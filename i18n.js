@@ -3,6 +3,8 @@
 // never breaks the UI. Language: ?lang=xx once (remembered), else localStorage, else the browser's.
 const I18N = {
   ru: {
+    "plug-in not loaded": "\u043f\u043b\u0430\u0433\u0438\u043d \u043d\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d",
+    "Open": "\u041e\u0442\u043a\u0440\u044b\u0442\u044c",
     "ui.js failed to load": "ui.js не загрузился",
     "This rule belongs to a plug-in that is not loaded here; it can be enabled, disabled or deleted, not edited.": "Это правило плагина, который здесь не загружен: его можно включить, выключить или удалить, но не редактировать.",
     "Plug-ins": "Плагины",

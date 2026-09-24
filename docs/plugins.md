@@ -49,14 +49,14 @@ PLUGIN = {"name": "Hello", "version": "1.0.0"}      # a dict; shown in Settings
 | hook | what it does |
 |---|---|
 | `core.app` | the FastAPI app: add routes with `@core.app.get(...)`; they need the token like every route |
-| `core.register_device(dev)` | add a device the plug-in owns (`id`, `name`, `transport`, `category`, `controls`); refuses an id another device has |
+| `core.register_device(dev)` | add a device the plug-in owns (`id`, `name`, `transport`, `category`, `controls`); refuses an id that already exists |
 | `core.TRANSPORTS[t] = fn(cfg, code, val, kind)` | switch a device whose `transport` is `t` (worker threads: bindings, schedules, timers; also `/control` when there is no async variant) |
 | `core.ASYNC_CONTROL[t] = async fn(cfg, code, val)` | the same for `POST /api/devices/{id}/control`, on the event loop |
 | `core.CONTROL_KINDS[k] = fn(cfg, ctl, val) -> dict` | a stateless channel kind (an IR button): no value stored; rules use the action `press` |
 | `core.MQTT_SUBSCRIPTIONS.append(filter)` | a topic filter under a topic of your own, subscribed after the core's on every (re)connect |
 | `core.MQTT_HANDLERS.append((prefix, fn(parts, payload, retain)))` | messages whose topic starts with the `prefix` tuple; `retain` is True for a replayed message - an event handler should ignore those |
-| `core.STARTUP_TASKS.append(fn)` | run once the broker is up, before the timers are replayed; a coroutine function runs as a task (a poller, errors are logged), a plain callable in a worker thread |
-| `core.SETTINGS_SECTIONS[key] = fn()` | a section of `settings.json` the plug-in owns (must be JSON: dict, list, str, number); read it back with `core._cfg_section(key, default)` |
+| `core.STARTUP_TASKS.append(fn)` | started once the broker is up, before the timers are replayed (nothing waits for it); a coroutine function runs as a task, a plain callable in a thread of its own - either may loop forever; errors, `sys.exit` included, are logged |
+| `core.SETTINGS_SECTIONS[key] = fn()` | a section of `settings.json` the plug-in owns (must be JSON: dict, list, str, number; not a core key); read it back with `core._cfg_section(key, default)`. A route of yours that writes it should call `core._save_settings()` like the core does |
 | `core.BINDING_ACTIONS[a] = {validate, run, describe}` | a rule action other than switching a device - see below |
 | `core.DEVICE_FIELDS.append(key)` | an extra device key `GET /api/devices` passes to the dashboard |
 | `core.OPEN_PATHS.add(path)` | a page of the plug-in served without the token (its API calls still carry it); never `/api...`, `/ws` or `/plugins/...` |
@@ -77,6 +77,8 @@ you enable, disable or delete it, not edit it.
 (`switch`, `bright`, `sensor`, ...), actions (`on`, `off`, `toggle`, `bright_up`, `bright_down`,
 `press`), device keys (`id`, `name`, `controls`, ...), MQTT handlers or subscriptions under
 `home/`, `zigbee2mqtt/`, `homeassistant/`, `$SYS`, or open paths under `/api`, `/ws`, `/plugins/`.
+Nor may it change or remove what the core or an earlier plug-in registered (a hook entry, a device,
+a settings section). A route under `/plugins/<name>/` other than the public files is yours.
 
 ## Dashboard side
 
@@ -89,16 +91,21 @@ HomePlugins.register({
   cards:       [(cardElement, device) => { /* decorate a device card */ }],
   ruleActions: [{type, label, visible?(), html(then|null), read() -> body, chip?(then), title?(then)}],
   toolbar:     [{tab: 'auto' | 'other', label, visible?(), onClick()}],
-  onReload:    [async () => { /* refresh your data; at start and on every resume, 5 s at most */ }],
+  onReload:    [async () => { /* refresh your data; at start and on every resume */ }],
 });
 ```
 
+- `onReload`: the dashboard waits at most 5 s for them, then renders anyway; a slower callback
+  still finishes later, so do not let an old reply overwrite a newer one.
 - `render(box)` gets an element of its own inside the page; after a tab switch it is detached, so
   a late write after an `await` does no harm.
 - `ruleActions`: `type` is the `describe().type` of the Python side; `html(then)` draws the form
   (`then` is the stored rule when editing, else `null`); `read()` returns the body for
   `PUT /api/bindings/...` - at least `{action, target}` - or throws an `Error` with the message
-  to show; `chip` / `title` are optional (the server's `title` is used otherwise).
+  to show; `chip` / `title` are optional (the server's `title` is used otherwise). A rule whose
+  `type` has no registered action, or whose `visible()` is false, opens read-only.
+- `badge()` returns a number or a short text (shown as text); `ui.js` that fails to load or throws
+  is listed as failed in Settings.
 - Labels are English source text; `i18n.json` adds translations. It never replaces a core word:
   a key the core already translates keeps the core's translation.
 

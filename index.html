@@ -569,6 +569,13 @@ const Home = {
   sendControl: (id, code, value) => sendControl(id, code, value),
   refresh: () => { renderTabs(); render(); },
 };
+// every text the core translates somewhere: a plug-in may add words, never re-word these
+const CORE_WORDS = new Set(Object.values(I18N).flatMap(t => Object.keys(t)));
+// the server's title of a plug-in's rule action; an absent plug-in's one in the UI language
+function pluginThenTitle(t){
+  if(t.type === 'plugin-absent') return `${t.action} (${i18n('plug-in not loaded')})`;
+  return t.title || t.action || t.type;
+}
 async function loadPlugins(){
   let r = {loaded: [], failed: []};
   try{ r = await api('/api/plugins'); }catch(e){ /* a core without plug-ins answers too */ }
@@ -578,11 +585,15 @@ async function loadPlugins(){
       if(!/^[a-z]{2}$/.test(lang) || !tbl || typeof tbl !== 'object') continue;
       const dst = I18N[lang] = I18N[lang] || {};
       for(const [k, v] of Object.entries(tbl))
-        if(typeof v === 'string' && !(k in dst) && !['__proto__', 'constructor', 'prototype'].includes(k)) dst[k] = v;
+        if(typeof v === 'string' && !(k in dst) && !CORE_WORDS.has(k)
+           && !['__proto__', 'constructor', 'prototype'].includes(k)) dst[k] = v;
     }
     if(p.ui) await new Promise(res => {
-      const sc = document.createElement('script'); sc.src = p.ui; sc.onload = res;
-      sc.onerror = () => { console.warn('plug-in ui failed', p.id); p.uiFailed = true; res(); };
+      const sc = document.createElement('script'); sc.src = p.ui;
+      const onErr = e => { if(e.filename && e.filename.endsWith(p.ui)) p.uiFailed = true; };
+      window.addEventListener('error', onErr);
+      sc.onload = () => { window.removeEventListener('error', onErr); res(); };
+      sc.onerror = () => { window.removeEventListener('error', onErr); console.warn('plug-in ui failed', p.id); p.uiFailed = true; res(); };
       document.head.appendChild(sc);
     });
   }
@@ -648,8 +659,14 @@ async function init(){
   translateDom(document);   // again: plug-in dictionaries are in now
   DEVICES = localizeDevices(DEVICES);   // and device labels, now with the plug-ins' words
   BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
-  HomePlugins.reload().then(() => { if(!openModalId){ renderTabs(); render(); } });
+  const wanted = activeTab;                        // a plug-in tab may only become visible after its reload
   if(!allTabs().some(t => t.id === activeTab) && !activeTab.startsWith('room:')) activeTab = 'fav';
+  HomePlugins.reload().then(() => {
+    renderTabs();                                  // badges with the plug-ins' data
+    if(wanted !== activeTab && allTabs().some(t => t.id === wanted) && !openModalId){
+      activeTab = wanted; renderTabs(); render();  // only a changed tab re-renders: no scroll/focus reset
+    }
+  });
   renderTabs();
   render();
   connectWS();
@@ -809,7 +826,9 @@ function applyTabOrder(tabId, devs){
 
 function renderTabs(){
   const bar = document.getElementById('tabs');
-  const badge = t => t.plugin ? (t.plugin.badge ? HomePlugins.safe(t.plugin.badge) ?? '' : '')
+  const pbadge = t => { const v = t.plugin.badge ? HomePlugins.safe(t.plugin.badge) : '';
+    return (typeof v === 'number' || typeof v === 'string') ? escapeHtml(String(v)) : ''; };
+  const badge = t => t.plugin ? pbadge(t)
     : (t.id === 'fav') ? FAVORITES.length : (t.id === 'auto') ? RULES.length : devsForTab(t.id).length;
   bar.innerHTML = allTabs().map(t => {
     const n = t.plugin ? badge(t) : (t.id === 'fav') ? FAVORITES.length
@@ -1339,8 +1358,10 @@ function ruleTitle(r){
   const w = (r.when && r.when[0]) || {}, t = (r.then && r.then[0]) || {};
   if(r.kind === 'binding'){
     const g = whenGesture(w.gesture);
-    const pa = HomePlugins.ruleAction(t.type);
-    if(pa) return `${w.device_name}: ${g} \u2192 ${(pa.title && HomePlugins.safe(pa.title, t)) || t.title || t.type}`;
+    if(t.type && t.type !== 'device'){
+      const pa = HomePlugins.ruleAction(t.type);
+      return `${w.device_name}: ${g} \u2192 ${(pa && pa.title && HomePlugins.safe(pa.title, t)) || pluginThenTitle(t)}`;
+    }
     return `${w.device_name}: ${g} \u2192 ${t.device_name} ${ACT_LABELS[t.action] || t.action}` + (t.for ? ` ${i18n('for')} ${t.for}${i18n('s')}` : '');
   }
   if(r.kind === 'schedule'){
@@ -1389,8 +1410,11 @@ function condChip(c){
                                      : `${escapeHtml(dn)} ${escapeHtml(op)} ${escapeHtml(String(c.value))}`;
 }
 function thenChip(t){
-  const pa = HomePlugins.ruleAction(t.type);
-  if(pa && pa.chip) return HomePlugins.safe(pa.chip, t) ?? escapeHtml(t.title || t.type);
+  if(t.type && t.type !== 'device'){          // a plug-in's action (its plug-in may be absent)
+    const pa = HomePlugins.ruleAction(t.type);
+    const c = pa && pa.chip ? HomePlugins.safe(pa.chip, t) : null;
+    return typeof c === 'string' ? c : escapeHtml(pluginThenTitle(t));
+  }
   let act = t.after!=null ? `${i18n('off after')} ${t.after}${i18n('s')}`
           : (ACT_LABELS[t.action]||t.action);
   if(t.for) act += ` ${i18n('for')} ${t.for}${i18n('s')}`;
@@ -1513,7 +1537,8 @@ function daysPickerHtml(sel){
 
 function openRuleBuilder(rule){
   const t0 = rule && rule.then && rule.then[0];
-  if(t0 && t0.type && t0.type !== 'device' && !HomePlugins.ruleAction(t0.type)){
+  const pa0 = t0 && HomePlugins.ruleAction(t0.type);
+  if(t0 && t0.type && t0.type !== 'device' && (!pa0 || (pa0.visible && !HomePlugins.safe(pa0.visible)))){
     // its plug-in (or that plug-in's ui.js) is not loaded: editing here would turn it into a device rule
     alert(i18n('This rule belongs to a plug-in that is not loaded here; it can be enabled, disabled or deleted, not edited.'));
     return;
@@ -3265,7 +3290,7 @@ function openAddDevice(){
         </div>
         ${HomePlugins.addMenu.map((e, i) => `<div class="row" id="ad-p${i}" style="cursor:pointer">
           <span class="rlabel">${escapeHtml(i18n(e.label))}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${escapeHtml(i18n(e.hint || ''))}</span></span>
-          <button class="dlg-btn primary">${escapeHtml(i18n(e.button || 'OK'))}</button>
+          <button class="dlg-btn primary">${escapeHtml(i18n(e.button || 'Open'))}</button>
         </div>`).join('')}
       </section>
     </div>`;

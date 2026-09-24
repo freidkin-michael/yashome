@@ -73,7 +73,9 @@ POST   /api/esphome/purge_discovery             drop the retained configs of a d
 
 ```
 GET    /api/plugins                             {loaded: [{id, name, version, ui, i18n}], failed: [{id, error}], dir}
-GET    /plugins/{name}/{file}                   static files of a loaded plug-in (.js .css .json .png .svg), no token
+GET    /plugins/{name}/ui.js                    the public files of a loaded plug-in, no token (GET and HEAD)
+GET    /plugins/{name}/i18n.json
+GET    /plugins/{name}/static/{file}            .js .css .json .png .svg
 ```
 
-Plug-ins add their own routes; see docs/plugins.md.
+Plug-ins add their own routes (they need the token); see docs/plugins.md.

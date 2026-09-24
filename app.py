@@ -311,7 +311,9 @@ def _load_bindings():
             if not isinstance(gestures, dict):
                 log.warning(f"[settings] bindings {src}/{code} skipped: not an object")
                 continue
-            ok = {g: b for g, b in gestures.items() if isinstance(b, dict) and isinstance(b.get("action"), str)}
+            ok = {g: b for g, b in gestures.items() if isinstance(b, dict) and isinstance(b.get("action"), str)
+                  and (isinstance(b.get("target"), str) or b["action"] not in ("on", "off", "toggle", "bright_up",
+                                                                                "bright_down", "press"))}
             if ok:
                 clean.setdefault(src, {})[code] = ok
     raw.clear(); raw.update(clean)        # keep the same object: it is the settings section
@@ -1211,6 +1213,8 @@ def _execute_binding(src_id: str, code: str, gesture: str, force: bool = False):
         return
     if b.get("action") in BINDING_ACTIONS:              # a plug-in's action (its target is its own)
         res = BINDING_ACTIONS[b["action"]]["run"](b)
+        res = dict(res) if isinstance(res, dict) else {}
+        res.setdefault("action", b["action"])                 # the press log shows what fired
         log.info(f"[binding] {src_id}/{code}={gesture} -> {b['action']} {b.get('target')}")
         return res
     target_id = b["target"]
@@ -2437,25 +2441,28 @@ async def _start_pollers():
 
 
 async def _run_startup_tasks():
-    """Plug-in STARTUP_TASKS: a coroutine function runs as a task (a poller), a plain callable in a
-    worker thread. Nothing a plug-in raises - SystemExit included - stops the core."""
-    def logged(t):
-        if not t.cancelled() and t.exception() is not None:
-            e = t.exception()
-            log.error(f"[plugins] task {t.get_name()} died: {type(e).__name__}: {e}")
+    """Plug-in STARTUP_TASKS, started and left running: a coroutine function as a task (a poller),
+    a plain callable in a daemon thread. Nothing waits for them - a poll loop is fine - and
+    nothing they raise, SystemExit included, stops the core; a death is logged."""
     for task in STARTUP_TASKS:
         name = getattr(task, "__qualname__", repr(task))
         if asyncio.iscoroutinefunction(task):
-            t = asyncio.create_task(task(), name=name)
-            t.add_done_callback(logged)
-            _PLUGIN_TASKS.append(t)                          # held: asyncio keeps tasks weakly
+            async def guarded(fn=task, name=name):
+                try:
+                    await fn()
+                except asyncio.CancelledError:
+                    raise
+                except BaseException as e:                 # noqa: BLE001 - SystemExit from a plug-in
+                    log.error(f"[plugins] task {name} died: {type(e).__name__}: {e}")
+            _PLUGIN_TASKS.append(asyncio.create_task(guarded(), name=name))   # held: tasks are kept weakly
             continue
-        try:
-            await asyncio.to_thread(task)
-        except BaseException as e:                           # noqa: BLE001
-            if isinstance(e, KeyboardInterrupt):
-                raise
-            log.error(f"[plugins] start task {name} failed: {type(e).__name__}: {e}")
+
+        def run(fn=task, name=name):
+            try:
+                fn()
+            except BaseException as e:                     # noqa: BLE001
+                log.error(f"[plugins] start task {name} failed: {type(e).__name__}: {e}")
+        threading.Thread(target=run, daemon=True, name=f"plugin-{name}"[:40]).start()
 
 
 async def _after_broker():
@@ -2870,6 +2877,8 @@ def put_binding(src: str, src_code: str, gesture: str, body: BindingBody):
         raise HTTPException(404, "unknown src device")
     if body.action in BINDING_ACTIONS:              # a plug-in's action checks its own fields
         entry = BINDING_ACTIONS[body.action]["validate"](body.model_dump())
+        if not (isinstance(entry, dict) and entry.get("action") == body.action and isinstance(entry.get("target"), str)):
+            raise HTTPException(502, f"plug-in action {body.action}: validate() must return {{action, target, ...}}")
         return _store_binding(src, src_code, gesture, body, entry)
     if body.target not in DEVICES:
         raise HTTPException(400, "unknown target device")
@@ -2946,6 +2955,12 @@ def _binding_rules():
                         log.warning(f"[plugins] describe of {b['action']} failed: {e}")
                         then = {"type": b["action"], "action": b["action"], "title": b["action"]}
                     title = f"{_dname(src)}: {_gesture_label(g)} -> {then.get('title', b['action'])}"
+                elif b.get("action") not in ("on", "off", "toggle", "bright_up", "bright_down", "press"):
+                    # a plug-in's action, but the plug-in is not loaded: keep it recognisable (and
+                    # the dashboard keeps it out of the editor), never present it as a device rule
+                    then = {"type": "plugin-absent", "action": b.get("action"), "device": tgt,
+                            "device_name": tgt, "title": f"{b.get('action')} (plug-in not loaded)"}
+                    title = f"{_dname(src)}: {_gesture_label(g)} -> {then['title']}"
                 else:
                     then = {"type": "device", "device": tgt, "device_name": _dname(tgt),
                             "code": b.get("code", "state"), "action": b.get("action")}
@@ -3130,10 +3145,19 @@ async def rule_run(body: RuleIdBody):
     parts = rid.split("|")
     if parts[0] == "b" and len(parts) == 4:
         _, src, scode, g = parts
-        b = (_bindings.get(src, {}).get(scode, {}) or {}).get(g) or {}
+        b = (_bindings.get(src, {}).get(scode, {}) or {}).get(g)
+        if not b:
+            raise HTTPException(404, "no such rule")
         if b.get("action") not in BINDING_ACTIONS:
             _need_broker()                               # a plug-in action may not need the broker at all
-        res = await run_in_threadpool(_execute_binding, src, scode, g, True)
+        try:
+            res = await run_in_threadpool(_execute_binding, src, scode, g, True)
+        except HTTPException:
+            raise
+        except Exception as e:
+            if b.get("action") in BINDING_ACTIONS:
+                raise HTTPException(502, f"{b['action']}: {e}")
+            raise
         if res is None:
             raise HTTPException(404, "no such rule")
         return {"ok": True, **(res if isinstance(res, dict) else {})}
@@ -4203,8 +4227,8 @@ def register_device(dev: dict) -> dict:
     the same path mqtt_devices.json entries take, so the dashboard treats it alike."""
     if not isinstance(dev.get("id"), str) or not _CODE_RE.match(dev["id"]):
         raise ValueError(f"device id {dev.get('id')!r}: 1-64 letters, digits, _ . -")
-    if dev["id"] in DEVICES and DEVICES[dev["id"]].get("transport") != dev.get("transport"):
-        raise ValueError(f"device id {dev['id']!r} is taken by a {DEVICES[dev['id']].get('transport')} device")
+    if dev["id"] in DEVICES:
+        raise ValueError(f"device id {dev['id']!r} is taken (a {DEVICES[dev['id']].get('transport')} device)")
     if dev.get("transport") in _CORE_TRANSPORTS:
         raise ValueError(f"transport {dev.get('transport')!r} belongs to the core")
     if any(_own_topic(dev.get(t)) for t in ("state_topic", "command_topic", "availability_topic")):
@@ -4237,8 +4261,11 @@ _CORE_DEVICE_KEYS = {"id", "name", "category", "transport", "controls", "room", 
 
 def _hooks_snapshot() -> dict:
     g = globals()
+    with _cache_lock:
+        cache = set(_status_cache)
     return {"dicts": {k: dict(g[k]) for k in _HOOK_DICTS}, "lists": {k: list(g[k]) for k in _HOOK_LISTS},
-            "open": set(OPEN_PATHS), "devices": set(DEVICES), "routes": len(app.router.routes)}
+            "open": set(OPEN_PATHS), "devices": dict(DEVICES), "cache": cache,
+            "routes": list(app.router.routes), "middleware": list(app.user_middleware)}
 
 
 def _hooks_restore(snap: dict):
@@ -4248,14 +4275,32 @@ def _hooks_restore(snap: dict):
     for k, v in snap["lists"].items():
         g[k][:] = v
     OPEN_PATHS.clear(); OPEN_PATHS.update(snap["open"])
-    for did in set(DEVICES) - snap["devices"]:
+    for did in set(DEVICES) - set(snap["devices"]):
         DEVICES.pop(did, None); BY_ID_NAME.pop(did, None)
-    del app.router.routes[snap["routes"]:]
+    DEVICES.update(snap["devices"])                      # whatever it replaced comes back too
+    with _cache_lock:
+        for did in set(_status_cache) - snap["cache"]:
+            _status_cache.pop(did, None)
+    app.router.routes[:] = snap["routes"]                # by identity: an inserted route cannot take a core one along
+    app.user_middleware[:] = snap["middleware"]
 
 
 def _hooks_check(name: str, snap: dict):
-    """What a plug-in registered must not reach into the core's own names or bus."""
-    new = {k: set(globals()[k]) - set(snap["dicts"][k]) for k in _HOOK_DICTS}
+    """What a plug-in registered must not reach into the core's own names or bus, nor into what
+    an earlier plug-in registered."""
+    g = globals()
+    for k in _HOOK_DICTS:
+        taken = [n for n, v in snap["dicts"][k].items() if g[k].get(n) is not v]
+        if taken:
+            raise ValueError(f"{k} {sorted(taken)} are registered by an earlier plug-in (or were removed)")
+    for did, d in snap["devices"].items():
+        if DEVICES.get(did) is not d:
+            raise ValueError(f"device {did!r} belongs to the core or an earlier plug-in")
+    new = {k: set(g[k]) - set(snap["dicts"][k]) for k in _HOOK_DICTS}
+    core_keys = {"_version", "names", "channel_names", "channel_dimrange", "bindings", "favorites", "rooms",
+                 "tab_order", "tile_sizes", "automations", "rules_disabled"}
+    if new["SETTINGS_SECTIONS"] & core_keys:
+        raise ValueError(f"settings sections {sorted(new['SETTINGS_SECTIONS'] & core_keys)} belong to the core")
     if new["TRANSPORTS"] & _CORE_TRANSPORTS or new["ASYNC_CONTROL"] & _CORE_TRANSPORTS:
         raise ValueError(f"transports {sorted(_CORE_TRANSPORTS)} belong to the core")
     if new["CONTROL_KINDS"] & _CORE_KINDS:
@@ -4271,7 +4316,8 @@ def _hooks_check(name: str, snap: dict):
                 or pre[0] in ("home", "zigbee2mqtt", "homeassistant", "$SYS"):
             raise ValueError(f"MQTT handler prefix {pre!r}: a topic of the plug-in's own, not the core's bus")
     for t in MQTT_SUBSCRIPTIONS[len(snap["lists"]["MQTT_SUBSCRIPTIONS"]):]:
-        if not isinstance(t, str) or not t or "#" in t[:-1] or t.split("/")[0] in ("home", "zigbee2mqtt", "#", "+"):
+        if not isinstance(t, str) or not t or "#" in t[:-1] \
+                or t.split("/")[0] in ("home", "zigbee2mqtt", "homeassistant", "$SYS", "#", "+"):
             raise ValueError(f"MQTT subscription {t!r}: a valid filter under a topic of the plug-in's own")
     for p in OPEN_PATHS - snap["open"]:
         if not isinstance(p, str) or not p.startswith("/") or p.startswith(("/api", "/ws", "/plugins/")):
@@ -4339,7 +4385,6 @@ def api_plugins():
             "dir": str(PLUGINS_DIR)}
 
 
-@app.get("/plugins/{name}/{path:path}")
 def plugin_asset(name: str, path: str):
     """Public files of a loaded plug-in: ui.js, i18n.json and anything in its static/ folder.
     Nothing else of the package is served (no source, no config). One answer for every miss,
@@ -4355,3 +4400,5 @@ def plugin_asset(name: str, path: str):
 
 
 _load_plugins()
+# registered after the plug-ins: a route a plug-in adds under /plugins/<name>/ is matched first
+app.add_api_route("/plugins/{name}/{path:path}", plugin_asset, methods=["GET", "HEAD"])

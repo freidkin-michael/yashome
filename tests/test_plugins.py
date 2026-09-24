@@ -103,9 +103,19 @@ class Isolation(unittest.TestCase):
                            ("r4", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('vendor/#/x')\n"),
                            ("r5", "import app as core\ncore.OPEN_PATHS.add('/ws')\n"),
                            ("r6", "import app as core\ncore.DEVICE_FIELDS.append('name')\n"),
-                           ("r7", "PLUGIN = 'not a dict'\n")):
+                           ("r7", "PLUGIN = 'not a dict'\n"),
+                           ("r8", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('homeassistant/#')\n"),
+                           ("r9", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('$SYS/#')\n"),
+                           ("r10", "import app as core\ncore.SETTINGS_SECTIONS['names'] = dict\n")):
             self.assertEqual(self.load(**{name: code}), [], name)
             self.assertIn(name, app._PLUGIN_ERRORS)
+
+    def test_an_earlier_plugins_entries_are_not_taken_over(self):
+        self.assertEqual(self.load(own1="import app as core\ncore.TRANSPORTS['own1'] = print\n"), ["own1"])
+        mine = app.TRANSPORTS["own1"]
+        self.assertEqual(self.load(own2="import app as core\ncore.TRANSPORTS['own1'] = repr\n"), [])
+        self.assertIs(app.TRANSPORTS["own1"], mine)
+        self.assertIn("own2", app._PLUGIN_ERRORS)
 
     def test_bad_i18n_is_a_load_error_not_a_crash(self):
         d = tempfile.mkdtemp()
@@ -174,3 +184,50 @@ class StartTasks(unittest.TestCase):
             self.assertTrue(any("poller died" in m for m in cm.output))
         finally:
             app.STARTUP_TASKS.clear()
+
+    def test_async_exit_and_a_blocking_task_do_not_stop_the_core(self):
+        import asyncio
+        import threading
+        import time
+        gate = threading.Event()
+
+        async def bye():
+            raise SystemExit("plug-in exits")
+        app.STARTUP_TASKS[:] = [gate.wait, bye]         # gate.wait blocks until the test ends
+        try:
+            async def go():
+                t0 = time.monotonic()
+                await app._run_startup_tasks()
+                await asyncio.sleep(0.05)
+                return time.monotonic() - t0
+            with self.assertLogs("home", level="ERROR"):
+                self.assertLess(asyncio.run(go()), 1.0)
+        finally:
+            gate.set()
+            app.STARTUP_TASKS.clear()
+
+
+class PluginRules(unittest.TestCase):
+    def setUp(self):
+        app._bindings["gone_src"] = {"action": {"single": {"action": "vanished", "target": "t1"}}}
+
+    def tearDown(self):
+        app._bindings.pop("gone_src", None)
+        app.BINDING_ACTIONS.pop("raises", None)
+
+    def test_rule_of_an_absent_plugin_is_not_a_device_rule(self):
+        rule = next(r for r in app._binding_rules() if r["id"] == "b|gone_src|action|single")
+        self.assertEqual(rule["then"][0]["type"], "plugin-absent")
+        self.assertEqual(rule["then"][0]["action"], "vanished")
+
+    def test_rules_run_404_and_502(self):
+        import asyncio
+
+        def boom(entry):
+            raise RuntimeError("down")
+        app.BINDING_ACTIONS["raises"] = {"validate": dict, "run": boom, "describe": dict}
+        app._bindings["gone_src"]["action"]["double"] = {"action": "raises", "target": "t1"}
+        for rid, code in (("b|gone_src|action|nope", 404), ("b|gone_src|action|double", 502)):
+            with self.assertRaises(app.HTTPException) as cm:
+                asyncio.run(app.rule_run(app.RuleIdBody(id=rid)))
+            self.assertEqual(cm.exception.status_code, code, rid)
