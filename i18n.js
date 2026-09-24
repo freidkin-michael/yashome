@@ -3,9 +3,11 @@
 // never breaks the UI. Language: ?lang=xx once (remembered), else localStorage, else the browser's.
 const I18N = {
   ru: {
+    "ui.js failed to load": "ui.js не загрузился",
+    "This rule belongs to a plug-in that is not loaded here; it can be enabled, disabled or deleted, not edited.": "Это правило плагина, который здесь не загружен: его можно включить, выключить или удалить, но не редактировать.",
     "Plug-ins": "Плагины",
     "loaded": "загружен",
-    "No plug-ins. A plug-in is a directory in HOME_PLUGINS_DIR; restart the backend after adding one (docs/plugins.md).": "Плагинов нет. Плагин — это каталог в HOME_PLUGINS_DIR; после добавления перезапусти бэкенд (docs/plugins.md).",
+    "No plug-ins. A plug-in is a directory in PLUGINS_DIR (see .env); restart the backend after adding one (docs/plugins.md).": "Плагинов нет. Плагин — это каталог в PLUGINS_DIR (см. .env); после добавления перезапусти бэкенд (docs/plugins.md).",
     "press is the one action of a stateless channel, and only of it": "press — единственное действие канала-события и только его",
     "action must be on|off|toggle|bright_up|bright_down|press": "действие: on, off, toggle, bright_up, bright_down или press",
     "no zigbee2mqtt configured (Z2M_SERIAL)": "zigbee2mqtt не настроен (Z2M_SERIAL)",

@@ -1,8 +1,9 @@
-"""hello: the smallest complete Yashome plug-in. Copy the directory into HOME_PLUGINS_DIR
-(default: plugins/ next to app.py), restart the backend, and it is live.
+"""hello: a small complete Yashome plug-in. Copy the directory into your PLUGINS_DIR (default:
+plugins/ next to docker-compose.yml), restart the backend, and it is live.
 
-It shows every kind of hook once: a transport with a device of its own, a rule action,
-a settings section, a REST route and an MQTT topic. ui.js adds a tab; i18n.json translates it."""
+Python side: a transport with a device of its own, a rule action, a settings section, a REST
+route and an MQTT topic. ui.js: a tab, an "Add" row, a card decoration, the rule target for the
+action, a toolbar button and a reload callback; i18n.json translates them."""
 import app as core
 
 PLUGIN = {"name": "Hello", "version": "1.0.0"}
@@ -39,9 +40,9 @@ def _run(b):
 
 core.BINDING_ACTIONS["greet"] = {
     "validate": _validate, "run": _run,
+    # the rule list shows this; "type" is what ui.js registers its ruleAction under
     "describe": lambda b: {"type": "hello", "action": "greet", "text": b.get("text"), "title": f"say {b.get('text')}"},
 }
-core.RULE_THEN["hello"] = lambda then: _run(then)
 
 
 # 3) a route and an MQTT topic
@@ -51,4 +52,5 @@ def hello():
 
 
 core.MQTT_SUBSCRIPTIONS.append("hello/ping")
-core.MQTT_HANDLERS.append((("hello", "ping"), lambda parts, payload, retain: _run({"text": "ping"})))
+# a retained message is replayed on every reconnect: an event handler ignores it
+core.MQTT_HANDLERS.append((("hello", "ping"), lambda parts, payload, retain: None if retain else _run({"text": "ping"})))

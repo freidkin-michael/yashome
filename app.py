@@ -84,7 +84,8 @@ if SETTINGS_PATH.exists():
 
 
 # ---------------------------------------------------------------------------
-# Plug-in hooks. A plug-in is a Python package in HOME_PLUGINS_DIR that does `import app as core`
+# Plug-in hooks. A plug-in is a Python package in the plug-in directory (PLUGINS_DIR in .env,
+# /app/plugins in the container) that does `import app as core`
 # and registers itself here when it is imported (see docs/plugins.md). The core never imports a
 # plug-in by name; with no plug-ins these stay empty and nothing changes.
 # ---------------------------------------------------------------------------
@@ -96,7 +97,6 @@ MQTT_HANDLERS: list = []     # (topic prefix tuple, fn(parts, payload, retain)) 
 STARTUP_TASKS: list = []     # callables (sync or async) run once the broker is up
 SETTINGS_SECTIONS: dict = {}  # settings.json key -> fn() returning what to persist for the plug-in
 BINDING_ACTIONS: dict = {}   # action -> {"validate": fn(body)->entry, "run": fn(b)->dict, "describe": fn(b)->then}
-RULE_THEN: dict = {}         # rule "then" type -> fn(then) -> dict: the manual "run" of such a rule
 DEVICE_FIELDS: list = []     # extra device keys GET /api/devices passes to the dashboard
 OPEN_PATHS: set = set()      # extra paths served without the token (a plug-in's own page)
 PLUGINS: list = []           # manifests for the dashboard: {id, name, version, ui, i18n}
@@ -158,15 +158,25 @@ def _save_settings():
             "rules_disabled": sorted(_rules_disabled),
         }
         for key, get in SETTINGS_SECTIONS.items():   # plug-in sections
-            if key not in data:
-                try:
-                    data[key] = get()
-                except Exception:
-                    log.exception(f"[settings] section {key!r} of a plug-in failed; kept as it was")
+            if key in data:
+                continue
+            try:
+                val = get()
+                json.dumps(val, ensure_ascii=False)       # must be storable, or it would break every save
+                data[key] = val
+            except Exception:
+                log.exception(f"[settings] section {key!r} of a plug-in is not storable; its last saved value stays")
+                if key in _saved_sections:
+                    data[key] = _saved_sections[key]
         # a section nobody owns right now (plug-in removed or failing) is carried over, never dropped
         for key, val in _cfg.items():
             data.setdefault(key, val)
         _atomic_json_dump(SETTINGS_PATH, data, indent=2, ensure_ascii=False)
+        _saved_sections.clear()
+        _saved_sections.update({k: copy.deepcopy(v) for k, v in data.items() if k in SETTINGS_SECTIONS or k not in _cfg})
+
+
+_saved_sections: dict = {}   # what the last save wrote for plug-in sections (a failing one falls back to it)
 
 
 WS_TICK = 2.0
@@ -301,7 +311,7 @@ def _load_bindings():
             if not isinstance(gestures, dict):
                 log.warning(f"[settings] bindings {src}/{code} skipped: not an object")
                 continue
-            ok = {g: b for g, b in gestures.items() if isinstance(b, dict) and isinstance(b.get("target"), str)}
+            ok = {g: b for g, b in gestures.items() if isinstance(b, dict) and isinstance(b.get("action"), str)}
             if ok:
                 clean.setdefault(src, {})[code] = ok
     raw.clear(); raw.update(clean)        # keep the same object: it is the settings section
@@ -585,7 +595,10 @@ def _safe_execute_binding(src_id: str, code: str, gesture: str):
                 if evs:
                     last = evs[-1]
                     if last.get("code") == code and str(last.get("value")) == gesture:
-                        last["fired"] = f"{BY_ID_NAME.get(result['target'], result['target'])}.{result['code']}={result['value']}"
+                        tgt = result.get("target")
+                        what = result.get("value", result.get("action", ""))
+                        last["fired"] = (f"{BY_ID_NAME.get(tgt, tgt)}.{result.get('code', '')}={what}"
+                                         if tgt else str(result.get("action") or what))
     except Exception as e:
         log.warning(f"[binding] {src_id}/{code}/{gesture} -> ERR {e}")
 
@@ -1288,7 +1301,10 @@ _CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'
 # CLOSED: a lost .env must never silently reopen the house.
 DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
 _OPEN_PATHS = {"/", "/manifest.json", "/sw.js", "/i18n.js", "/favicon.ico"}
-_OPEN_PREFIXES = ("/icon-", "/plugins/")   # /plugins/<name>/<asset>: a plug-in's static files
+_OPEN_PREFIXES = ("/icon-",)
+# a plug-in's public assets: GET /plugins/<name>/ui.js | i18n.json | static/<file>; routes a plug-in
+# adds under /plugins/ (any other shape or method) need the token like everything else
+_OPEN_ASSET = re.compile(r"^/plugins/[a-z][a-z0-9_]{0,31}/(ui\.js|i18n\.json|static/[A-Za-z0-9_][A-Za-z0-9_.-]{0,63})$")
 if not DASHBOARD_TOKEN:
     log.error("DASHBOARD_TOKEN is not set: every /api call will be refused (401)")
 
@@ -1326,7 +1342,9 @@ async def _require_token(request, call_next):
     p = request.url.path
     if request.method not in ("GET", "HEAD", "OPTIONS") and not _same_origin(request.headers):
         return _refuse(403, "cross-origin request refused")
-    if p in _OPEN_PATHS or p in OPEN_PATHS or p.startswith(_OPEN_PREFIXES) or _token_ok(request.headers):
+    plugin_open = p in OPEN_PATHS and not p.startswith(("/api", "/ws"))   # a plug-in page, never the API
+    asset = request.method in ("GET", "HEAD") and _OPEN_ASSET.match(p)
+    if p in _OPEN_PATHS or plugin_open or asset or p.startswith(_OPEN_PREFIXES) or _token_ok(request.headers):
         if "settings" in _load_failed and request.method != "GET" and _writes_settings(p):
             return _refuse(503, "settings.json was unreadable at start: fix or remove it and restart; "
                                 "nothing that is kept in it can change until then")
@@ -1722,13 +1740,16 @@ def _mqtt_subscribe_all(cli):
     cli.subscribe("zigbee2mqtt/+/availability")  # online/offline when availability is on in z2m
     cli.subscribe("zigbee2mqtt/+")            # z2m state frames -> ingest / binding engine
     cli.subscribe("home/cmd/#")
-    for t in MQTT_SUBSCRIPTIONS:                 # plug-in topics
-        cli.subscribe(t)
     _MQTT_TOPIC_IDX = _mqtt_topic_index()     # generic-MQTT DIY ESP devices
     for _t in _MQTT_TOPIC_IDX:
         cli.subscribe(_t)
     if _MQTT_TOPIC_IDX:
         log.info(f"[mqtt] subscribed {len(_MQTT_TOPIC_IDX)} generic-mqtt topics")
+    for t in MQTT_SUBSCRIPTIONS:                 # plug-in topics: last, one bad filter hurts nobody else
+        try:
+            cli.subscribe(t)
+        except Exception as e:
+            log.error(f"[plugins] subscribe {t!r} failed: {e}")
     # fresh retained snapshot for every device (a client may hold stale state)
     _mqtt_last_pub.clear()
     for did in list(DEVICES):
@@ -1864,6 +1885,10 @@ def _z2m_controls_from_exposes(exposes):
 def _register_z2m_device(z):
     fname = z.get("friendly_name")
     if not fname or z.get("type") == "Coordinator":
+        return False
+    if fname in DEVICES and DEVICES[fname].get("transport") != "z2m":
+        # the id belongs to another device (mqtt_devices.json, a plug-in): never overwrite it
+        log.warning(f"[z2m] '{fname}' skipped: the id is taken by a {DEVICES[fname].get('transport')} device; rename one of them")
         return False
     if "/" in fname:
         # a / makes a sub-topic in z2m and cannot be one path segment of our REST API
@@ -2411,6 +2436,28 @@ async def _start_pollers():
     _AFTER_BROKER = asyncio.create_task(_after_broker())   # the API is up now; the rest waits for the broker
 
 
+async def _run_startup_tasks():
+    """Plug-in STARTUP_TASKS: a coroutine function runs as a task (a poller), a plain callable in a
+    worker thread. Nothing a plug-in raises - SystemExit included - stops the core."""
+    def logged(t):
+        if not t.cancelled() and t.exception() is not None:
+            e = t.exception()
+            log.error(f"[plugins] task {t.get_name()} died: {type(e).__name__}: {e}")
+    for task in STARTUP_TASKS:
+        name = getattr(task, "__qualname__", repr(task))
+        if asyncio.iscoroutinefunction(task):
+            t = asyncio.create_task(task(), name=name)
+            t.add_done_callback(logged)
+            _PLUGIN_TASKS.append(t)                          # held: asyncio keeps tasks weakly
+            continue
+        try:
+            await asyncio.to_thread(task)
+        except BaseException as e:                           # noqa: BLE001
+            if isinstance(e, KeyboardInterrupt):
+                raise
+            log.error(f"[plugins] start task {name} failed: {type(e).__name__}: {e}")
+
+
 async def _after_broker():
     # Elapsed deadlines fire through MQTT the moment they are replayed, and a
     # QoS-0 publish before CONNACK is silently dropped, so wait for the link.
@@ -2423,14 +2470,10 @@ async def _after_broker():
             log.exception(f"[start] {what} failed; the rest of the start goes on")
     # the scheduler first: whatever breaks below, schedules keep running
     threading.Thread(target=_scheduler_loop, daemon=True, name="scheduler").start()
+    await _run_startup_tasks()                          # plug-ins first: timers may fire on their devices
     step(_replay_pending_on_boot, "timer replay")      # deferred deadlines (inching + rule `for`)
     step(_rearm_inching_on_boot, "inching re-arm")     # channels on at boot without a timer
-    for task in STARTUP_TASKS:                          # plug-in pollers and the like
-        name = getattr(task, "__qualname__", repr(task))
-        if asyncio.iscoroutinefunction(task):
-            _PLUGIN_TASKS.append(asyncio.create_task(task()))   # held: asyncio keeps tasks weakly
-        else:
-            step(task, f"plug-in task {name}")
+
     # once more when the retained frames have arrived: the cache read at start may be older
     _t = threading.Timer(20, lambda: step(_rearm_inching_on_boot, "inching re-arm"))
     _t.daemon = True
@@ -2551,7 +2594,7 @@ async def control(dev_id: str, body: ControlBody):
             val = _pct_to_raw(ctl, val)
         except (TypeError, ValueError, OverflowError):
             raise HTTPException(400, f"brightness must be a number 0-100, got {val!r}")
-    if ctl["kind"] == "color":
+    if ctl["kind"] == "color" and cfg.get("transport") == "mqtt":
         # picked "#rrggbb" -> raw 0-255 to each channel command topic
         hexv = str(val).lstrip("#")
         try:
@@ -2581,10 +2624,16 @@ async def control(dev_id: str, body: ControlBody):
         except Exception as e:
             raise HTTPException(500, f"z2m error: {e}")
         log.warning(f"[control] {cfg['name']}/{body.code}={val} via z2m")
-    elif cfg.get("transport") in ASYNC_CONTROL:
-        await ASYNC_CONTROL[cfg["transport"]](cfg, body.code, val)
-    elif cfg.get("transport") in TRANSPORTS:
-        await run_in_threadpool(TRANSPORTS[cfg["transport"]], cfg, body.code, val, ctl["kind"])
+    elif cfg.get("transport") in ASYNC_CONTROL or cfg.get("transport") in TRANSPORTS:
+        try:
+            if cfg["transport"] in ASYNC_CONTROL:
+                await ASYNC_CONTROL[cfg["transport"]](cfg, body.code, val)
+            else:
+                await run_in_threadpool(TRANSPORTS[cfg["transport"]], cfg, body.code, val, ctl["kind"])
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(502, f"{cfg['transport']}: {e}")
     elif cfg.get("transport") == "mqtt":
         try:
             _mqtt_generic_publish_set(cfg, body.code, val, ctl["kind"])
@@ -2891,7 +2940,11 @@ def _binding_rules():
                     when["threshold"] = b["threshold"]
                     when["hyst"] = b.get("hyst", 0)
                 if b.get("action") in BINDING_ACTIONS:      # a plug-in's action describes itself
-                    then = BINDING_ACTIONS[b["action"]]["describe"](b)
+                    try:
+                        then = dict(BINDING_ACTIONS[b["action"]]["describe"](b))
+                    except Exception as e:
+                        log.warning(f"[plugins] describe of {b['action']} failed: {e}")
+                        then = {"type": b["action"], "action": b["action"], "title": b["action"]}
                     title = f"{_dname(src)}: {_gesture_label(g)} -> {then.get('title', b['action'])}"
                 else:
                     then = {"type": "device", "device": tgt, "device_name": _dname(tgt),
@@ -3054,8 +3107,6 @@ def rule_delete(body: RuleIdBody):
 
 async def _run_then_action(then: dict):
     """Execute one projected `then` action (used by the manual rule-run test)."""
-    if then.get("type") in RULE_THEN:            # a plug-in's action
-        return RULE_THEN[then["type"]](then)
     dev = then.get("device")
     code = then.get("code") or "state"
     action = then.get("action")
@@ -3075,16 +3126,19 @@ async def _run_then_action(then: dict):
 async def rule_run(body: RuleIdBody):
     """Manually fire a rule's action(s) to test the wiring -- ignores the rule's
     enabled flag, time window and conditions."""
-    _need_broker()
     rid = body.id
     parts = rid.split("|")
     if parts[0] == "b" and len(parts) == 4:
         _, src, scode, g = parts
-        res = _execute_binding(src, scode, g, force=True)
+        b = (_bindings.get(src, {}).get(scode, {}) or {}).get(g) or {}
+        if b.get("action") not in BINDING_ACTIONS:
+            _need_broker()                               # a plug-in action may not need the broker at all
+        res = await run_in_threadpool(_execute_binding, src, scode, g, True)
         if res is None:
             raise HTTPException(404, "no such rule")
         return {"ok": True, **(res if isinstance(res, dict) else {})}
     if parts[0] == "a" and len(parts) >= 3:
+        _need_broker()
         rule = next((r for r in _project_rules() if r["id"] == rid), None)
         if not rule:
             raise HTTPException(404, "no such rule")
@@ -3643,7 +3697,8 @@ def _audit_orphan_refs() -> dict:
             note("binding-source", src, src)
             for code, gestures in codes.items():
                 for g, entry in gestures.items():
-                    note("binding-target", entry.get("target"), f"{src}/{code}/{g}")
+                    if entry.get("action") not in BINDING_ACTIONS:     # a plug-in action targets its own
+                        note("binding-target", entry.get("target"), f"{src}/{code}/{g}")
                     for c in entry.get("conditions") or []:
                         note("condition", c.get("device"), f"{src}/{code}/{g}")
         for f in _favorites:
@@ -4135,7 +4190,10 @@ def pwa_icon512():
 # ---------------------------------------------------------------------------
 # Plug-in loader (docs/plugins.md). Loaded last, so every hook above exists.
 # ---------------------------------------------------------------------------
-PLUGINS_DIR = Path(os.environ.get("HOME_PLUGINS_DIR") or (ROOT / "plugins"))
+# inside the container always /app/plugins (compose mounts the host's PLUGINS_DIR there); a bare
+# `uvicorn app:app` uses plugins/ next to the data. Not read from the environment on purpose: the
+# host path in PLUGINS_DIR reaches the container through env_file and would point nowhere.
+PLUGINS_DIR = ROOT / "plugins"
 _PLUGIN_ASSETS = (".js", ".css", ".json", ".png", ".svg")   # served open, like the shell: no secrets in them
 _PLUGIN_NAME = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
@@ -4145,7 +4203,15 @@ def register_device(dev: dict) -> dict:
     the same path mqtt_devices.json entries take, so the dashboard treats it alike."""
     if not isinstance(dev.get("id"), str) or not _CODE_RE.match(dev["id"]):
         raise ValueError(f"device id {dev.get('id')!r}: 1-64 letters, digits, _ . -")
+    if dev["id"] in DEVICES and DEVICES[dev["id"]].get("transport") != dev.get("transport"):
+        raise ValueError(f"device id {dev['id']!r} is taken by a {DEVICES[dev['id']].get('transport')} device")
+    if dev.get("transport") in _CORE_TRANSPORTS:
+        raise ValueError(f"transport {dev.get('transport')!r} belongs to the core")
+    if any(_own_topic(dev.get(t)) for t in ("state_topic", "command_topic", "availability_topic")):
+        raise ValueError("a device topic under home/state/ or home/cmd/ is the backend's own bus")
     d = dict(dev)
+    if not _CAT_RE.match(str(d.get("category") or "other")):
+        d["category"] = "other"
     d["controls"] = _safe_controls(d["id"], d.get("controls"))
     for c in d["controls"]:
         c.setdefault("_label0", c.get("label", ""))
@@ -4157,6 +4223,59 @@ def register_device(dev: dict) -> dict:
     with _cache_lock:
         _status_cache.setdefault(d["id"], {"online": False, "values": {}, "raw": {}})
     return d
+
+
+_HOOK_DICTS = ("TRANSPORTS", "ASYNC_CONTROL", "CONTROL_KINDS", "SETTINGS_SECTIONS", "BINDING_ACTIONS")
+_HOOK_LISTS = ("MQTT_SUBSCRIPTIONS", "MQTT_HANDLERS", "STARTUP_TASKS", "DEVICE_FIELDS")
+# names the core owns: a plug-in may not take them over
+_CORE_TRANSPORTS = {"z2m", "mqtt"}
+_CORE_KINDS = {"switch", "bright", "color", "sensor", "sensor_text", "trigger", "trigger_text",
+               "setting_bool", "setting_enum", "setting_int"}
+_CORE_ACTIONS = {"on", "off", "toggle", "bright_up", "bright_down", "press"}
+_CORE_DEVICE_KEYS = {"id", "name", "category", "transport", "controls", "room", "ieee", "model", "unsupported"}
+
+
+def _hooks_snapshot() -> dict:
+    g = globals()
+    return {"dicts": {k: dict(g[k]) for k in _HOOK_DICTS}, "lists": {k: list(g[k]) for k in _HOOK_LISTS},
+            "open": set(OPEN_PATHS), "devices": set(DEVICES), "routes": len(app.router.routes)}
+
+
+def _hooks_restore(snap: dict):
+    g = globals()
+    for k, v in snap["dicts"].items():
+        g[k].clear(); g[k].update(v)
+    for k, v in snap["lists"].items():
+        g[k][:] = v
+    OPEN_PATHS.clear(); OPEN_PATHS.update(snap["open"])
+    for did in set(DEVICES) - snap["devices"]:
+        DEVICES.pop(did, None); BY_ID_NAME.pop(did, None)
+    del app.router.routes[snap["routes"]:]
+
+
+def _hooks_check(name: str, snap: dict):
+    """What a plug-in registered must not reach into the core's own names or bus."""
+    new = {k: set(globals()[k]) - set(snap["dicts"][k]) for k in _HOOK_DICTS}
+    if new["TRANSPORTS"] & _CORE_TRANSPORTS or new["ASYNC_CONTROL"] & _CORE_TRANSPORTS:
+        raise ValueError(f"transports {sorted(_CORE_TRANSPORTS)} belong to the core")
+    if new["CONTROL_KINDS"] & _CORE_KINDS:
+        raise ValueError(f"control kinds {sorted(new['CONTROL_KINDS'] & _CORE_KINDS)} belong to the core")
+    if new["BINDING_ACTIONS"] & _CORE_ACTIONS:
+        raise ValueError(f"rule actions {sorted(new['BINDING_ACTIONS'] & _CORE_ACTIONS)} belong to the core")
+    for k in DEVICE_FIELDS[len(snap["lists"]["DEVICE_FIELDS"]):]:
+        if k in _CORE_DEVICE_KEYS or not isinstance(k, str):
+            raise ValueError(f"device field {k!r} belongs to the core")
+    for pre, _fn in MQTT_HANDLERS[len(snap["lists"]["MQTT_HANDLERS"]):]:
+        pre = tuple(pre)
+        if not pre or not all(isinstance(x, str) and x and x not in ("+", "#") for x in pre) \
+                or pre[0] in ("home", "zigbee2mqtt", "homeassistant", "$SYS"):
+            raise ValueError(f"MQTT handler prefix {pre!r}: a topic of the plug-in's own, not the core's bus")
+    for t in MQTT_SUBSCRIPTIONS[len(snap["lists"]["MQTT_SUBSCRIPTIONS"]):]:
+        if not isinstance(t, str) or not t or "#" in t[:-1] or t.split("/")[0] in ("home", "zigbee2mqtt", "#", "+"):
+            raise ValueError(f"MQTT subscription {t!r}: a valid filter under a topic of the plug-in's own")
+    for p in OPEN_PATHS - snap["open"]:
+        if not isinstance(p, str) or not p.startswith("/") or p.startswith(("/api", "/ws", "/plugins/")):
+            raise ValueError(f"open path {p!r}: a page of the plug-in, never the API")
 
 
 def _load_plugins(pdir: "Path | None" = None, top: str = "yashome_plugins") -> list:
@@ -4183,22 +4302,27 @@ def _load_plugins(pdir: "Path | None" = None, top: str = "yashome_plugins") -> l
             _PLUGIN_ERRORS[name] = "directory name must be lowercase letters, digits and _ (starting with a letter)"
             log.error(f"[plugins] {name}: {_PLUGIN_ERRORS[name]}")
             continue
+        snap = _hooks_snapshot()
         try:
             mod = importlib.import_module(f"{top}.{name}")
+            meta = getattr(mod, "PLUGIN", {}) or {}
+            if not isinstance(meta, dict):
+                raise TypeError("PLUGIN must be a dict like {'name': ..., 'version': ...}")
+            _hooks_check(name, snap)
+            i18n = {}
+            if (q / "i18n.json").is_file():
+                i18n = json.loads((q / "i18n.json").read_text(encoding="utf-8"))
+                if not isinstance(i18n, dict) or not all(isinstance(v, dict) for v in i18n.values()):
+                    raise ValueError("i18n.json must be {lang: {text: translation}}")
         except BaseException as e:              # noqa: BLE001 - SystemExit in a plug-in must not stop us
             if isinstance(e, KeyboardInterrupt):
                 raise
+            _hooks_restore(snap)                 # what it registered before failing is taken back
+            _sys.modules.pop(f"{top}.{name}", None)
             _PLUGIN_ERRORS[name] = f"{type(e).__name__}: {e}"
             log.error(f"[plugins] {name} failed to load: {_PLUGIN_ERRORS[name]}")
             continue
         _PLUGIN_ERRORS.pop(name, None)
-        meta = dict(getattr(mod, "PLUGIN", {}) or {})
-        i18n = {}
-        if (q / "i18n.json").is_file():
-            try:
-                i18n = json.loads((q / "i18n.json").read_text(encoding="utf-8"))
-            except ValueError as e:
-                log.error(f"[plugins] {name}/i18n.json: {e}")
         PLUGINS[:] = [m for m in PLUGINS if m["id"] != name]
         PLUGINS.append({"id": name, "name": str(meta.get("name") or name), "version": meta.get("version"),
                         "ui": f"/plugins/{name}/ui.js" if (q / "ui.js").is_file() else None, "i18n": i18n})
@@ -4215,17 +4339,19 @@ def api_plugins():
             "dir": str(PLUGINS_DIR)}
 
 
-@app.get("/plugins/{name}/{file}")
-def plugin_asset(name: str, file: str):
-    """Static files of a loaded plug-in (ui.js, i18n.json, css, icons)."""
-    if (not _PLUGIN_NAME.match(name) or not any(m["id"] == name for m in PLUGINS)
-            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", file) or ".." in file
-            or not file.lower().endswith(_PLUGIN_ASSETS)):
-        raise HTTPException(404, "not a plug-in asset")
-    path = PLUGINS_DIR / name / file
-    if not path.is_file():
-        raise HTTPException(404, "no such asset")
-    return FileResponse(path, headers={"Cache-Control": "no-cache"})
+@app.get("/plugins/{name}/{path:path}")
+def plugin_asset(name: str, path: str):
+    """Public files of a loaded plug-in: ui.js, i18n.json and anything in its static/ folder.
+    Nothing else of the package is served (no source, no config). One answer for every miss,
+    so the route does not tell which plug-ins exist."""
+    miss = HTTPException(404, "not found")
+    if not _OPEN_ASSET.match(f"/plugins/{name}/{path}") or not any(m["id"] == name for m in PLUGINS):
+        raise miss
+    base = (PLUGINS_DIR / name).resolve()
+    target = (base / path).resolve()
+    if base not in target.parents or not target.is_file() or not target.name.lower().endswith(_PLUGIN_ASSETS):
+        raise miss                                   # symlinks out of the package, directories
+    return FileResponse(target, headers={"Cache-Control": "no-cache"})
 
 
 _load_plugins()

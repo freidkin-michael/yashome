@@ -538,8 +538,19 @@ const HomePlugins = {
       if(Array.isArray(m && m[k])) this[k].push(...m[k]);
   },
   // one plug-in's bug must not blank the dashboard: every call into a plug-in goes through this
-  safe(fn, ...args){ try{ return fn(...args); }catch(e){ console.warn('plug-in', e); return undefined; } },
-  reload(){ return Promise.all(this.onReload.map(f => Promise.resolve().then(f).catch(e => console.warn('plug-in', e)))); },
+  safe(fn, ...args){
+    try{
+      const r = fn(...args);
+      if(r && typeof r.catch === 'function') r.catch(e => console.warn('plug-in', e));   // async callbacks too
+      return r;
+    }catch(e){ console.warn('plug-in', e); return undefined; }
+  },
+  // every onReload gets 5 s; a plug-in that never answers must not hold the dashboard
+  reload(){
+    const limit = f => Promise.race([Promise.resolve().then(f), new Promise(res => setTimeout(res, 5000))])
+      .catch(e => console.warn('plug-in', e));
+    return Promise.all(this.onReload.map(limit));
+  },
   ruleAction(type){ return this.ruleActions.find(a => a.type === type); },
   toolbarButtons(tab){ return this.toolbar.filter(b => b.tab === tab && (!b.visible || this.safe(b.visible))); },
 };
@@ -563,10 +574,15 @@ async function loadPlugins(){
   try{ r = await api('/api/plugins'); }catch(e){ /* a core without plug-ins answers too */ }
   HomePlugins.list = r.loaded || []; HomePlugins.failed = r.failed || [];
   for(const p of HomePlugins.list){
-    for(const [lang, tbl] of Object.entries(p.i18n || {})) I18N[lang] = Object.assign(I18N[lang] || {}, tbl);
+    for(const [lang, tbl] of Object.entries(p.i18n || {})){
+      if(!/^[a-z]{2}$/.test(lang) || !tbl || typeof tbl !== 'object') continue;
+      const dst = I18N[lang] = I18N[lang] || {};
+      for(const [k, v] of Object.entries(tbl))
+        if(typeof v === 'string' && !(k in dst) && !['__proto__', 'constructor', 'prototype'].includes(k)) dst[k] = v;
+    }
     if(p.ui) await new Promise(res => {
       const sc = document.createElement('script'); sc.src = p.ui; sc.onload = res;
-      sc.onerror = () => { console.warn('plug-in ui failed', p.id); res(); };
+      sc.onerror = () => { console.warn('plug-in ui failed', p.id); p.uiFailed = true; res(); };
       document.head.appendChild(sc);
     });
   }
@@ -630,7 +646,9 @@ async function init(){
   try { RULES = await api('/api/rules'); } catch(e){ RULES = []; }
   await loadPlugins();
   translateDom(document);   // again: plug-in dictionaries are in now
-  await HomePlugins.reload();
+  DEVICES = localizeDevices(DEVICES);   // and device labels, now with the plug-ins' words
+  BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
+  HomePlugins.reload().then(() => { if(!openModalId){ renderTabs(); render(); } });
   if(!allTabs().some(t => t.id === activeTab) && !activeTab.startsWith('room:')) activeTab = 'fav';
   renderTabs();
   render();
@@ -667,10 +685,11 @@ function openSettings(){
       </section>
       <section><h3>${i18n('Plug-ins')}</h3>
         ${HomePlugins.list.map(p => `<div class="row"><span class="rlabel">${escapeHtml(p.name)}</span>
-          <span class="rval">${escapeHtml(p.version || '')} \u00b7 ${i18n('loaded')}</span></div>`).join('')}
+          <span class="rval"${p.uiFailed ? ' style="color:var(--bad)"' : ''}>${escapeHtml(p.version || '')} \u00b7 ${
+            p.uiFailed ? i18n('ui.js failed to load') : i18n('loaded')}</span></div>`).join('')}
         ${HomePlugins.failed.map(p => `<div class="row"><span class="rlabel">${escapeHtml(p.id)}</span>
           <span class="rval" style="color:var(--bad)">${escapeHtml(p.error)}</span></div>`).join('')}
-        ${HomePlugins.list.length || HomePlugins.failed.length ? '' : `<div class="bindcaption">${i18n('No plug-ins. A plug-in is a directory in HOME_PLUGINS_DIR; restart the backend after adding one (docs/plugins.md).')}</div>`}
+        ${HomePlugins.list.length || HomePlugins.failed.length ? '' : `<div class="bindcaption">${i18n('No plug-ins. A plug-in is a directory in PLUGINS_DIR (see .env); restart the backend after adding one (docs/plugins.md).')}</div>`}
       </section>
     </div>`;
   document.getElementById('bd').classList.add('show');
@@ -796,7 +815,8 @@ function renderTabs(){
     const n = t.plugin ? badge(t) : (t.id === 'fav') ? FAVORITES.length
             : (t.id === 'auto') ? RULES.length
             : devsForTab(t.id).length;
-    return `<button class="tab ${t.id===activeTab?'active':''}" data-tab="${t.id}">${escapeHtml(t.label)}<span class="badge">${n}</span></button>`;
+    return `<button class="tab ${t.id===activeTab?'active':''}" data-tab="${t.id}">${escapeHtml(t.label)}${
+      n === '' || n == null ? '' : `<span class="badge">${n}</span>`}</button>`;
   }).join('');
   const act = allTabs().find(t=>t.id===activeTab);
   const tt = document.getElementById('tabtitle');
@@ -860,7 +880,8 @@ function render(){
   if(activeTab.startsWith('room:')){ renderRoom(app, activeTab.slice(5)); return; }
   if(activeTab.startsWith('p:')){
     const t = allTabs().find(x => x.id === activeTab);
-    if(t) HomePlugins.safe(() => t.plugin.render(app));
+    const box = el('div'); app.append(box);   // detached by the next render(): stale async writes are harmless
+    if(t) HomePlugins.safe(() => t.plugin.render(box));
     return;
   }
   if(activeTab === 'fav'){ renderFavorites(app); return; }
@@ -1491,6 +1512,12 @@ function daysPickerHtml(sel){
 }
 
 function openRuleBuilder(rule){
+  const t0 = rule && rule.then && rule.then[0];
+  if(t0 && t0.type && t0.type !== 'device' && !HomePlugins.ruleAction(t0.type)){
+    // its plug-in (or that plug-in's ui.js) is not loaded: editing here would turn it into a device rule
+    alert(i18n('This rule belongs to a plug-in that is not loaded here; it can be enabled, disabled or deleted, not edited.'));
+    return;
+  }
   openModalId = '__rule_builder__';
   const edit = !!rule;
   // derive initial trigger type from an existing rule
