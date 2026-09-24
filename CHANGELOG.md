@@ -1,6 +1,6 @@
 # Changelog -- Yashome
 
-## 1.1.0 - unreleased
+## 1.1.0 - 2026-09-24
 
 Plug-ins: everything beyond the core arrives as a package in PLUGINS_DIR (docs/plugins.md).
 
@@ -10,6 +10,9 @@ Plug-ins: everything beyond the core arrives as a package in PLUGINS_DIR (docs/p
 - dashboard hooks: tabs, "Add" rows, card decorators, rule targets, toolbar buttons, reload
   callbacks, i18n tables; every call into a plug-in is guarded
 - `GET /api/plugins`, `/plugins/<name>/<asset>`, Settings -> Plug-ins, compose mounts PLUGINS_DIR
+- a plug-in may not take over core names, the core's MQTT topics or what an earlier plug-in
+  registered; only `ui.js`, `i18n.json` and `static/` of a loaded plug-in are served without the
+  token, everything else a plug-in adds needs it
 - `examples/plugins/hello`: a complete plug-in; contract tests in tests/test_plugins.py
 
 ## 1.0.0 - 2026-09-24
