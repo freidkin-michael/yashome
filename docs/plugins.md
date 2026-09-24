@@ -79,8 +79,9 @@ you enable, disable or delete it, not edit it, and `POST /api/rules/run` answers
 `home/`, `zigbee2mqtt/`, `homeassistant/`, `$SYS`, or open paths under `/api`, `/ws`, `/plugins/`.
 Nor may it replace or remove what the core or an earlier plug-in registered (a hook entry, a device,
 a settings section); changing such an object in place is not detected - do not. A route under
-`/plugins/<name>/` is yours, except one whose path looks like a public file (`ui.js`, `i18n.json`,
-`static/...`): that is refused, it would be served without the token.
+`/plugins/<name>/` is yours (never under another plug-in's name), except one whose path looks like
+a public file (`ui.js`, `i18n.json`, `static/...`): that is refused. A pattern of yours that also
+covers a public file (`static/{f}`, `{p:path}`) wins over it and needs the token.
 
 ## Dashboard side
 

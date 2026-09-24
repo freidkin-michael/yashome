@@ -32,6 +32,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 import hmac
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.routing import Match
 from pydantic import BaseModel, ConfigDict
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s")
@@ -1340,13 +1341,22 @@ _EXTRA_ORIGINS = {x.strip().split("://", 1)[-1].rstrip("/").lower()
                   for x in os.environ.get("DASHBOARD_ORIGINS", "").split(",") if x.strip()}
 
 
+def _routes_to_asset(scope) -> bool:
+    """Open without the token only what routing really hands to plugin_asset: a plug-in route whose
+    pattern also covers a public-looking path ({f}, {p:path}) matches first and stays closed."""
+    for r in app.router.routes:
+        if r.matches(scope)[0] == Match.FULL:
+            return getattr(r, "endpoint", None) is plugin_asset
+    return False
+
+
 @app.middleware("http")
 async def _require_token(request, call_next):
     p = request.url.path
     if request.method not in ("GET", "HEAD", "OPTIONS") and not _same_origin(request.headers):
         return _refuse(403, "cross-origin request refused")
     plugin_open = p in OPEN_PATHS and not p.startswith(("/api", "/ws"))   # a plug-in page, never the API
-    asset = request.method in ("GET", "HEAD") and _OPEN_ASSET.match(p)
+    asset = request.method in ("GET", "HEAD") and _OPEN_ASSET.match(p) and _routes_to_asset(request.scope)
     if p in _OPEN_PATHS or plugin_open or asset or p.startswith(_OPEN_PREFIXES) or _token_ok(request.headers):
         if "settings" in _load_failed and request.method != "GET" and _writes_settings(p):
             return _refuse(503, "settings.json was unreadable at start: fix or remove it and restart; "
@@ -4322,8 +4332,13 @@ def _hooks_check(name: str, snap: dict):
                 or t.split("/")[0] in ("home", "zigbee2mqtt", "homeassistant", "$SYS", "#", "+"):
             raise ValueError(f"MQTT subscription {t!r}: a valid filter under a topic of the plug-in's own")
     for r in app.router.routes:
-        if r not in snap["routes"] and _OPEN_ASSET.match(getattr(r, "path", "")):
-            raise ValueError(f"route {r.path!r} looks like a public plug-in file: it would be served without the token")
+        rp = getattr(r, "path", "")
+        if r in snap["routes"] or not rp.startswith("/plugins/"):
+            continue
+        if not rp.startswith(f"/plugins/{name}/"):
+            raise ValueError(f"route {rp!r}: under /plugins/ only /plugins/{name}/...")
+        if _OPEN_ASSET.match(rp):
+            raise ValueError(f"route {rp!r} looks like a public plug-in file: it would be served without the token")
     for p in OPEN_PATHS - snap["open"]:
         if not isinstance(p, str) or not p.startswith("/") or p.startswith(("/api", "/ws", "/plugins/")):
             raise ValueError(f"open path {p!r}: a page of the plug-in, never the API")

@@ -108,7 +108,9 @@ class Isolation(unittest.TestCase):
                            ("r9", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('$SYS/#')\n"),
                            ("r10", "import app as core\ncore.SETTINGS_SECTIONS['names'] = dict\n"),
                            ("r11", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('vendor/a+b')\n"),
-                           ("r12", "import app as core\n\n\ndef f():\n    return {}\n\n\ncore.app.get('/plugins/hello/i18n.json')(f)\n")):
+                           ("r12", "import app as core\n\n\ndef f():\n    return {}\n\n\ncore.app.get('/plugins/r12/i18n.json')(f)\n"),
+                           ("r13", "import app as core\n\n\ndef f(p: str):\n    return {}\n\n\n"
+                                   "core.app.get('/plugins/hello/{p:path}')(f)\n")):
             self.assertEqual(self.load(**{name: code}), [], name)
             self.assertIn(name, app._PLUGIN_ERRORS)
 
@@ -158,6 +160,26 @@ class Assets(unittest.TestCase):
                     app.plugin_asset("pub", f)
         finally:
             app.PLUGINS_DIR = keep
+
+    def test_a_parametrised_plugin_route_is_not_opened(self):
+        d = tempfile.mkdtemp()
+        _pkg(d, "rt", "import app as core\n\n\ndef f(f: str):\n    return {}\n\n\n"
+                      "def p(p: str):\n    return {}\n\n\n"
+                      "core.app.get('/plugins/rt/static/{f}')(f)\ncore.app.get('/plugins/rt/{p:path}')(p)\n",
+             **{"ui.js": "//"})
+        self.assertEqual(app._load_plugins(pathlib.Path(d), top="t_rt"), ["rt"])
+        routes = app.app.router.routes
+        asset = next(r for r in routes if getattr(r, "endpoint", None) is app.plugin_asset)
+        keep = list(routes)
+        routes.remove(asset); routes.append(asset)           # as in production: after the plug-ins
+        try:
+            for path in ("/plugins/rt/static/data.json", "/plugins/rt/ui.js"):
+                scope = {"type": "http", "method": "GET", "path": path, "root_path": ""}
+                self.assertFalse(app._routes_to_asset(scope), path)
+            scope = {"type": "http", "method": "GET", "path": "/plugins/hello/ui.js", "root_path": ""}
+            self.assertTrue(app._routes_to_asset(scope))
+        finally:
+            routes[:] = keep
 
     def test_plugin_routes_under_plugins_need_the_token(self):
         self.assertIsNone(app._OPEN_ASSET.match("/plugins/ir/learn"))
