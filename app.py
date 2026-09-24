@@ -31,7 +31,8 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 import hmac
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
+from pydantic import BaseModel, ConfigDict
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s")
 
@@ -80,6 +81,27 @@ if SETTINGS_PATH.exists():
         _cfg = {}
         _load_failed.add("settings")
         log.error(f"[settings] {SETTINGS_PATH} unreadable ({_e}); saves DISABLED until fixed")
+
+
+# ---------------------------------------------------------------------------
+# Plug-in hooks. A plug-in is a Python package in HOME_PLUGINS_DIR that does `import app as core`
+# and registers itself here when it is imported (see docs/plugins.md). The core never imports a
+# plug-in by name; with no plug-ins these stay empty and nothing changes.
+# ---------------------------------------------------------------------------
+TRANSPORTS: dict = {}        # transport -> fn(cfg, code, val, kind): actuate (worker threads, bindings, timers)
+ASYNC_CONTROL: dict = {}     # transport -> async fn(cfg, code, val): actuate from POST /control (event loop)
+CONTROL_KINDS: dict = {}     # control kind -> fn(cfg, ctl, val) -> dict: stateless channels (e.g. an IR button)
+MQTT_SUBSCRIPTIONS: list = []   # topic filters subscribed after the core's own, on every (re)connect
+MQTT_HANDLERS: list = []     # (topic prefix tuple, fn(parts, payload, retain)) tried before home/cmd
+STARTUP_TASKS: list = []     # callables (sync or async) run once the broker is up
+SETTINGS_SECTIONS: dict = {}  # settings.json key -> fn() returning what to persist for the plug-in
+BINDING_ACTIONS: dict = {}   # action -> {"validate": fn(body)->entry, "run": fn(b)->dict, "describe": fn(b)->then}
+RULE_THEN: dict = {}         # rule "then" type -> fn(then) -> dict: the manual "run" of such a rule
+DEVICE_FIELDS: list = []     # extra device keys GET /api/devices passes to the dashboard
+OPEN_PATHS: set = set()      # extra paths served without the token (a plug-in's own page)
+PLUGINS: list = []           # manifests for the dashboard: {id, name, version, ui, i18n}
+_PLUGIN_TASKS: list = []     # running plug-in coroutines (referenced so they are not collected)
+_PLUGIN_ERRORS: dict = {}    # plug-in -> why its import failed (shown in Settings)
 
 
 def _cfg_section(key, default):
@@ -135,6 +157,15 @@ def _save_settings():
             "automations": _autos,
             "rules_disabled": sorted(_rules_disabled),
         }
+        for key, get in SETTINGS_SECTIONS.items():   # plug-in sections
+            if key not in data:
+                try:
+                    data[key] = get()
+                except Exception:
+                    log.exception(f"[settings] section {key!r} of a plug-in failed; kept as it was")
+        # a section nobody owns right now (plug-in removed or failing) is carried over, never dropped
+        for key, val in _cfg.items():
+            data.setdefault(key, val)
         _atomic_json_dump(SETTINGS_PATH, data, indent=2, ensure_ascii=False)
 
 
@@ -620,11 +651,17 @@ def _apply_value(dev_id: str, code: str, val, kind: str = "switch"):
     cfg = DEVICES.get(dev_id)
     if cfg is None:
         raise RuntimeError(f"unknown device {dev_id}")
+    ctl = cfg["_ctl"].get(code) or {}
+    if ctl.get("kind") in CONTROL_KINDS:      # a plug-in's stateless channel (an event, no value)
+        CONTROL_KINDS[ctl["kind"]](cfg, ctl, val)
+        return
     tr = cfg.get("transport")
     if tr == "z2m":
         _z2m_publish_set(cfg, code, val, kind)
     elif tr == "mqtt":
         _mqtt_generic_publish_set(cfg, code, val, kind)
+    elif tr in TRANSPORTS:
+        TRANSPORTS[tr](cfg, code, val, kind)
     else:
         raise RuntimeError(f"unsupported transport {tr!r} for {dev_id}")
     if kind == "switch":
@@ -1159,6 +1196,10 @@ def _execute_binding(src_id: str, code: str, gesture: str, force: bool = False):
     if not force and not _conditions_pass(b.get("conditions")):
         log.info(f"[binding] {src_id}/{code}={gesture} -> skipped (conditions)")
         return
+    if b.get("action") in BINDING_ACTIONS:              # a plug-in's action (its target is its own)
+        res = BINDING_ACTIONS[b["action"]]["run"](b)
+        log.info(f"[binding] {src_id}/{code}={gesture} -> {b['action']} {b.get('target')}")
+        return res
     target_id = b["target"]
     # The z2m shortcut publishes standard-cluster commands (brightness_step_onoff,
     # state TOGGLE). A Tuya-datapoint device speaks only EF00 and has no
@@ -1183,7 +1224,7 @@ def _execute_binding(src_id: str, code: str, gesture: str, force: bool = False):
     if not tctl:
         return
     tctl_kind = tctl.get("kind", "switch")
-    if action == "on":
+    if action in ("on", "press"):             # press: a plug-in's stateless channel (CONTROL_KINDS)
         val = True
     elif action == "off":
         val = False
@@ -1201,6 +1242,9 @@ def _execute_binding(src_id: str, code: str, gesture: str, force: bool = False):
     else:
         return
     _apply_value(target_id, target_code, val, tctl_kind)
+    if tctl_kind in CONTROL_KINDS:            # an event: nothing to store or mirror
+        _last_control_ts[target_id] = time.time()
+        return {"target": target_id, "code": target_code, "action": action}
     cur_st = _status_copy(target_id, {"online": True, "values": {}, "raw": {}})
     cur_st.setdefault("values", {})[target_code] = val
     cur_st["online"] = True
@@ -1244,7 +1288,7 @@ _CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'
 # CLOSED: a lost .env must never silently reopen the house.
 DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
 _OPEN_PATHS = {"/", "/manifest.json", "/sw.js", "/i18n.js", "/favicon.ico"}
-_OPEN_PREFIXES = ("/icon-",)
+_OPEN_PREFIXES = ("/icon-", "/plugins/")   # /plugins/<name>/<asset>: a plug-in's static files
 if not DASHBOARD_TOKEN:
     log.error("DASHBOARD_TOKEN is not set: every /api call will be refused (401)")
 
@@ -1282,7 +1326,7 @@ async def _require_token(request, call_next):
     p = request.url.path
     if request.method not in ("GET", "HEAD", "OPTIONS") and not _same_origin(request.headers):
         return _refuse(403, "cross-origin request refused")
-    if p in _OPEN_PATHS or p.startswith(_OPEN_PREFIXES) or _token_ok(request.headers):
+    if p in _OPEN_PATHS or p in OPEN_PATHS or p.startswith(_OPEN_PREFIXES) or _token_ok(request.headers):
         if "settings" in _load_failed and request.method != "GET" and _writes_settings(p):
             return _refuse(503, "settings.json was unreadable at start: fix or remove it and restart; "
                                 "nothing that is kept in it can change until then")
@@ -1574,6 +1618,10 @@ def _mqtt_on_message(cli, userdata, msg):
             else:
                 _handle_z2m_message(parts, msg.payload, msg.retain)
             return
+        for pre, fn in MQTT_HANDLERS:            # plug-in topics
+            if tuple(parts[:len(pre)]) == tuple(pre):
+                fn(parts, msg.payload, msg.retain)
+                return
         if len(parts) != 4 or parts[:2] != ["home", "cmd"]:
             return
         if msg.retain:            # a command is an event; a retained one would re-run on every reconnect
@@ -1674,6 +1722,8 @@ def _mqtt_subscribe_all(cli):
     cli.subscribe("zigbee2mqtt/+/availability")  # online/offline when availability is on in z2m
     cli.subscribe("zigbee2mqtt/+")            # z2m state frames -> ingest / binding engine
     cli.subscribe("home/cmd/#")
+    for t in MQTT_SUBSCRIPTIONS:                 # plug-in topics
+        cli.subscribe(t)
     _MQTT_TOPIC_IDX = _mqtt_topic_index()     # generic-MQTT DIY ESP devices
     for _t in _MQTT_TOPIC_IDX:
         cli.subscribe(_t)
@@ -2375,6 +2425,12 @@ async def _after_broker():
     threading.Thread(target=_scheduler_loop, daemon=True, name="scheduler").start()
     step(_replay_pending_on_boot, "timer replay")      # deferred deadlines (inching + rule `for`)
     step(_rearm_inching_on_boot, "inching re-arm")     # channels on at boot without a timer
+    for task in STARTUP_TASKS:                          # plug-in pollers and the like
+        name = getattr(task, "__qualname__", repr(task))
+        if asyncio.iscoroutinefunction(task):
+            _PLUGIN_TASKS.append(asyncio.create_task(task()))   # held: asyncio keeps tasks weakly
+        else:
+            step(task, f"plug-in task {name}")
     # once more when the retained frames have arrived: the cache read at start may be older
     _t = threading.Timer(20, lambda: step(_rearm_inching_on_boot, "inching re-arm"))
     _t.daemon = True
@@ -2428,6 +2484,7 @@ def list_devices():
         "transport": d.get("transport"),
         "controls": _controls_with_dimrange(d["id"], d.get("controls", [])),
         "room": d.get("room", ""),
+        **{k: d.get(k) for k in DEVICE_FIELDS},   # fields a plug-in needs on its cards
         "ieee": d.get("ieee"), "model": d.get("model"),
         "unsupported": bool(d.get("unsupported")),
     } for d in list(DEVICES.values())]
@@ -2471,6 +2528,15 @@ async def control(dev_id: str, body: ControlBody):
         raise HTTPException(400, f"Unknown code '{body.code}'")
     if ctl.get("ro") or ctl.get("kind") in ("sensor", "sensor_text", "trigger", "trigger_text"):
         raise HTTPException(400, "Read-only")
+    if ctl.get("kind") in CONTROL_KINDS:      # a plug-in's stateless channel: no value is stored
+        try:
+            info = await run_in_threadpool(CONTROL_KINDS[ctl["kind"]], cfg, ctl, body.value)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(502, f"send failed: {e}")
+        _last_control_ts[dev_id] = time.time()
+        return {"ok": True, "code": body.code, "pressed": info}
     val = body.value
     if ctl["kind"] == "switch" and not isinstance(val, bool):
         v = str(val).strip().lower()
@@ -2515,6 +2581,10 @@ async def control(dev_id: str, body: ControlBody):
         except Exception as e:
             raise HTTPException(500, f"z2m error: {e}")
         log.warning(f"[control] {cfg['name']}/{body.code}={val} via z2m")
+    elif cfg.get("transport") in ASYNC_CONTROL:
+        await ASYNC_CONTROL[cfg["transport"]](cfg, body.code, val)
+    elif cfg.get("transport") in TRANSPORTS:
+        await run_in_threadpool(TRANSPORTS[cfg["transport"]], cfg, body.code, val, ctl["kind"])
     elif cfg.get("transport") == "mqtt":
         try:
             _mqtt_generic_publish_set(cfg, body.code, val, ctl["kind"])
@@ -2700,6 +2770,7 @@ async def rename_device(dev_id: str, body: RenameBody):
 # Bindings CRUD
 # ---------------------------------------------------------------------------
 class BindingBody(BaseModel):
+    model_config = ConfigDict(extra="allow")   # fields of plug-in actions (BINDING_ACTIONS)
     target: str
     code: Optional[str] = None  # target code
     action: str  # on | off | toggle | bright_up | bright_down
@@ -2711,35 +2782,9 @@ class BindingBody(BaseModel):
     time_window: Optional[dict] = None  # {from:'HH:MM', to:'HH:MM', days:[1..7]}
 
 
-@app.put("/api/bindings/{src}/{src_code}/{gesture}")
-def put_binding(src: str, src_code: str, gesture: str, body: BindingBody):
-    for part, what in ((src, "source"), (src_code, "code"), (gesture, "gesture")):
-        _check_topic_name(part, what)          # | would break the rule id b|src|code|gesture
-    if src not in DEVICES:
-        raise HTTPException(404, "unknown src device")
-    if body.target not in DEVICES:
-        raise HTTPException(400, "unknown target device")
-    if body.action not in ("on", "off", "toggle", "bright_up", "bright_down"):
-        raise HTTPException(400, "action must be on|off|toggle|bright_up|bright_down")
-    if not body.code:
-        raise HTTPException(400, "target code required for device action")
-    tcfg = DEVICES[body.target]
-    tctl = tcfg["_ctl"].get(body.code)
-    if not tctl:
-        raise HTTPException(400, f"target has no code '{body.code}'")
-    if body.action.startswith("bright_") and tctl.get("kind") != "bright":
-        raise HTTPException(400, "bright_* action needs a bright target code")
-    entry = {"target": body.target, "code": body.code, "action": body.action}
-    if body.for_sec is not None:
-        if body.action not in ("on", "off"):
-            raise HTTPException(400, "for-duration only applies to on/off actions")
-        if body.for_sec <= 0 or body.for_sec > _MAX_DELAY:
-            raise HTTPException(400, f"for-duration must be 1 s .. {_MAX_DELAY // 86400} days")
-        entry["for"] = int(body.for_sec)
-        pol = (body.retrigger or "restart").lower()
-        if pol not in ("restart", "extend", "ignore"):
-            raise HTTPException(400, "retrigger must be restart|extend|ignore")
-        entry["retrigger"] = pol
+def _store_binding(src: str, src_code: str, gesture: str, body, entry: dict):
+    """What every binding shares, core action or plug-in action: conditions, time window,
+    threshold, then the save."""
     # common to every action kind: conditions, time window, sensor threshold
     if body.conditions:
         for c in body.conditions:
@@ -2766,6 +2811,44 @@ def put_binding(src: str, src_code: str, gesture: str, body: BindingBody):
         _bindings.setdefault(src, {}).setdefault(src_code, {})[gesture] = entry
         _save_settings()
     return {"ok": True}
+
+
+@app.put("/api/bindings/{src}/{src_code}/{gesture}")
+def put_binding(src: str, src_code: str, gesture: str, body: BindingBody):
+    for part, what in ((src, "source"), (src_code, "code"), (gesture, "gesture")):
+        _check_topic_name(part, what)          # | would break the rule id b|src|code|gesture
+    if src not in DEVICES:
+        raise HTTPException(404, "unknown src device")
+    if body.action in BINDING_ACTIONS:              # a plug-in's action checks its own fields
+        entry = BINDING_ACTIONS[body.action]["validate"](body.model_dump())
+        return _store_binding(src, src_code, gesture, body, entry)
+    if body.target not in DEVICES:
+        raise HTTPException(400, "unknown target device")
+    if body.action not in ("on", "off", "toggle", "bright_up", "bright_down", "press"):
+        raise HTTPException(400, "action must be on|off|toggle|bright_up|bright_down|press")
+    if not body.code:
+        raise HTTPException(400, "target code required for device action")
+    tcfg = DEVICES[body.target]
+    tctl = tcfg["_ctl"].get(body.code)
+    if not tctl:
+        raise HTTPException(400, f"target has no code '{body.code}'")
+    if body.action.startswith("bright_") and tctl.get("kind") != "bright":
+        raise HTTPException(400, "bright_* action needs a bright target code")
+    if (body.action == "press") != (tctl.get("kind") in CONTROL_KINDS):
+        raise HTTPException(400, "press is the one action of a stateless channel, and only of it")
+    entry = {"target": body.target, "code": body.code, "action": body.action}
+    if body.for_sec is not None:
+        if body.action not in ("on", "off"):
+            raise HTTPException(400, "for-duration only applies to on/off actions")
+        if body.for_sec <= 0 or body.for_sec > _MAX_DELAY:
+            raise HTTPException(400, f"for-duration must be 1 s .. {_MAX_DELAY // 86400} days")
+        entry["for"] = int(body.for_sec)
+        pol = (body.retrigger or "restart").lower()
+        if pol not in ("restart", "extend", "ignore"):
+            raise HTTPException(400, "retrigger must be restart|extend|ignore")
+        entry["retrigger"] = pol
+    return _store_binding(src, src_code, gesture, body, entry)
+
 
 
 # ---------------------------------------------------------------------------
@@ -2807,15 +2890,19 @@ def _binding_rules():
                 if "threshold" in b:
                     when["threshold"] = b["threshold"]
                     when["hyst"] = b.get("hyst", 0)
-                then = {"type": "device", "device": tgt, "device_name": _dname(tgt),
-                        "code": b.get("code", "state"), "action": b.get("action")}
-                fs = b.get("for")
-                if fs:
-                    then["for"] = fs
-                title = (f"{_dname(src)}: {_gesture_label(g)} -> "
-                         f"{_dname(tgt)} {b.get('action')}")
-                if fs:
-                    title += f" for {fs}s"
+                if b.get("action") in BINDING_ACTIONS:      # a plug-in's action describes itself
+                    then = BINDING_ACTIONS[b["action"]]["describe"](b)
+                    title = f"{_dname(src)}: {_gesture_label(g)} -> {then.get('title', b['action'])}"
+                else:
+                    then = {"type": "device", "device": tgt, "device_name": _dname(tgt),
+                            "code": b.get("code", "state"), "action": b.get("action")}
+                    fs = b.get("for")
+                    if fs:
+                        then["for"] = fs
+                    title = (f"{_dname(src)}: {_gesture_label(g)} -> "
+                             f"{_dname(tgt)} {b.get('action')}")
+                    if fs:
+                        title += f" for {fs}s"
                 out.append({
                     "id": rid, "kind": "binding", "enabled": _rule_enabled(rid),
                     "when": [when], "conditions": b.get("conditions") or [],
@@ -2967,6 +3054,8 @@ def rule_delete(body: RuleIdBody):
 
 async def _run_then_action(then: dict):
     """Execute one projected `then` action (used by the manual rule-run test)."""
+    if then.get("type") in RULE_THEN:            # a plug-in's action
+        return RULE_THEN[then["type"]](then)
     dev = then.get("device")
     code = then.get("code") or "state"
     action = then.get("action")
@@ -4041,3 +4130,102 @@ def pwa_icon_maskable():
 @app.get("/icon-512.png")
 def pwa_icon512():
     return FileResponse(ROOT / "icon-512.png", media_type="image/png")
+
+
+# ---------------------------------------------------------------------------
+# Plug-in loader (docs/plugins.md). Loaded last, so every hook above exists.
+# ---------------------------------------------------------------------------
+PLUGINS_DIR = Path(os.environ.get("HOME_PLUGINS_DIR") or (ROOT / "plugins"))
+_PLUGIN_ASSETS = (".js", ".css", ".json", ".png", ".svg")   # served open, like the shell: no secrets in them
+_PLUGIN_NAME = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+
+
+def register_device(dev: dict) -> dict:
+    """Add a device a plug-in owns (any transport): channel map, saved rename, cache seed -
+    the same path mqtt_devices.json entries take, so the dashboard treats it alike."""
+    if not isinstance(dev.get("id"), str) or not _CODE_RE.match(dev["id"]):
+        raise ValueError(f"device id {dev.get('id')!r}: 1-64 letters, digits, _ . -")
+    d = dict(dev)
+    d["controls"] = _safe_controls(d["id"], d.get("controls"))
+    for c in d["controls"]:
+        c.setdefault("_label0", c.get("label", ""))
+    d["_ctl"] = {c["code"]: c for c in d["controls"]}
+    d["name"] = _name_overrides.get(d["id"], d.get("name") or d["id"])
+    d.setdefault("category", "other")
+    DEVICES[d["id"]] = d
+    BY_ID_NAME[d["id"]] = d["name"]
+    with _cache_lock:
+        _status_cache.setdefault(d["id"], {"online": False, "values": {}, "raw": {}})
+    return d
+
+
+def _load_plugins(pdir: "Path | None" = None, top: str = "yashome_plugins") -> list:
+    """Import every <dir>/<name>/ package (alphabetical; names starting with _ are helpers).
+    A plug-in registers itself through the hooks when imported. A missing directory = no
+    plug-ins; a failing one is logged and skipped - one broken plug-in must not take the
+    house down. Returns the ids loaded."""
+    import importlib
+    import sys as _sys
+    import types
+    pdir = Path(pdir) if pdir else PLUGINS_DIR
+    if not pdir.is_dir():
+        return []
+    _sys.modules.setdefault("app", _sys.modules[__name__])   # plug-ins do `import app as core`
+    pkg = types.ModuleType(top)
+    pkg.__path__ = [str(pdir)]
+    _sys.modules[top] = pkg
+    loaded = []
+    for q in sorted(pdir.iterdir()):
+        name = q.name
+        if name.startswith("_") or not (q / "__init__.py").is_file():
+            continue
+        if not _PLUGIN_NAME.match(name):
+            _PLUGIN_ERRORS[name] = "directory name must be lowercase letters, digits and _ (starting with a letter)"
+            log.error(f"[plugins] {name}: {_PLUGIN_ERRORS[name]}")
+            continue
+        try:
+            mod = importlib.import_module(f"{top}.{name}")
+        except BaseException as e:              # noqa: BLE001 - SystemExit in a plug-in must not stop us
+            if isinstance(e, KeyboardInterrupt):
+                raise
+            _PLUGIN_ERRORS[name] = f"{type(e).__name__}: {e}"
+            log.error(f"[plugins] {name} failed to load: {_PLUGIN_ERRORS[name]}")
+            continue
+        _PLUGIN_ERRORS.pop(name, None)
+        meta = dict(getattr(mod, "PLUGIN", {}) or {})
+        i18n = {}
+        if (q / "i18n.json").is_file():
+            try:
+                i18n = json.loads((q / "i18n.json").read_text(encoding="utf-8"))
+            except ValueError as e:
+                log.error(f"[plugins] {name}/i18n.json: {e}")
+        PLUGINS[:] = [m for m in PLUGINS if m["id"] != name]
+        PLUGINS.append({"id": name, "name": str(meta.get("name") or name), "version": meta.get("version"),
+                        "ui": f"/plugins/{name}/ui.js" if (q / "ui.js").is_file() else None, "i18n": i18n})
+        loaded.append(name)
+        log.info(f"[plugins] {name} loaded")
+    return loaded
+
+
+@app.get("/api/plugins")
+def api_plugins():
+    """What the dashboard loads before its first render (scripts, dictionaries) plus the
+    plug-ins that failed, for the Settings screen."""
+    return {"loaded": PLUGINS, "failed": [{"id": k, "error": v} for k, v in sorted(_PLUGIN_ERRORS.items())],
+            "dir": str(PLUGINS_DIR)}
+
+
+@app.get("/plugins/{name}/{file}")
+def plugin_asset(name: str, file: str):
+    """Static files of a loaded plug-in (ui.js, i18n.json, css, icons)."""
+    if (not _PLUGIN_NAME.match(name) or not any(m["id"] == name for m in PLUGINS)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", file) or ".." in file
+            or not file.lower().endswith(_PLUGIN_ASSETS)):
+        raise HTTPException(404, "not a plug-in asset")
+    path = PLUGINS_DIR / name / file
+    if not path.is_file():
+        raise HTTPException(404, "no such asset")
+    return FileResponse(path, headers={"Cache-Control": "no-cache"})
+
+
+_load_plugins()

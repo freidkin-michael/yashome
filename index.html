@@ -528,6 +528,60 @@ function apiErrorText(body, status){
   return body || `HTTP ${status}`;
 }
 
+// -- plug-ins (docs/plugins.md) ---------------------------------------------
+// A plug-in ships /plugins/<id>/ui.js (+ i18n.json). The dashboard loads every script before the
+// first render; a script registers what it adds. Helpers a plug-in may use are on `Home`.
+const HomePlugins = {
+  list: [], failed: [], tabs: [], addMenu: [], cards: [], ruleActions: [], toolbar: [], onReload: [],
+  register(m){
+    for(const k of ['tabs', 'addMenu', 'cards', 'ruleActions', 'toolbar', 'onReload'])
+      if(Array.isArray(m && m[k])) this[k].push(...m[k]);
+  },
+  // one plug-in's bug must not blank the dashboard: every call into a plug-in goes through this
+  safe(fn, ...args){ try{ return fn(...args); }catch(e){ console.warn('plug-in', e); return undefined; } },
+  reload(){ return Promise.all(this.onReload.map(f => Promise.resolve().then(f).catch(e => console.warn('plug-in', e)))); },
+  ruleAction(type){ return this.ruleActions.find(a => a.type === type); },
+  toolbarButtons(tab){ return this.toolbar.filter(b => b.tab === tab && (!b.visible || this.safe(b.visible))); },
+};
+const Home = {
+  api: (path, opts) => api(path, opts),
+  escapeHtml: s => escapeHtml(s), el: (tag, cls, html) => el(tag, cls, html),
+  i18n, i18nPlural,
+  openModal(html, id){
+    document.getElementById('md').innerHTML = html;
+    document.getElementById('bd').classList.add('show');
+    document.body.style.overflow = 'hidden';
+    openModalId = id || '__plugin__';
+  },
+  closeModal: () => closeModal(), modalId: () => openModalId,
+  devices: () => DEVICES, state: id => STATE[id], activeTab: () => activeTab,
+  sendControl: (id, code, value) => sendControl(id, code, value),
+  refresh: () => { renderTabs(); render(); },
+};
+async function loadPlugins(){
+  let r = {loaded: [], failed: []};
+  try{ r = await api('/api/plugins'); }catch(e){ /* a core without plug-ins answers too */ }
+  HomePlugins.list = r.loaded || []; HomePlugins.failed = r.failed || [];
+  for(const p of HomePlugins.list){
+    for(const [lang, tbl] of Object.entries(p.i18n || {})) I18N[lang] = Object.assign(I18N[lang] || {}, tbl);
+    if(p.ui) await new Promise(res => {
+      const sc = document.createElement('script'); sc.src = p.ui; sc.onload = res;
+      sc.onerror = () => { console.warn('plug-in ui failed', p.id); res(); };
+      document.head.appendChild(sc);
+    });
+  }
+}
+// core tabs + the plug-ins' (ids "p:<id>"; `after` places one behind a core tab)
+function allTabs(){
+  const out = TABS.slice();
+  for(const t of HomePlugins.tabs){
+    const tab = {id: 'p:' + t.id, label: i18n(t.label), cats: [], plugin: t};
+    const at = t.after ? out.findIndex(x => x.id === t.after || x.id === 'p:' + t.after) : -1;
+    if(at < 0) out.push(tab); else out.splice(at + 1, 0, tab);
+  }
+  return out.filter(t => !t.plugin || !t.plugin.visible || HomePlugins.safe(t.plugin.visible));
+}
+
 async function init(){
   translateDom(document);   // static shell; dynamic markup goes through i18n()
   // CSS cannot call i18n(): the "offline" caption of a card comes in as a variable
@@ -574,7 +628,10 @@ async function init(){
   BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
   await loadFavorites();
   try { RULES = await api('/api/rules'); } catch(e){ RULES = []; }
-  if(!TABS.some(t => t.id === activeTab) && !activeTab.startsWith('room:')) activeTab = 'fav';
+  await loadPlugins();
+  translateDom(document);   // again: plug-in dictionaries are in now
+  await HomePlugins.reload();
+  if(!allTabs().some(t => t.id === activeTab) && !activeTab.startsWith('room:')) activeTab = 'fav';
   renderTabs();
   render();
   connectWS();
@@ -607,6 +664,13 @@ function openSettings(){
     <div class="body">
       <section><h3>${i18n('Language')}</h3>
         <div class="row"><span class="rlabel">${i18n('Dashboard language')}</span><span class="enum">${langs}</span></div>
+      </section>
+      <section><h3>${i18n('Plug-ins')}</h3>
+        ${HomePlugins.list.map(p => `<div class="row"><span class="rlabel">${escapeHtml(p.name)}</span>
+          <span class="rval">${escapeHtml(p.version || '')} \u00b7 ${i18n('loaded')}</span></div>`).join('')}
+        ${HomePlugins.failed.map(p => `<div class="row"><span class="rlabel">${escapeHtml(p.id)}</span>
+          <span class="rval" style="color:var(--bad)">${escapeHtml(p.error)}</span></div>`).join('')}
+        ${HomePlugins.list.length || HomePlugins.failed.length ? '' : `<div class="bindcaption">${i18n('No plug-ins. A plug-in is a directory in HOME_PLUGINS_DIR; restart the backend after adding one (docs/plugins.md).')}</div>`}
       </section>
     </div>`;
   document.getElementById('bd').classList.add('show');
@@ -726,16 +790,18 @@ function applyTabOrder(tabId, devs){
 
 function renderTabs(){
   const bar = document.getElementById('tabs');
-  bar.innerHTML = TABS.map(t => {
-    const n = (t.id === 'fav') ? FAVORITES.length
+  const badge = t => t.plugin ? (t.plugin.badge ? HomePlugins.safe(t.plugin.badge) ?? '' : '')
+    : (t.id === 'fav') ? FAVORITES.length : (t.id === 'auto') ? RULES.length : devsForTab(t.id).length;
+  bar.innerHTML = allTabs().map(t => {
+    const n = t.plugin ? badge(t) : (t.id === 'fav') ? FAVORITES.length
             : (t.id === 'auto') ? RULES.length
             : devsForTab(t.id).length;
     return `<button class="tab ${t.id===activeTab?'active':''}" data-tab="${t.id}">${escapeHtml(t.label)}<span class="badge">${n}</span></button>`;
   }).join('');
-  const act = TABS.find(t=>t.id===activeTab);
+  const act = allTabs().find(t=>t.id===activeTab);
   const tt = document.getElementById('tabtitle');
   if(tt && act){
-    const n = (act.id === 'fav') ? FAVORITES.length
+    const n = act.plugin ? badge(act) : (act.id === 'fav') ? FAVORITES.length
             : (act.id === 'auto') ? RULES.length
             : devsForTab(act.id).length;
     tt.innerHTML = escapeHtml(act.label) + (n===''?'':' <span class="badge">'+n+'</span>');
@@ -792,11 +858,28 @@ let favSelected = new Set();   // keys "device/code" picked for deletion
 function render(){
   const app=$('#app'); app.innerHTML='';
   if(activeTab.startsWith('room:')){ renderRoom(app, activeTab.slice(5)); return; }
+  if(activeTab.startsWith('p:')){
+    const t = allTabs().find(x => x.id === activeTab);
+    if(t) HomePlugins.safe(() => t.plugin.render(app));
+    return;
+  }
   if(activeTab === 'fav'){ renderFavorites(app); return; }
   if(activeTab === 'auto'){ renderAutomations(app); return; }
   const devs = devsForTab(activeTab);
+  // plug-in buttons on the "Other" tab (e.g. "find my phone"), independent of devices
+  const otherBtns = activeTab === 'other' ? HomePlugins.toolbarButtons('other') : [];
+  if(otherBtns.length){
+    const bar = el('div'); bar.style.cssText = 'margin:8px 16px 0;display:flex;gap:8px;flex-wrap:wrap';
+    for(const tb of otherBtns){
+      const b = el('button', 'addbtn', escapeHtml(i18n(tb.label)));
+      b.style.cssText = 'width:auto;margin:0;padding:10px 16px;background:var(--card)';
+      b.onclick = () => HomePlugins.safe(tb.onClick);
+      bar.append(b);
+    }
+    app.append(bar);
+  }
   if(!devs.length){
-    app.innerHTML = '<div class="skeleton">' + i18n('\u2014 no devices on this tab \u2014') + '</div>';
+    if(!otherBtns.length) app.innerHTML = '<div class="skeleton">' + i18n('\u2014 no devices on this tab \u2014') + '</div>';
     return;
   }
   const bar = document.createElement('div');
@@ -815,12 +898,13 @@ function render(){
     }
   }
   if(bar.children.length) app.append(bar);
-  const tabDef = TABS.find(t => t.id === activeTab);
+  const tabDef = allTabs().find(t => t.id === activeTab);
   const g=document.createElement('div');
   g.className = 'grid' + (tabDef && tabDef.compact ? ' compact' : '');
   g.dataset.scope = activeTab;
   for(const d of devs){
     const cd = card(d);
+    for(const f of HomePlugins.cards) HomePlugins.safe(f, cd, d);   // plug-in decorations
     cd.dataset.dev = d.id;
     if(gridEditMode) armGridDrag(cd, g, activeTab, parent => saveTabOrder(activeTab, parent));
     g.appendChild(cd);
@@ -1136,6 +1220,7 @@ function renderRoom(app, rid){
   g.dataset.scope = activeTab;
   for(const d of devs){
     const cd = card(d);
+    for(const f of HomePlugins.cards) HomePlugins.safe(f, cd, d);   // plug-in decorations
     cd.dataset.dev = d.id;
     if(gridEditMode) armGridDrag(cd, g, activeTab, async parent => {
       // visible order + the room's invisible (missing) members at the tail
@@ -1233,6 +1318,8 @@ function ruleTitle(r){
   const w = (r.when && r.when[0]) || {}, t = (r.then && r.then[0]) || {};
   if(r.kind === 'binding'){
     const g = whenGesture(w.gesture);
+    const pa = HomePlugins.ruleAction(t.type);
+    if(pa) return `${w.device_name}: ${g} \u2192 ${(pa.title && HomePlugins.safe(pa.title, t)) || t.title || t.type}`;
     return `${w.device_name}: ${g} \u2192 ${t.device_name} ${ACT_LABELS[t.action] || t.action}` + (t.for ? ` ${i18n('for')} ${t.for}${i18n('s')}` : '');
   }
   if(r.kind === 'schedule'){
@@ -1281,6 +1368,8 @@ function condChip(c){
                                      : `${escapeHtml(dn)} ${escapeHtml(op)} ${escapeHtml(String(c.value))}`;
 }
 function thenChip(t){
+  const pa = HomePlugins.ruleAction(t.type);
+  if(pa && pa.chip) return HomePlugins.safe(pa.chip, t) ?? escapeHtml(t.title || t.type);
   let act = t.after!=null ? `${i18n('off after')} ${t.after}${i18n('s')}`
           : (ACT_LABELS[t.action]||t.action);
   if(t.for) act += ` ${i18n('for')} ${t.for}${i18n('s')}`;
@@ -1311,6 +1400,7 @@ async function renderAutomations(app, keepScroll){
   tb.innerHTML = `<div style="color:var(--dim);font-size:13px">${RULES.length} ${
     i18nPlural('rule', RULES.length)}</div>
     <div style="display:flex;gap:8px">
+    ${HomePlugins.toolbarButtons('auto').map((b, i) => `<button class="addbtn" style="width:auto;margin:0;padding:10px 16px;background:var(--card)" id="rb-x${i}">${escapeHtml(i18n(b.label))}</button>`).join('')}
     <button class="addbtn" style="width:auto;margin:0;padding:10px 16px" id="rb-new">${i18n('\uff0b Add')}</button></div>`;
   wrap.append(tb);
   if(!RULES.length){
@@ -1322,6 +1412,7 @@ async function renderAutomations(app, keepScroll){
   }
   app.innerHTML = ''; app.append(wrap);
   document.getElementById('rb-new').onclick = ()=> openRuleBuilder(null);
+  HomePlugins.toolbarButtons('auto').forEach((b, i) => { document.getElementById('rb-x' + i).onclick = () => HomePlugins.safe(b.onClick); });
   if(keepScroll) window.scrollTo(0, y);   // enable/delete redraws in place, no jump to the top
 }
 
@@ -1548,13 +1639,30 @@ function rbActionFields(type, rule){
       </select></div>
     <div class="bindcaption" id="rb-forcap" style="display:none">
       ${i18n('turns on and reverts after N seconds (a repeated trigger follows the rule)')}</div>`;
-  box.innerHTML = `<div id="rb-adev">
+  // plug-in targets (a phone to ring, a greeting ...) instead of a device, for button/sensor rules
+  const pacts = (type==='button'||type==='sensor')
+    ? HomePlugins.ruleActions.filter(a => !a.visible || HomePlugins.safe(a.visible)) : [];
+  const cur = t && pacts.find(a => a.type === t.type);
+  const kindHtml = pacts.length ? `<div class="rb-row"><label>${i18n('Target')}</label>
+      <select id="rb-akind"><option value="device">${i18n('Device')}</option>
+        ${pacts.map(a => `<option value="${escapeHtml(a.type)}">${escapeHtml(i18n(a.label))}</option>`).join('')}</select></div>` : '';
+  const plugHtml = pacts.map(a => `<div class="rb-apl" data-type="${escapeHtml(a.type)}" style="display:none">${
+      HomePlugins.safe(a.html, cur === a ? t : null) || ''}</div>`).join('');
+  box.innerHTML = kindHtml + `<div id="rb-adev">
       <div class="rb-row"><label>${i18n('Device')}</label>
         <select id="rb-atgt">${switchTargetOpts(t?t.device:'')}</select>
         <select id="rb-acode"></select></div>
       <div class="rb-row"><label>${i18n('Action')}</label>
         <select id="rb-aact">${optsHtml(acts, t?t.action:'')}</select></div>${forHtml}
-    </div>`;
+    </div>` + plugHtml;
+  if(pacts.length){
+    const kind = document.getElementById('rb-akind');
+    kind.value = cur ? cur.type : 'device';
+    const toggle = ()=>{
+      box.querySelectorAll('.rb-apl').forEach(d => { d.style.display = d.dataset.type === kind.value ? '' : 'none'; });
+      document.getElementById('rb-adev').style.display = kind.value === 'device' ? '' : 'none'; };
+    kind.onchange = toggle; toggle();
+  }
   const tsel = document.getElementById('rb-atgt');
   const csel = ()=> document.getElementById('rb-acode');
   const syncActs = ()=>{
@@ -1663,7 +1771,11 @@ async function rbSave(editRule){
   try{
     if(type==='button' || type==='sensor'){
       let body;
-      {
+      const kind = document.getElementById('rb-akind');
+      const pa = kind && kind.value !== 'device' ? HomePlugins.ruleAction(kind.value) : null;
+      if(pa){
+        body = Object.assign(pa.read(), {conditions: rbReadConds()});   // pa.read() throws on a bad form
+      } else {
         const tgt = document.getElementById('rb-atgt').value;
         const tcode = document.getElementById('rb-acode').value;
         const action = document.getElementById('rb-aact').value;
@@ -3124,6 +3236,10 @@ function openAddDevice(){
           <span class="rlabel">\u{1f4f6} ESPHome / WiFi<br><span style="color:var(--dim);font-weight:400;font-size:12px">${i18n('Finds ESP nodes already publishing to MQTT')}</span></span>
           <button class="dlg-btn primary">${i18n('Find')}</button>
         </div>
+        ${HomePlugins.addMenu.map((e, i) => `<div class="row" id="ad-p${i}" style="cursor:pointer">
+          <span class="rlabel">${escapeHtml(i18n(e.label))}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${escapeHtml(i18n(e.hint || ''))}</span></span>
+          <button class="dlg-btn primary">${escapeHtml(i18n(e.button || 'OK'))}</button>
+        </div>`).join('')}
       </section>
     </div>`;
   document.getElementById('bd').classList.add('show');
@@ -3131,6 +3247,7 @@ function openAddDevice(){
   openModalId = '__add_device__';
   md.querySelector('#ad-zb').onclick  = openZigbeePair;
   md.querySelector('#ad-esp').onclick = openEsphomeAdd;
+  HomePlugins.addMenu.forEach((e, i) => { md.querySelector('#ad-p' + i).onclick = () => HomePlugins.safe(e.onClick); });
 }
 
 
@@ -3486,6 +3603,7 @@ async function softReload(){
     BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
     await loadFavorites();
     try { RULES = await api('/api/rules'); } catch(e){ }
+    await HomePlugins.reload();
     if (!openModalId) { renderTabs(); render(); }
   } catch(e){ /* offline / transient -- WS reconnect recovers live state */ }
 }

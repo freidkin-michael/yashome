@@ -3,6 +3,11 @@
 // never breaks the UI. Language: ?lang=xx once (remembered), else localStorage, else the browser's.
 const I18N = {
   ru: {
+    "Plug-ins": "Плагины",
+    "loaded": "загружен",
+    "No plug-ins. A plug-in is a directory in HOME_PLUGINS_DIR; restart the backend after adding one (docs/plugins.md).": "Плагинов нет. Плагин — это каталог в HOME_PLUGINS_DIR; после добавления перезапусти бэкенд (docs/plugins.md).",
+    "press is the one action of a stateless channel, and only of it": "press — единственное действие канала-события и только его",
+    "action must be on|off|toggle|bright_up|bright_down|press": "действие: on, off, toggle, bright_up, bright_down или press",
     "no zigbee2mqtt configured (Z2M_SERIAL)": "zigbee2mqtt не настроен (Z2M_SERIAL)",
     "only z2m devices have a renameable key; use /api/devices/{id}/rename for a display name": "ключ можно переименовать только у z2m-устройств; для отображаемого имени есть /api/devices/{id}/rename",
     "action must be on or off": "действие: on или off",

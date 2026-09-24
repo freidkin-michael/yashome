@@ -155,6 +155,11 @@ The backend keeps its configuration in `settings.json` (names, rooms, rules, fav
 stack is stopped. State lives in the broker as retained messages; the backend mirrors every
 device into `home/state/...` so a script never needs to know the vendor topic.
 
+Anything beyond the core - another transport, a vendor integration, a page of its own - is a
+**plug-in**: a Python package (plus an optional `ui.js`) in a directory outside the repository,
+loaded at start. The core does not know any plug-in by name; see [docs/plugins.md](docs/plugins.md)
+and the complete example in `examples/plugins/hello/`.
+
 Details: [MQTT contract](docs/mqtt-contract.md), [REST API](docs/rest-api.md),
 [rules engine](docs/rules.md), [security model](docs/security.md).
 

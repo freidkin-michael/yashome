@@ -23,6 +23,9 @@ config/zigbee2mqtt/configuration_backup_*.yaml
 config/zigbee2mqtt/*.log
 config/zigbee2mqtt/log/
 
+# plug-ins live outside the repository (PLUGINS_DIR); ./plugins is only a default mount point
+/plugins/
+
 # python
 __pycache__/
 *.pyc

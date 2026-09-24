@@ -21,6 +21,8 @@ services:
       - "${DASHBOARD_PORT:-8765}:8765"
     volumes:
       - .:/app
+      # plug-ins: a directory of packages outside the repository (docs/plugins.md), read-only
+      - ${PLUGINS_DIR:-./plugins}:/app/plugins:ro
     depends_on:
       mosquitto:
         condition: service_healthy

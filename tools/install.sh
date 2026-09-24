@@ -50,6 +50,7 @@ case "$z2m_serial" in
     *) echo "  zigbee2mqtt on $(get Z2M_SERIAL)";;   # COMPOSE_PROFILES follows in tools/secrets.sh
 esac
 echo "== device and rule files"
+mkdir -p plugins        # default PLUGINS_DIR; created here so it belongs to you, not to docker (root)
 [ -f mqtt_devices.json ] || { cp examples/mqtt_devices.json mqtt_devices.json; echo "  mqtt_devices.json <- examples/"; }
 [ -f settings.json ] || { cp examples/settings.json settings.json; echo "  settings.json <- examples/"; }
 mkdir -p config/mosquitto/data config/zigbee2mqtt
