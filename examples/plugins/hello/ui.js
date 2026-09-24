@@ -3,7 +3,7 @@
   let greetings = 0;
   const load = async () => { try { greetings = (await Home.api('/api/hello')).greetings; } catch(e){ /* offline */ } };
   HomePlugins.register({
-    onReload: [load],                                   // at start and on every resume, 5 s at most
+    onReload: [load],                                   // at start and on every resume
     tabs: [{
       id: 'hello', label: 'Hello', after: 'fav', badge: () => greetings,
       // `box` is this tab's own element: after a tab switch it is detached, late writes are harmless

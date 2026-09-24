@@ -49,13 +49,13 @@ PLUGIN = {"name": "Hello", "version": "1.0.0"}      # a dict; shown in Settings
 | hook | what it does |
 |---|---|
 | `core.app` | the FastAPI app: add routes with `@core.app.get(...)`; they need the token like every route |
-| `core.register_device(dev)` | add a device the plug-in owns (`id`, `name`, `transport`, `category`, `controls`); refuses an id that already exists |
+| `core.register_device(dev)` | add a device the plug-in owns (`id`, `name`, `transport`, `category`, `controls`); refuses an id that already exists; once, at import (there is no update or removal) |
 | `core.TRANSPORTS[t] = fn(cfg, code, val, kind)` | switch a device whose `transport` is `t` (worker threads: bindings, schedules, timers; also `/control` when there is no async variant) |
 | `core.ASYNC_CONTROL[t] = async fn(cfg, code, val)` | the same for `POST /api/devices/{id}/control`, on the event loop |
 | `core.CONTROL_KINDS[k] = fn(cfg, ctl, val) -> dict` | a stateless channel kind (an IR button): no value stored; rules use the action `press` |
 | `core.MQTT_SUBSCRIPTIONS.append(filter)` | a topic filter under a topic of your own, subscribed after the core's on every (re)connect |
 | `core.MQTT_HANDLERS.append((prefix, fn(parts, payload, retain)))` | messages whose topic starts with the `prefix` tuple; `retain` is True for a replayed message - an event handler should ignore those |
-| `core.STARTUP_TASKS.append(fn)` | started once the broker is up, before the timers are replayed (nothing waits for it); a coroutine function runs as a task, a plain callable in a thread of its own - either may loop forever; errors, `sys.exit` included, are logged |
+| `core.STARTUP_TASKS.append(fn)` | started once the broker is up, before the timers are replayed (nothing waits for it); a coroutine function runs as a task, a plain callable in a thread of its own - either may loop forever; errors, `sys.exit` included, are logged. Timers of your devices may fire before your task has run: a transport that is not ready yet should raise (the core logs it and retries) |
 | `core.SETTINGS_SECTIONS[key] = fn()` | a section of `settings.json` the plug-in owns (must be JSON: dict, list, str, number; not a core key); read it back with `core._cfg_section(key, default)`. A route of yours that writes it should call `core._save_settings()` like the core does |
 | `core.BINDING_ACTIONS[a] = {validate, run, describe}` | a rule action other than switching a device - see below |
 | `core.DEVICE_FIELDS.append(key)` | an extra device key `GET /api/devices` passes to the dashboard |
@@ -71,14 +71,16 @@ your own included) and returns what is stored; it must contain `"action"` (your 
 a string `"target"` (any id of yours - it is not a device). `run(entry) -> dict` executes it (a
 worker thread). `describe(entry) -> dict` is what the rule list shows: `{"type": <your ui type>,
 "title": <short text>, ...}`. A rule whose plug-in is not loaded stays stored; the dashboard lets
-you enable, disable or delete it, not edit it.
+you enable, disable or delete it, not edit it, and `POST /api/rules/run` answers 409.
 
 **Reserved.** A plug-in may not register the core's transports (`z2m`, `mqtt`), control kinds
 (`switch`, `bright`, `sensor`, ...), actions (`on`, `off`, `toggle`, `bright_up`, `bright_down`,
 `press`), device keys (`id`, `name`, `controls`, ...), MQTT handlers or subscriptions under
 `home/`, `zigbee2mqtt/`, `homeassistant/`, `$SYS`, or open paths under `/api`, `/ws`, `/plugins/`.
-Nor may it change or remove what the core or an earlier plug-in registered (a hook entry, a device,
-a settings section). A route under `/plugins/<name>/` other than the public files is yours.
+Nor may it replace or remove what the core or an earlier plug-in registered (a hook entry, a device,
+a settings section); changing such an object in place is not detected - do not. A route under
+`/plugins/<name>/` is yours, except one whose path looks like a public file (`ui.js`, `i18n.json`,
+`static/...`): that is refused, it would be served without the token.
 
 ## Dashboard side
 
@@ -95,7 +97,8 @@ HomePlugins.register({
 });
 ```
 
-- `onReload`: the dashboard waits at most 5 s for them, then renders anyway; a slower callback
+- `onReload`: after it the dashboard redraws the tab bar (badges), not an open plug-in tab: call
+  `Home.refresh()` when your tab shows data that changed. It waits at most 5 s for them, then renders anyway; a slower callback
   still finishes later, so do not let an old reply overwrite a newer one.
 - `render(box)` gets an element of its own inside the page; after a tab switch it is detached, so
   a late write after an `await` does no harm.

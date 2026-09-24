@@ -312,8 +312,7 @@ def _load_bindings():
                 log.warning(f"[settings] bindings {src}/{code} skipped: not an object")
                 continue
             ok = {g: b for g, b in gestures.items() if isinstance(b, dict) and isinstance(b.get("action"), str)
-                  and (isinstance(b.get("target"), str) or b["action"] not in ("on", "off", "toggle", "bright_up",
-                                                                                "bright_down", "press"))}
+                  and (isinstance(b.get("target"), str) or b["action"] not in _CORE_ACTIONS)}
             if ok:
                 clean.setdefault(src, {})[code] = ok
     raw.clear(); raw.update(clean)        # keep the same object: it is the settings section
@@ -2955,7 +2954,7 @@ def _binding_rules():
                         log.warning(f"[plugins] describe of {b['action']} failed: {e}")
                         then = {"type": b["action"], "action": b["action"], "title": b["action"]}
                     title = f"{_dname(src)}: {_gesture_label(g)} -> {then.get('title', b['action'])}"
-                elif b.get("action") not in ("on", "off", "toggle", "bright_up", "bright_down", "press"):
+                elif b.get("action") not in _CORE_ACTIONS:
                     # a plug-in's action, but the plug-in is not loaded: keep it recognisable (and
                     # the dashboard keeps it out of the editor), never present it as a device rule
                     then = {"type": "plugin-absent", "action": b.get("action"), "device": tgt,
@@ -3148,6 +3147,8 @@ async def rule_run(body: RuleIdBody):
         b = (_bindings.get(src, {}).get(scode, {}) or {}).get(g)
         if not b:
             raise HTTPException(404, "no such rule")
+        if b.get("action") not in BINDING_ACTIONS and b.get("action") not in _CORE_ACTIONS:
+            raise HTTPException(409, f"{b.get('action')}: its plug-in is not loaded")
         if b.get("action") not in BINDING_ACTIONS:
             _need_broker()                               # a plug-in action may not need the broker at all
         try:
@@ -3721,7 +3722,7 @@ def _audit_orphan_refs() -> dict:
             note("binding-source", src, src)
             for code, gestures in codes.items():
                 for g, entry in gestures.items():
-                    if entry.get("action") not in BINDING_ACTIONS:     # a plug-in action targets its own
+                    if entry.get("action") in _CORE_ACTIONS:     # a plug-in action targets an id of its own
                         note("binding-target", entry.get("target"), f"{src}/{code}/{g}")
                     for c in entry.get("conditions") or []:
                         note("condition", c.get("device"), f"{src}/{code}/{g}")
@@ -4317,8 +4318,12 @@ def _hooks_check(name: str, snap: dict):
             raise ValueError(f"MQTT handler prefix {pre!r}: a topic of the plug-in's own, not the core's bus")
     for t in MQTT_SUBSCRIPTIONS[len(snap["lists"]["MQTT_SUBSCRIPTIONS"]):]:
         if not isinstance(t, str) or not t or "#" in t[:-1] \
+                or any(("+" in lv or "#" in lv) and lv not in ("+", "#") for lv in t.split("/")) \
                 or t.split("/")[0] in ("home", "zigbee2mqtt", "homeassistant", "$SYS", "#", "+"):
             raise ValueError(f"MQTT subscription {t!r}: a valid filter under a topic of the plug-in's own")
+    for r in app.router.routes:
+        if r not in snap["routes"] and _OPEN_ASSET.match(getattr(r, "path", "")):
+            raise ValueError(f"route {r.path!r} looks like a public plug-in file: it would be served without the token")
     for p in OPEN_PATHS - snap["open"]:
         if not isinstance(p, str) or not p.startswith("/") or p.startswith(("/api", "/ws", "/plugins/")):
             raise ValueError(f"open path {p!r}: a page of the plug-in, never the API")

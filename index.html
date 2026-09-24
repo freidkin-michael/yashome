@@ -590,7 +590,9 @@ async function loadPlugins(){
     }
     if(p.ui) await new Promise(res => {
       const sc = document.createElement('script'); sc.src = p.ui;
-      const onErr = e => { if(e.filename && e.filename.endsWith(p.ui)) p.uiFailed = true; };
+      const onErr = e => {
+        if(document.currentScript === sc || (e.filename && e.filename.endsWith(p.ui))) p.uiFailed = true;
+      };
       window.addEventListener('error', onErr);
       sc.onload = () => { window.removeEventListener('error', onErr); res(); };
       sc.onerror = () => { window.removeEventListener('error', onErr); console.warn('plug-in ui failed', p.id); p.uiFailed = true; res(); };
@@ -662,10 +664,12 @@ async function init(){
   const wanted = activeTab;                        // a plug-in tab may only become visible after its reload
   if(!allTabs().some(t => t.id === activeTab) && !activeTab.startsWith('room:')) activeTab = 'fav';
   HomePlugins.reload().then(() => {
-    renderTabs();                                  // badges with the plug-ins' data
-    if(wanted !== activeTab && allTabs().some(t => t.id === wanted) && !openModalId){
-      activeTab = wanted; renderTabs(); render();  // only a changed tab re-renders: no scroll/focus reset
-    }
+    const shown = id => id.startsWith('room:') || allTabs().some(t => t.id === id);
+    // the stored tab, unless the user has picked one meanwhile (a pick is stored)
+    if(activeTab !== wanted && shown(wanted) && localStorage.getItem('home.tab') === wanted) activeTab = wanted;
+    else if(!shown(activeTab)) activeTab = 'fav';  // the plug-in hid it
+    else { renderTabs(); return; }                 // badges only: no scroll/focus reset
+    renderTabs(); if(!openModalId) render();
   });
   renderTabs();
   render();
@@ -1539,8 +1543,9 @@ function openRuleBuilder(rule){
   const t0 = rule && rule.then && rule.then[0];
   const pa0 = t0 && HomePlugins.ruleAction(t0.type);
   if(t0 && t0.type && t0.type !== 'device' && (!pa0 || (pa0.visible && !HomePlugins.safe(pa0.visible)))){
-    // its plug-in (or that plug-in's ui.js) is not loaded: editing here would turn it into a device rule
-    alert(i18n('This rule belongs to a plug-in that is not loaded here; it can be enabled, disabled or deleted, not edited.'));
+    // no editor of its plug-in here: editing would turn it into a device rule
+    alert(i18n(pa0 ? 'The plug-in of this rule does not offer editing it now; it can be enabled, disabled or deleted.'
+                   : 'This rule belongs to a plug-in that is not loaded here; it can be enabled, disabled or deleted, not edited.'));
     return;
   }
   openModalId = '__rule_builder__';

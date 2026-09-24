@@ -106,7 +106,9 @@ class Isolation(unittest.TestCase):
                            ("r7", "PLUGIN = 'not a dict'\n"),
                            ("r8", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('homeassistant/#')\n"),
                            ("r9", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('$SYS/#')\n"),
-                           ("r10", "import app as core\ncore.SETTINGS_SECTIONS['names'] = dict\n")):
+                           ("r10", "import app as core\ncore.SETTINGS_SECTIONS['names'] = dict\n"),
+                           ("r11", "import app as core\ncore.MQTT_SUBSCRIPTIONS.append('vendor/a+b')\n"),
+                           ("r12", "import app as core\n\n\ndef f():\n    return {}\n\n\ncore.app.get('/plugins/hello/i18n.json')(f)\n")):
             self.assertEqual(self.load(**{name: code}), [], name)
             self.assertIn(name, app._PLUGIN_ERRORS)
 
@@ -220,14 +222,18 @@ class PluginRules(unittest.TestCase):
         self.assertEqual(rule["then"][0]["type"], "plugin-absent")
         self.assertEqual(rule["then"][0]["action"], "vanished")
 
-    def test_rules_run_404_and_502(self):
+    def test_audit_leaves_an_absent_plugins_target_alone(self):
+        self.assertNotIn("t1", app._audit_orphan_refs())
+
+    def test_rules_run_404_409_502(self):
         import asyncio
 
         def boom(entry):
             raise RuntimeError("down")
         app.BINDING_ACTIONS["raises"] = {"validate": dict, "run": boom, "describe": dict}
         app._bindings["gone_src"]["action"]["double"] = {"action": "raises", "target": "t1"}
-        for rid, code in (("b|gone_src|action|nope", 404), ("b|gone_src|action|double", 502)):
+        for rid, code in (("b|gone_src|action|nope", 404), ("b|gone_src|action|double", 502),
+                          ("b|gone_src|action|single", 409)):
             with self.assertRaises(app.HTTPException) as cm:
                 asyncio.run(app.rule_run(app.RuleIdBody(id=rid)))
             self.assertEqual(cm.exception.status_code, code, rid)
