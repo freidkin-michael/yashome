@@ -1,0 +1,3500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>YasH!</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0e1116">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-maskable-512.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root{
+    --bg:#0e1116; --card:#1a1f29; --card2:#232a36; --line:#2c3442;
+    --txt:#e6eaf0; --dim:#8a93a3; --accent:#3CC2B8; --accent-fill:#177A75; --on:#FFC34D; --ok:#3ad29f;
+    --bad:#e35d6a; --radius:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:17px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  /* iPhone PWA (black-translucent, viewport-fit=cover): the page runs under the clock and the
+     island. A fixed strip keeps scrolled content out of that zone; everything fixed or sticky
+     below keeps clear of the insets itself. */
+  body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top);
+    background:var(--bg);z-index:45}
+  header{padding:22px 18px 6px;display:flex;align-items:baseline;justify-content:space-between;
+         flex-wrap:wrap;row-gap:8px}
+  header h1{font-size:28px;margin:0;font-weight:650;letter-spacing:-.3px}
+  #conn{font-size:13px;color:var(--dim)} #conn.live{color:var(--ok)}
+  .conngroup{display:flex;gap:10px;align-items:center;flex-wrap:wrap;row-gap:6px}
+  /* phone: page must never scroll sideways; tighter header/tabs */
+  /* clip keeps the tab bar sticky (hidden makes body a scroll container); Safari < 16 does not know
+     clip, keeps the hidden line above and at least never scrolls sideways */
+  html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip}
+  @media (max-width:480px){
+    header{padding:14px 12px 4px}
+    header h1{font-size:22px}
+    .tabs{padding:8px 8px 2px}
+    .tab{font-size:13.5px;padding:7px 10px}
+    #conn{display:none}
+  }
+  .room{padding:20px 18px 6px;font-size:13px;text-transform:uppercase;
+        letter-spacing:.8px;color:var(--dim);font-weight:600}
+
+  /* tabs: CRM-style drawer behind a burger */
+  #tabbar{display:flex;align-items:center;gap:12px;padding:10px 14px;
+          border-bottom:1px solid var(--line);background:var(--bg);
+          position:sticky;top:env(safe-area-inset-top);z-index:5}
+  #tabburger{background:var(--card2);border:1px solid var(--line);color:var(--txt);
+             font-size:18px;width:40px;height:40px;border-radius:10px;cursor:pointer}
+  #tabtitle{font-size:17px;font-weight:700}
+  #tabtitle .badge{display:inline-block;background:var(--card2);color:var(--dim);
+                   border-radius:9px;padding:1px 8px;font-size:12px;margin-left:8px}
+  #taboverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:39;
+              opacity:0;pointer-events:none;transition:opacity .2s}
+  #taboverlay.show{opacity:1;pointer-events:auto}
+  .tabs{position:fixed;left:0;top:0;bottom:0;width:calc(240px + env(safe-area-inset-left));z-index:40;
+        display:flex;flex-direction:column;gap:4px;
+        padding:calc(16px + env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom))
+                calc(10px + env(safe-area-inset-left));
+        background:var(--card);border-right:1px solid var(--line);
+        overflow-y:auto;transform:translateX(-100%);transition:transform .2s}
+  .tabs.open{transform:none}
+  .tab{background:transparent;border:0;color:var(--dim);font:inherit;
+       font-size:15px;font-weight:600;padding:11px 12px;cursor:pointer;
+       border-radius:10px;border-left:3px solid transparent;text-align:left;
+       display:flex;justify-content:space-between;align-items:center;gap:8px;
+       transition:.15s}
+  .tab:hover{color:var(--txt);background:var(--card2)}
+  .tab.active{color:var(--on);border-left-color:var(--on);background:var(--card2)}
+  .tab .badge{display:inline-block;background:var(--card2);color:var(--dim);
+              border-radius:8px;padding:1px 7px;font-size:11px;font-weight:500;
+              margin-left:5px}
+  .tab.active .badge{background:#3a2e10;color:var(--on)}
+  /* Rooms: horizontal chips in the header, right of the Yashome logo */
+  .brandgroup{display:flex;align-items:center;gap:14px;flex-wrap:wrap;row-gap:8px}
+  #roomsbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;row-gap:6px}
+  .roomchip{background:var(--card);border:1px solid var(--line);color:var(--dim);
+            font:inherit;font-size:14px;font-weight:600;padding:7px 14px;
+            border-radius:999px;cursor:pointer;transition:.15s;
+            display:flex;align-items:center;gap:6px}
+  .roomchip:hover{color:var(--txt);background:var(--card2)}
+  .roomchip.active{color:var(--on);border-color:var(--on);background:var(--card2)}
+  .roomchip .badge{display:inline-block;background:var(--card2);color:var(--dim);
+                   border-radius:8px;padding:1px 7px;font-size:11px;font-weight:500}
+  .roomchip.active .badge{background:#3a2e10;color:var(--on)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+        gap:14px;padding:10px 14px 24px}
+  /* Compact tabs (switches, rooms and other "buttons only" tabs): a tile without
+     dead space -- no min-height and no "category . transport" line, everything smaller.
+     Dense packing (masonry): 8px tracks, every card spans as many as its real
+     height needs (packGrid) -- several small tiles stack under a tall AC card in the
+     same column instead of a gap */
+  .grid.compact{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;
+                grid-auto-rows:8px}
+  .grid.compact .card{min-height:0;padding:10px 12px;gap:6px}
+  .grid.compact .card > .name{font-size:14px}
+  .grid.compact .info .meta{display:none}
+  .grid.compact .dot{width:34px;height:34px;font-size:12px}
+  .grid.compact .dotlabel{font-size:11px}
+  /* "Order" mode on device grids -- the same lift animation as favourites */
+  .grid .card.editing{cursor:grab;border-style:dashed;touch-action:none;user-select:none}
+  .grid .card.dragging{opacity:.85;z-index:5;cursor:grabbing}
+  .grid .card.drop-target{border-color:var(--accent);background:#1f2a3d}
+  /* corner handle for resizing a tile */
+  .card .resizer{position:absolute;right:0;bottom:0;width:26px;height:26px;z-index:6;
+    cursor:nwse-resize;display:flex;align-items:center;justify-content:center;
+    color:var(--dim);font-size:12px;background:var(--card2);
+    border:1px solid var(--line);border-radius:8px 0 8px 0;touch-action:none}
+  .card .resizer:hover{color:var(--on);border-color:var(--on)}
+  /* ghost of the future size while resizing: the grid is left alone until release */
+  .rzghost{position:fixed;z-index:50;border:2px dashed var(--on);pointer-events:none;
+    border-radius:var(--radius);background:rgba(240,180,41,.07);color:var(--on);
+    display:flex;align-items:flex-end;justify-content:flex-end;
+    padding:6px 10px;font-size:12px;font-weight:600}
+
+  /* card layout */
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;display:grid;grid-template-rows:auto 1fr auto;
+    grid-template-columns:minmax(0,1fr);gap:10px;
+    min-height:180px;position:relative;cursor:pointer;overflow:hidden;
+    transition:border-color .15s, background .25s;
+  }
+  .card.any-on{background:linear-gradient(160deg,#322712,var(--card));border-color:#5a4a1e}
+  .card.offline{opacity:.45}
+  .card.offline .name::after{content:var(--offline-txt, " \2022  offline");color:var(--bad);font-weight:400;font-size:12px}
+
+  .name{font-weight:600;font-size:17px;line-height:1.2;
+        overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+        -webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .info{font-size:13px;color:var(--dim);display:flex;flex-direction:column;gap:4px;
+        overflow:hidden;justify-content:flex-end}
+  .info .sens{display:flex;gap:10px;flex-wrap:wrap}
+  .info .sens b{color:var(--txt);font-weight:500}
+  .meta{font-size:11px;color:var(--dim);text-transform:lowercase;opacity:.7}
+
+  /* switch dots row at bottom */
+  .switches{display:flex;gap:10px;justify-content:flex-end;align-items:flex-start;
+            flex-wrap:wrap;padding-top:6px}
+  .switches.center{justify-content:center}
+  .dotwrap{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:46px;
+           cursor:pointer}
+  .dot{
+    width:42px;height:42px;border-radius:50%;background:var(--card2);
+    border:1.5px solid var(--line);transition:.15s;flex:none;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;color:var(--dim);font-weight:600;
+  }
+  .dot.on{background:var(--on);border-color:var(--on);
+          box-shadow:0 0 14px var(--on),0 0 3px var(--on);color:#1a1500}
+  .dotwrap:active .dot{transform:scale(.9)}
+  .dotlabel{font-size:11px;color:var(--dim);max-width:62px;text-align:center;
+            line-height:1.1;overflow:hidden;text-overflow:ellipsis;
+            display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+  /* inline dimmer on the card (dd strips, dimmable lamps) */
+  .brightrow{display:flex;align-items:center;gap:6px;padding:8px 0 0;
+             max-width:100%;box-sizing:border-box}
+  .brightrow .brlbl{flex:0 0 auto;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .enumrow{max-width:100%;box-sizing:border-box}
+  .enumrow select{min-width:0;max-width:55%}
+  .brightrow input[type=range]{flex:1;min-width:0;accent-color:var(--on);height:22px;margin:0}
+  .brpc{font-size:11px;color:var(--dim);min-width:32px;flex:0 0 auto;text-align:right}
+  .fav-card .brightrow{width:100%;padding:4px 0 0;gap:6px}
+  .fav-card .brightrow .brpc{font-size:11px;min-width:30px}
+
+  /* modal: one dimmer channel as a self-contained group (name + toggle + slider
+     + its own threshold window), so a slider is never detached from its gang */
+  .chgroup{padding:12px 0;border-top:1px solid var(--line)}
+  .chgroup:first-child{border-top:0}
+  .dimwin{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+  .dimwin input{width:58px;background:#1b2330;color:#dfe7f3;border:1px solid #2a3547;
+                border-radius:6px;padding:4px 6px;font-size:12px}
+
+  /* favorites */
+  .fav-toolbar{display:flex;justify-content:space-between;align-items:center;
+               padding:14px 18px 4px;gap:10px;flex-wrap:wrap}
+  .fav-toolbar button{background:var(--card2);border:1px solid var(--line);
+                      color:var(--txt);border-radius:10px;padding:8px 14px;
+                      cursor:pointer;font:inherit;font-size:14px;font-weight:500}
+  .fav-toolbar button.primary{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
+  .fav-toolbar button.active{background:var(--on);border-color:var(--on);color:#1a1500}
+  /* 4 per row on every screen; circle and font sizes follow the width */
+  .fav-grid{display:grid;grid-template-columns:repeat(4,1fr);
+            gap:8px;padding:8px 10px 24px}
+  @media (min-width:520px){.fav-grid{gap:12px;padding:10px 14px 24px}}
+  .fav-card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+            padding:8px 6px;display:flex;flex-direction:column;align-items:center;
+            justify-content:space-between;gap:6px;min-height:0;text-align:center;
+            position:relative;transition:.15s;cursor:pointer;
+            -webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+  /* dimmable round control: yellow fills the CIRCLE bottom-up = brightness */
+  .dimdot{position:relative;overflow:hidden}
+  .dimdot .dotfill{position:absolute;left:0;right:0;bottom:0;height:0;
+            background:linear-gradient(0deg,#ffcf2e,#ffcf2e7a);
+            pointer-events:none;opacity:0;transition:height .1s linear,opacity .15s}
+  .dimdot.on .dotfill{opacity:1}
+  /* horizontal variant: the 3-zone dimmer pill on a multi-channel card fills
+     left-to-right, so the level reads at a glance */
+  .dimpill{position:relative;overflow:hidden}
+  .dimpill .dotfill{position:absolute;left:0;top:0;bottom:0;right:auto;
+            height:auto;width:0;
+            background:linear-gradient(90deg,#ffcf2e,#ffcf2e7a);
+            pointer-events:none;opacity:0;transition:width .1s linear,opacity .15s}
+  .dimpill.on .dotfill{opacity:1}
+  .dimpill > span{position:relative;z-index:1}
+  .fav-card .bigdot.dimdot.on, .dot.dimdot.on{
+            background:var(--card2);border-color:var(--on);color:var(--txt);
+            box-shadow:0 0 16px var(--on),0 0 4px var(--on)}
+  .dimpc{font-size:11px;font-weight:700;color:var(--txt);min-height:13px;line-height:1.2}
+  .fav-card:not(.on) .dimpc{visibility:hidden}
+  @media (min-width:520px){.fav-card{padding:10px 10px;gap:8px;border-radius:18px}}
+  .fav-card.on{background:linear-gradient(160deg,#322712,var(--card));border-color:#5a4a1e}
+  .fav-card.offline{opacity:.4}
+  /* delete-select mode */
+  .fav-toolbar button.danger{background:#b3261e;border-color:#b3261e;color:#fff}
+  .fav-toolbar button:disabled{opacity:.45;cursor:default}
+  .fav-card.selectable{cursor:pointer}
+  .fav-card.selected{outline:2px solid #e5484d;border-color:#e5484d;
+                     background:linear-gradient(160deg,#3a1512,var(--card))}
+  .fav-card .selmark{position:absolute;top:6px;right:8px;width:20px;height:20px;
+                     border-radius:50%;border:2px solid var(--line);background:var(--card2);
+                     display:flex;align-items:center;justify-content:center;
+                     font-size:13px;font-weight:700;color:#fff;line-height:1}
+  .fav-card.selected .selmark{background:#e5484d;border-color:#e5484d}
+  .fav-card .orphan{font-size:10px;color:var(--dim);line-height:1.15}
+  .fav-card .alias{font-size:11.5px;font-weight:600;line-height:1.15;
+                   word-break:break-word;hyphens:auto;width:100%}
+  @media (min-width:420px){.fav-card .alias{font-size:13px}}
+  @media (min-width:600px){.fav-card .alias{font-size:14px}}
+  @media (min-width:780px){.fav-card .alias{font-size:15px}}
+  .fav-card .bigdot{
+    width:54px;height:54px;border-radius:50%;background:var(--card2);
+    border:2px solid var(--line);cursor:pointer;transition:.15s;flex:none;
+    display:flex;align-items:center;justify-content:center;
+  }
+  @media (min-width:420px){.fav-card .bigdot{width:62px;height:62px}}
+  @media (min-width:600px){.fav-card .bigdot{width:72px;height:72px}}
+  @media (min-width:780px){.fav-card .bigdot{width:80px;height:80px;border-width:2.5px}}
+  .fav-card .bigdot.on{background:var(--on);border-color:var(--on);
+                       box-shadow:0 0 22px var(--on),0 0 5px var(--on)}
+  .fav-card .bigdot:active{transform:scale(.9)}
+  .fav-card.editing{border-style:dashed;cursor:grab;touch-action:none;transition:.18s ease}
+  .fav-card.editing:active{cursor:grabbing}
+  .fav-card.dragging{opacity:.92;z-index:10;
+                     box-shadow:0 10px 28px rgba(0,0,0,.5);
+                     border-color:var(--accent);border-style:solid;transition:none}
+  .fav-card.drop-target{border-color:var(--accent);background:#1f2a3d}
+  .fav-card .alias[contenteditable=true]{outline:1px dashed var(--accent);
+                                          border-radius:4px;padding:2px 4px}
+  .fav-empty{padding:30px;text-align:center;color:var(--dim);font-size:14px}
+
+  /* picker modal -- devices with channel buttons */
+  .picker-list{max-height:65vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .picker-dev{padding:12px 4px;border-top:1px solid var(--line)}
+  .picker-dev:first-child{border-top:0}
+  .picker-name{font-size:15px;font-weight:500;margin-bottom:8px}
+  .picker-meta{font-size:11px;color:var(--dim);font-weight:400;margin-left:6px}
+  .picker-channels{display:flex;gap:8px;flex-wrap:wrap}
+  .picker-chan{background:var(--card2);border:1px solid var(--line);color:var(--txt);
+               border-radius:10px;padding:8px 14px;cursor:pointer;font:inherit;
+               font-size:14px;font-weight:500;min-width:80px;text-align:center}
+  .picker-chan:hover{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
+  .picker-chan.exists{opacity:.4;cursor:default;background:var(--card2)}
+  .picker-chan.exists:hover{background:var(--card2);border-color:var(--line);color:var(--txt)}
+  .picker-chan.active{background:var(--on);border-color:var(--on);color:#1a1500}
+  .picker-chan.active:hover{background:var(--on);border-color:var(--on);color:#1a1500}
+
+  /* event blink on card */
+  .card .eventdot{position:absolute;top:10px;right:12px;width:10px;height:10px;
+                  border-radius:50%;background:var(--accent);
+                  box-shadow:0 0 8px var(--accent);
+                  opacity:0;transition:opacity .3s}
+  .card.eventflash .eventdot{opacity:1}
+
+  .bindcaption{font-size:11px;color:var(--dim);margin-bottom:6px;font-style:italic}
+
+  /* unified automation rules */
+  .auto-wrap{max-width:860px;margin:8px auto;padding:0 4px}
+  .auto-toolbar{display:flex;justify-content:space-between;align-items:center;
+                gap:10px;margin:6px 0 14px}
+  .auto-empty{color:var(--dim);text-align:center;padding:48px 16px;line-height:1.7}
+  .rule-card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+             padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+  .rule-card.off{opacity:.5}
+  .rule-main{flex:1;min-width:0;cursor:pointer}
+  .rule-title{font-weight:650;font-size:15px;margin-bottom:6px}
+  .rule-flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px}
+  .rule-chip{background:var(--card2);border:1px solid var(--line);border-radius:8px;
+             padding:3px 8px;white-space:nowrap}
+  .rule-chip.when{border-color:#3a4a6a}
+  .rule-chip.cond{border-color:#5a4a1e}
+  .rule-chip.then{border-color:#1e5a3e}
+  .rule-arrow{color:var(--dim)}
+  .rule-kind{font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+             color:var(--dim);margin-left:6px}
+  .rule-actions{display:flex;flex-direction:column;gap:8px;align-items:center}
+  .rule-actions-top{display:flex;align-items:center;gap:8px}
+  .rule-run{background:transparent;border:1px solid #1e5a3e;color:var(--ok);
+            width:34px;height:34px;border-radius:50%;font-size:14px;line-height:1;
+            cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
+  .rule-run:hover{background:#12331f;border-color:var(--ok)}
+  .rule-run:disabled{opacity:.6;cursor:default}
+  .rule-del{background:transparent;border:1px solid var(--line);color:var(--dim);
+            width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer}
+  .rule-del:hover{color:var(--bad);border-color:var(--bad)}
+  .role-badge{display:inline-block;font-size:10px;border-radius:6px;padding:1px 6px;
+              margin-left:4px;border:1px solid var(--line);color:var(--dim)}
+  .role-badge.trigger{border-color:#3a4a6a;color:#7fa0d8}
+  .role-badge.condition{border-color:#5a4a1e;color:var(--on)}
+  .role-badge.action{border-color:#1e5a3e;color:var(--ok)}
+  /* rule builder */
+  .rb-step{margin:14px 0;padding:12px;background:var(--card2);
+           border:1px solid var(--line);border-radius:12px}
+  .rb-step > h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;
+                letter-spacing:.6px;color:var(--on)}
+  .rb-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+  .rb-row label{font-size:13px;color:var(--dim);min-width:64px}
+  .rb-step select,.rb-step input{background:var(--card);border:1px solid var(--line);
+       color:var(--txt);border-radius:8px;padding:7px 10px;font:inherit;font-size:14px}
+  .rb-days{display:flex;gap:4px;flex-wrap:wrap}
+  .rb-day{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);
+          background:var(--card);color:var(--dim);cursor:pointer;font:inherit;font-size:13px}
+  .rb-day.on{background:var(--accent-fill);color:#fff;border-color:var(--accent-fill)}
+  .rb-cond-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+  .rb-cond-row .rb-del{background:transparent;border:1px solid var(--line);color:var(--dim);
+                       width:28px;height:28px;border-radius:50%;cursor:pointer}
+
+  /* events log */
+  .evlog{font-family:ui-monospace,monospace;font-size:12px;color:var(--dim);
+         max-height:180px;overflow-y:auto;background:var(--card2);
+         border-radius:8px;padding:8px}
+  .evlog .ev{padding:2px 0}
+  .evlog .ev b{color:var(--txt);font-weight:500}
+  .evlog .ev .vchip{display:inline-block;padding:1px 6px;border-radius:8px;
+                    background:#2a3a55;color:var(--txt);font-size:11px;margin-left:4px}
+
+  /* modal */
+  .backdrop{
+    position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);
+    display:none;align-items:stretch;justify-content:center;z-index:50;
+    animation:fade .15s ease;
+    /* the modal's close button must never sit under the clock or the island */
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .backdrop.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{
+    background:var(--card);width:100%;max-width:640px;display:flex;
+    flex-direction:column;animation:up .2s ease;
+  }
+  .modal .head{padding:20px 22px 14px;flex:none;position:relative;
+               border-bottom:1px solid var(--line)}
+  .modal .body{padding:6px 22px 32px;overflow-y:auto;
+               -webkit-overflow-scrolling:touch;flex:1 1 auto;overscroll-behavior:contain}
+  @media (min-width:640px){
+    .backdrop{align-items:center;
+      padding:max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+              max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left))}
+    .modal{border-radius:22px;max-height:90vh}
+  }
+  @keyframes up{from{transform:translateY(20px);opacity:.5}to{transform:none;opacity:1}}
+  .modal h2{margin:0 0 6px;font-size:24px;font-weight:650;padding-right:48px;letter-spacing:-.3px}
+  .modal .sub{color:var(--dim);font-size:13px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .modal section{padding:18px 0;border-top:1px solid var(--line)}
+  .modal section:first-of-type{padding-top:14px}
+  .modal h3{font-size:12px;color:var(--dim);text-transform:uppercase;
+            letter-spacing:.7px;margin:0 0 12px;font-weight:600}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:12px;
+       padding:13px 0;border-top:1px dashed var(--line);min-height:48px}
+  .row:first-child{border-top:0}
+  .row.adv{opacity:.65}
+  .row.adv .rlabel{font-size:13px}
+  .rlabel{font-size:16px;flex:1;min-width:0}
+  .renbtn{background:transparent;border:0;color:var(--dim);font-size:16px;
+          cursor:pointer;padding:0 4px;vertical-align:middle}
+  .renbtn:hover{color:var(--txt)}
+  .rval{font-size:15px;color:var(--dim);min-width:0;overflow-wrap:anywhere;text-align:right}
+  .rval b{color:var(--txt);font-weight:600}
+  /* raw hex blobs (scene_data etc) must never widen the modal */
+  .rval b.blob{font-size:11px;font-family:ui-monospace,monospace;font-weight:400;
+               display:inline-block;max-width:100%;overflow:hidden;
+               text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+  /* big toggle */
+  .toggle{width:58px;height:34px;border-radius:22px;background:var(--card2);
+          border:1px solid var(--line);position:relative;cursor:pointer;flex:none;transition:.2s}
+  .toggle.on{background:var(--on);border-color:var(--on)}
+  .toggle::after{content:"";position:absolute;top:2px;left:2px;width:28px;height:28px;
+                 border-radius:50%;background:#fff;transition:.2s}
+  .toggle.on::after{transform:translateX(24px)}
+  /* enum */
+  .enum{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .enum button{background:var(--card2);border:1px solid var(--line);color:var(--txt);
+               border-radius:12px;padding:10px 16px;cursor:pointer;font-size:15px;
+               min-height:44px;font:inherit;font-weight:500}
+  .enum button.sel{background:var(--accent-fill);border-color:var(--accent-fill)}
+  /* int input */
+  .num{display:flex;align-items:center;gap:8px}
+  .num input{background:var(--card2);border:1px solid var(--line);color:var(--txt);
+             border-radius:10px;padding:10px 12px;width:110px;font:inherit;
+             text-align:right;font-size:16px}
+  .num .unit{font-size:13px;color:var(--dim);min-width:40px}
+  /* slider */
+  input[type=range]{-webkit-appearance:none;width:100%;height:8px;border-radius:8px;
+    background:var(--card2);outline:none;margin:8px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;
+    border-radius:50%;background:var(--on);cursor:pointer;border:3px solid var(--bg)}
+  input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;
+    background:var(--on);cursor:pointer;border:3px solid var(--bg)}
+
+  .raw{font-family:ui-monospace,monospace;font-size:12px;color:var(--dim);
+       background:var(--card2);border-radius:10px;padding:12px;white-space:pre-wrap;
+       max-height:200px;overflow-y:auto}
+  details summary{cursor:pointer;color:var(--dim);font-size:14px;padding:10px 0;
+                  list-style:none;display:flex;align-items:center;gap:6px}
+  details summary::before{content:"\25b8 ";display:inline-block;transition:transform .15s}
+  details[open] summary::before{transform:rotate(90deg)}
+  details summary::-webkit-details-marker{display:none}
+
+  .closebtn{position:absolute;top:14px;right:14px;width:40px;height:40px;
+            border-radius:50%;background:var(--card2);border:1px solid var(--line);
+            color:var(--txt);font-size:22px;cursor:pointer;line-height:1;
+            display:flex;align-items:center;justify-content:center}
+
+  /* Dialog action buttons -- all the same size */
+  .dlg-btn{font:inherit;font-size:13px;line-height:1.1;padding:7px 12px;border-radius:8px;
+           cursor:pointer;background:transparent;border:1px solid var(--line);color:var(--txt);
+           white-space:nowrap}
+  .dlg-btn.danger{border-color:var(--bad);color:var(--bad)}
+  .dlg-btn.primary{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff;font-weight:600}
+  .addbtn{display:block;width:100%;background:var(--accent-fill);border:0;
+          color:#fff;border-radius:10px;padding:12px;font:inherit;font-size:15px;
+          font-weight:600;cursor:pointer;margin-top:10px}
+  .addbtn:active{filter:brightness(.9)}
+
+  .skeleton{color:var(--dim);text-align:center;padding:40px 0}
+
+  /* header brand badge */
+  #brandtitle{padding:5px 14px;border-radius:14px;transition:background-color .35s ease,color .35s ease;display:flex;align-items:center}
+  #brandtitle .wordmark{height:40px;width:auto;display:block}
+  @media (max-width:640px){#brandtitle .wordmark{height:32px}}
+  /* settings gear: the same height as the Home badge, left of it */
+  #gearbtn{font:inherit;font-size:28px;line-height:1.15;height:calc(28px * 1.15 + 4px);width:calc(28px * 1.15 + 4px);padding:0;border-radius:14px;
+           background:var(--card);border:1px solid var(--line);color:var(--txt);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  #gearbtn svg{width:58%;height:58%;display:block}
+  @media (max-width:640px){#gearbtn{font-size:22px;height:calc(22px * 1.15 + 4px);width:calc(22px * 1.15 + 4px)}}
+  .rc .rrow .dotwrap.inrow{flex-direction:row;gap:8px;min-width:0;margin-right:8px}
+  .rc .rrow .dotwrap.inrow .dotlabel{display:none}   /* in the power row the dot's colour tells the state */
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<header><div class="brandgroup"><button id="gearbtn" onclick="openSettings()" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><h1 id="brandtitle"><svg viewBox="140 55 680 285" class="wordmark" role="img" aria-label="Yashome"><path transform="translate(158.60 300) scale(0.23000 -0.23000)" fill="#FFFFFF" d="M315.577880859375 -8.62646484375Q278 -8.62646484375 257.8978271484375 12.319091796875Q237.795654296875 33.2646484375 237.795654296875 72.15576171875V361.7470703125L269.807373046875 272.531005859375L34.445556640625 607.772216796875Q19.566162109375 628.904541015625 21.5360107421875 653.6331787109375Q23.505859375 678.36181640625 41.63818359375 695.994140625Q59.7705078125 713.62646484375 93.03515625 713.62646484375Q117.107177734375 713.62646484375 136.739501953125 701.7470703125Q156.371826171875 689.86767578125 174.19091796875 663.85595703125L333.7705078125 433.348388671875H301.698486328125L462.278076171875 664.169189453125Q480.783935546875 690.86767578125 499.2294921875 702.2470703125Q517.675048828125 713.62646484375 543.433837890625 713.62646484375Q575.38525390625 713.62646484375 593.017578125 697.307373046875Q610.64990234375 680.98828125 611.6197509765625 656.60302734375Q612.589599609375 632.2177734375 595.083740234375 606.458984375L361.721923828125 272.531005859375L393.046875 361.7470703125V72.15576171875Q393.046875 -8.62646484375 315.577880859375 -8.62646484375Z"/><path transform="translate(303.73 300) scale(0.23000 -0.23000)" fill="#FFFFFF" d="M224.433837890625 -10.62646484375Q169.554443359375 -10.62646484375 126.9581298828125 10.186767578125Q84.36181640625 31 60.3919677734375 66.7830810546875Q36.422119140625 102.566162109375 36.422119140625 147.819091796875Q36.422119140625 201.819091796875 64.422119140625 233.1624755859375Q92.422119140625 264.505859375 155.10888671875 278.3492431640625Q217.795654296875 292.192626953125 322.2294921875 292.192626953125H374.7353515625V214.2412109375H322.60302734375Q271.87939453125 214.2412109375 240.6741943359375 208.3978271484375Q209.468994140625 202.554443359375 195.6917724609375 189.62060546875Q181.91455078125 176.686767578125 181.91455078125 154.445556640625Q181.91455078125 126.14404296875 201.6256103515625 108.1197509765625Q221.336669921875 90.095458984375 257.63818359375 90.095458984375Q286.566162109375 90.095458984375 309.0904541015625 103.40283203125Q331.61474609375 116.710205078125 345.048583984375 140.1080322265625Q358.482421875 163.505859375 358.482421875 194.12060546875V309.433837890625Q358.482421875 352.85595703125 338.36181640625 371.2537841796875Q318.2412109375 389.651611328125 269.686767578125 389.651611328125Q242.87939453125 389.651611328125 211.2587890625 383.4346923828125Q179.63818359375 377.2177734375 142.324951171875 361.783935546875Q119.566162109375 352.470703125 102.7169189453125 357.8802490234375Q85.86767578125 363.289794921875 76.7713623046875 377.8258056640625Q67.675048828125 392.36181640625 67.8316650390625 409.86767578125Q67.98828125 427.37353515625 78.180908203125 443.7529296875Q88.37353515625 460.13232421875 111.13232421875 468.38525390625Q157.7587890625 486.7587890625 199.4757080078125 493.9757080078125Q241.192626953125 501.192626953125 275.566162109375 501.192626953125Q352.577880859375 501.192626953125 402.3668212890625 478.4095458984375Q452.15576171875 455.62646484375 476.8785400390625 409.0904541015625Q501.601318359375 362.554443359375 501.601318359375 289.7353515625V68.216064453125Q501.601318359375 30.951416015625 483.6256103515625 11.1624755859375Q465.64990234375 -8.62646484375 431.698486328125 -8.62646484375Q397.7470703125 -8.62646484375 379.2713623046875 11.1624755859375Q360.795654296875 30.951416015625 360.795654296875 68.216064453125V105.2529296875L367.85595703125 98.675048828125Q361.795654296875 65.2412109375 342.3919677734375 40.8375244140625Q322.98828125 16.433837890625 293.0845947265625 2.9036865234375Q263.180908203125 -10.62646484375 224.433837890625 -10.62646484375Z"/><path transform="translate(431.84 300) scale(0.23000 -0.23000)" fill="#FFFFFF" d="M246.192626953125 -10.62646484375Q202.2529296875 -10.62646484375 155.6624755859375 -2.7227783203125Q109.072021484375 5.180908203125 71.38525390625 24.36181640625Q51 34.36181640625 42.4639892578125 49.7412109375Q33.927978515625 65.12060546875 34.9581298828125 81.2830810546875Q35.98828125 97.445556640625 45.427978515625 110.1080322265625Q54.86767578125 122.7705078125 70.4036865234375 127.4932861328125Q85.939697265625 132.216064453125 105.072021484375 124.216064453125Q145.698486328125 107.095458984375 180.072021484375 100.0653076171875Q214.445556640625 93.03515625 246.87939453125 93.03515625Q289.554443359375 93.03515625 309.4522705078125 106.716064453125Q329.35009765625 120.39697265625 329.35009765625 142.38525390625Q329.35009765625 161.62646484375 316.1993408203125 171.7772216796875Q303.048583984375 181.927978515625 278 186.36181640625L172.675048828125 205.048583984375Q110.675048828125 216.422119140625 77.3919677734375 250.548583984375Q44.10888671875 284.675048828125 44.10888671875 339.2412109375Q44.10888671875 389.12060546875 72.0184326171875 425.37353515625Q99.927978515625 461.62646484375 149.2772216796875 481.4095458984375Q198.62646484375 501.192626953125 262.445556640625 501.192626953125Q307.072021484375 501.192626953125 344.7889404296875 492.945556640625Q382.505859375 484.698486328125 418.192626953125 466.577880859375Q436.324951171875 457.951416015625 443.5477294921875 443.072021484375Q450.7705078125 428.192626953125 448.2403564453125 412.0301513671875Q445.710205078125 395.86767578125 435.9271240234375 383.0184326171875Q426.14404296875 370.169189453125 410.451416015625 366.10302734375Q394.7587890625 362.036865234375 374.62646484375 370.35009765625Q342.686767578125 384.783935546875 315.5963134765625 391.157470703125Q288.505859375 397.531005859375 264.38525390625 397.531005859375Q219.14404296875 397.531005859375 198.9329833984375 383.5067138671875Q178.721923828125 369.482421875 178.721923828125 346.807373046875Q178.721923828125 330.192626953125 190.3726806640625 318.698486328125Q202.0234375 307.204345703125 226.01171875 303.14404296875L331.336669921875 284.457275390625Q396.0234375 273.083740234375 429.9932861328125 240.457275390625Q463.963134765625 207.830810546875 463.963134765625 152.2646484375Q463.963134765625 75.505859375 404.457275390625 32.439697265625Q344.951416015625 -10.62646484375 246.192626953125 -10.62646484375Z"/><g fill="none" stroke="#FFFFFF" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M588 150 L588 300"/><path d="M588 235 Q588 190 638 190 Q683 190 683 235 L683 300"/><path d="M553 175 L668 85 L783 175"/><path d="M753 160 L753 235"/></g><circle cx="753" cy="288" r="17" fill="#FFC34D"/><path d="M753.0 260.8 L753.0 252.3 M753.0 315.2 L753.0 323.7 M725.8 288.0 L717.3 288.0 M780.2 288.0 L788.7 288.0 M771.6 306.6 L776.4 311.4 M734.4 306.6 L729.6 311.4 M771.6 269.4 L776.4 264.6 M734.4 269.4 L729.6 264.6" stroke="#FFC34D" stroke-width="7" stroke-linecap="round" fill="none"/></svg></h1><div id="roomsbar"></div></div>
+  <div class="conngroup">
+    <button class="dlg-btn" onclick="logout()" title="Forget the access token on this device">Log out</button>
+    <button id="add-device-btn" class="dlg-btn primary"
+            title="Add a device: Zigbee (pairing) or ESPHome over MQTT">&#xff0b; Add</button>
+    <button id="install-btn" class="dlg-btn primary" hidden title="Install as an app">&#x2b07; Install</button>
+    <span id="conn">connecting&#x2026;</span>
+  </div></header>
+<div id="tabbar">
+  <button id="tabburger" aria-label="groups">&#x2630;</button>
+  <span id="tabtitle"></span>
+</div>
+<div id="taboverlay"></div>
+<nav class="tabs" id="tabs"></nav>
+<div id="app"><div class="skeleton">Loading devices&#x2026;</div></div>
+
+<div class="backdrop" id="bd"><div class="modal" id="md" role="dialog" aria-modal="true" tabindex="-1"></div></div>
+
+<script src="/i18n.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let DEVICES = [];
+let BY_ID   = {};
+let STATE   = {};
+let pending = {};   // local-applied values vs WS
+let optimistic = {}; // id+'/'+code -> {value, expires} -- preserved against WS revert
+let openModalId = null;
+const OPT_HOLD_MS = 4000;
+
+// One bearer token gates the API. Entered once per device, kept in
+// localStorage, sent on every request; a 401 clears it and asks again.
+const TOKEN_KEY = 'hs_token';
+// ?token=... once (kiosks, screenshots, first visit from a link) and ?tab=... as a deep link;
+// both leave the address bar so they are not bookmarked or shared by accident
+const _qs = new URLSearchParams(location.search);
+if(_qs.get('token')){ localStorage.setItem(TOKEN_KEY, _qs.get('token').trim()); }
+if(_qs.get('tab')){ localStorage.setItem('home.tab', _qs.get('tab')); }
+if(_qs.has('token') || _qs.has('tab') || _qs.has('lang')){ _qs.delete('token'); _qs.delete('tab'); _qs.delete('lang'); history.replaceState(null, '', location.pathname + (_qs.toString() ? '?' + _qs : '')); }
+let TOKEN = localStorage.getItem(TOKEN_KEY) || '';
+function authHeaders(h){ return Object.assign({}, h || {}, TOKEN ? {'Authorization': 'Bearer ' + TOKEN} : {}); }
+function withToken(url){ return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN); }
+function askToken(msg){
+  const t = prompt(msg || i18n('Home access token (entered once on this device)'));
+  if(t === null) return;
+  TOKEN = t.trim(); localStorage.setItem(TOKEN_KEY, TOKEN); location.reload();
+}
+function logout(){ localStorage.removeItem(TOKEN_KEY); TOKEN = ''; location.reload(); }
+// no eager prompt: behind a proxy that injects the header nobody is asked,
+// so we only ask when the API actually answers 401 (see api() below).
+let _focusBeforeModal = null;   // where the focus was before a modal took it
+let _tokenAsked = false;   // one prompt per page: parallel 401s must not ask (or wipe) again
+async function api(path, opts){
+  opts = Object.assign({}, opts || {}); opts.headers = authHeaders(opts.headers);
+  const sent = TOKEN;
+  const r = await fetch(path, opts);
+  if(r.status === 401){
+    // only forget the token this request carried, never one typed in meanwhile
+    if(localStorage.getItem(TOKEN_KEY) === sent) localStorage.removeItem(TOKEN_KEY);
+    if(!_tokenAsked){ _tokenAsked = true; askToken(i18n('Token rejected \u2014 enter it again')); }
+    throw new Error('401');
+  }
+  if(!r.ok) throw new Error(apiErrorText(await r.text(), r.status));
+  return r.json();
+}
+// {"detail": "..."} or pydantic's {"detail": [{msg, loc}, ...]} -> one readable line
+function apiErrorText(body, status){
+  let d;
+  try { d = JSON.parse(body).detail; } catch(e) { return body || `HTTP ${status}`; }
+  if(typeof d === 'string') return i18n(d);
+  if(Array.isArray(d)) return d.map(x => `${(x.loc || []).slice(1).join('.')}: ${i18n(x.msg || '')}`).join('; ');
+  return body || `HTTP ${status}`;
+}
+
+async function init(){
+  translateDom(document);   // static shell; dynamic markup goes through i18n()
+  // CSS cannot call i18n(): the "offline" caption of a card comes in as a variable
+  document.documentElement.style.setProperty('--offline-txt', JSON.stringify(' \u2022  ' + i18n('offline')));
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape' && openModalId) closeModal();
+    // Tab stays inside an open modal: focus wraps from the last control to the first and back
+    if(e.key === 'Tab' && openModalId){
+      const md = document.getElementById('md');
+      const f = [...md.querySelectorAll('button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')]
+        .filter(x => !x.disabled && x.offsetParent !== null);
+      if(f.length){
+        const first = f[0], last = f[f.length - 1];
+        if(e.shiftKey && (document.activeElement === first || document.activeElement === md)){ e.preventDefault(); last.focus(); }
+        else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+      }
+    }
+    // on/off toggles are divs: Enter / Space act like a click once they have focus
+    if((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('toggle')){
+      e.preventDefault(); e.target.click();
+    }
+  });
+  // every toggle, whenever it is rendered, is a focusable switch; a modal takes the focus
+  new MutationObserver(muts => {
+    for(const t of document.querySelectorAll('.toggle:not([tabindex])')){
+      t.tabIndex = 0; t.setAttribute('role', 'switch');
+    }
+    // aria-checked follows the "on" class whenever a toggle is drawn or flips
+    for(const m of muts){
+      const els = m.type === 'attributes' ? [m.target] : [...m.addedNodes].filter(n => n.querySelectorAll)
+        .flatMap(n => [n, ...n.querySelectorAll('.toggle')]);
+      for(const t of els) if(t.classList && t.classList.contains('toggle')){
+        const v = t.classList.contains('on') ? 'true' : 'false';
+        if(t.getAttribute('aria-checked') !== v) t.setAttribute('aria-checked', v);
+      }
+    }
+    const md = document.getElementById('md');
+    if(openModalId && md && !md.contains(document.activeElement)){
+      if(!_focusBeforeModal) _focusBeforeModal = document.activeElement;   // given back on close
+      md.focus();
+    }
+  }).observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: ['class']});
+  DEVICES = localizeDevices(await api('/api/devices'));
+  BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
+  await loadFavorites();
+  try { RULES = await api('/api/rules'); } catch(e){ RULES = []; }
+  if(!TABS.some(t => t.id === activeTab) && !activeTab.startsWith('room:')) activeTab = 'fav';
+  renderTabs();
+  render();
+  connectWS();
+  document.getElementById('bd').onclick = e => {
+    if(e.target.id === 'bd') closeModal();
+  };
+  document.getElementById('add-device-btn').onclick = openAddDevice;
+}
+
+async function loadFavorites(){
+  try{ FAVORITES = await api('/api/favorites'); }
+  catch(e){ FAVORITES = []; }
+  try{ ROOMS = await api('/api/rooms'); }
+  catch(e){ ROOMS = []; }
+  try{ TAB_ORDER = await api('/api/tab_order'); }
+  catch(e){ TAB_ORDER = {}; }
+  try{ TILE_SIZES = await api('/api/tile_sizes'); }
+  catch(e){ TILE_SIZES = {}; }
+}
+
+
+function openSettings(){
+  const langs = Object.entries(I18N_NAMES || {en: 'English'}).map(([k, v]) =>
+    `<button class="dlg-btn ${I18N_LANG === k ? 'primary' : ''}" onclick="setLang('${k}')">${escapeHtml(v)}</button>`).join(' ');
+  document.getElementById('md').innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${i18n('Settings')}</h2>
+    </div>
+    <div class="body">
+      <section><h3>${i18n('Language')}</h3>
+        <div class="row"><span class="rlabel">${i18n('Dashboard language')}</span><span class="enum">${langs}</span></div>
+      </section>
+    </div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  openModalId = '__settings__';
+}
+
+
+// Repack at most once per frame: every WS tick used to force a synchronous
+// layout of the whole grid.
+let _packRaf = 0;
+function schedulePack(){
+  if(_packRaf) return;
+  _packRaf = requestAnimationFrame(()=>{ _packRaf = 0; if(!resizing) packGrids(); });
+}
+
+// Reconnect with capped exponential backoff, and treat a socket that has gone
+// quiet for 60 s as dead: a phone hopping WiFi->LTE leaves it half-open and the
+// UI frozen on "online" otherwise.
+let _wsDelay = 1000, _wsLast = 0, _wsWatch = 0, _wsRefused = 0;   // _wsRefused: closes before open in a row
+function connectWS(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(withToken(`${proto}://${location.host}/ws`));
+  let opened = false;
+  const retry = ()=>{
+    clearInterval(_wsWatch);
+    $('#conn').textContent=i18n('reconnecting\u2026'); $('#conn').classList.remove('live');
+    // Refused before it ever opened: ask the API why. A 401 brings up the token prompt. If the
+    // API answers, a restart would explain one or two misses; three in a row with a healthy API
+    // mean the socket itself is refused -- an Origin the backend does not accept.
+    if(!opened){
+      _wsRefused++;
+      api('/api/health').then(()=>{
+        if(_wsRefused < 3) return;
+        $('#conn').textContent = i18n('refused: see DASHBOARD_ORIGINS'); $('#conn').title = i18n('The live connection was refused although the token is valid: the page is opened under an address the backend does not accept (reverse proxy?). Set DASHBOARD_ORIGINS in .env.');
+      }).catch(()=>{});
+    }
+    const wait = _wsDelay + Math.random() * 500;
+    _wsDelay = Math.min(_wsDelay * 2, 30000);
+    setTimeout(connectWS, wait);
+  };
+  ws.onopen  = ()=>{
+    opened = true; _wsRefused = 0;
+    $('#conn').textContent=i18n('online'); $('#conn').title = ''; $('#conn').classList.add('live');
+    _wsDelay = 1000; _wsLast = Date.now();
+    clearInterval(_wsWatch);
+    _wsWatch = setInterval(()=>{
+      if(Date.now() - _wsLast > 60000){
+        // close() waits for a handshake a half-open socket never answers: detach and reconnect now
+        ws.onclose = ws.onmessage = ws.onerror = null;
+        try{ ws.close(); }catch(_){}
+        retry();
+      }
+    }, 10000);
+  };
+  ws.onclose = retry;
+  ws.onerror = ()=>{ try{ ws.close(); }catch(_){} };
+  ws.onmessage = e =>{
+    _wsLast = Date.now();
+    const incoming = JSON.parse(e.data);
+    const now = Date.now();
+    for(const [k, info] of Object.entries(optimistic)){
+      if(info.expires < now){ delete optimistic[k]; continue; }
+      const slash = k.indexOf('/');
+      const id = k.slice(0, slash), code = k.slice(slash+1);
+      if(incoming[id]?.values) incoming[id].values[code] = info.value;
+    }
+    delete incoming._meta;
+    STATE = incoming;
+    updateCards();
+    // card content changes height (sliders, statuses) -- repack,
+    // but not in the middle of a gesture: repacking under the finger makes the tile jump
+    schedulePack();
+    if(openModalId) updateModal();
+  };
+}
+
+// Tab layout
+const TABS = [
+  {id:'fav',     label:i18n('Favourites'),   cats:[]},                // user-curated channels
+  {id:'switch',  label:i18n('Switches'), cats:['switch'], compact:true},
+  {id:'sensor',  label:i18n('Sensors'),     cats:['sensor']},
+  {id:'button',  label:i18n('Buttons'),      cats:['button'], compact:true},
+  {id:'auto',    label:i18n('Automations'), cats:[]},             // bindings view over buttons+sensors
+  {id:'indicator', label:i18n('Indicators'), cats:['indicator'], compact:true},
+  {id:'other',   label:i18n('Other'),   cats:[]},
+];
+let activeTab = localStorage.getItem('home.tab') || 'fav';   // last tab, or favourites
+let FAVORITES = [];   // [{device, code, alias}]
+let ROOMS = [];       // [{id, name, devices:[ids]}] -- living zones, tabs after TABS
+let TAB_ORDER = {};   // {tabId:[device ids]} -- manual tile order on a tab
+let TILE_SIZES = {};  // {scope:{dev:{w,h}}} -- resized tiles; scope = tab/room:<id>
+
+
+function devsForTab(tabId){
+  const tab = TABS.find(t => t.id === tabId) || TABS[0];
+  // "Other" -- catch-all for anything not in other tabs (plus its own cats)
+  let devs;
+  if(tab.id === 'other'){
+    const knownCats = new Set(TABS.filter(t=>t.id!=='other').flatMap(t=>t.cats));
+    devs = DEVICES.filter(d => !knownCats.has(d.category));
+  }else{
+    devs = DEVICES.filter(d => tab.cats.includes(d.category));
+  }
+  return applyTabOrder(tab.id, devs);
+}
+
+// Manual tab order: the listed ones first, the rest after them as they were
+function applyTabOrder(tabId, devs){
+  const ord = TAB_ORDER[tabId];
+  if(!Array.isArray(ord) || !ord.length) return devs;
+  const pos = new Map(ord.map((id, i) => [id, i]));
+  return devs.slice().sort((a, b) =>
+    (pos.has(a.id) ? pos.get(a.id) : 1e9) - (pos.has(b.id) ? pos.get(b.id) : 1e9));
+}
+
+
+function renderTabs(){
+  const bar = document.getElementById('tabs');
+  bar.innerHTML = TABS.map(t => {
+    const n = (t.id === 'fav') ? FAVORITES.length
+            : (t.id === 'auto') ? RULES.length
+            : devsForTab(t.id).length;
+    return `<button class="tab ${t.id===activeTab?'active':''}" data-tab="${t.id}">${escapeHtml(t.label)}<span class="badge">${n}</span></button>`;
+  }).join('');
+  const act = TABS.find(t=>t.id===activeTab);
+  const tt = document.getElementById('tabtitle');
+  if(tt && act){
+    const n = (act.id === 'fav') ? FAVORITES.length
+            : (act.id === 'auto') ? RULES.length
+            : devsForTab(act.id).length;
+    tt.innerHTML = escapeHtml(act.label) + (n===''?'':' <span class="badge">'+n+'</span>');
+  } else if(tt && activeTab.startsWith('room:')){
+    const r = ROOMS.find(x => 'room:'+x.id === activeTab);
+    tt.innerHTML = r ? escapeHtml(r.name)+' <span class="badge">'+(r.devices||[]).length+'</span>' : '';
+  }
+  if(!window._drawerWired){
+    window._drawerWired = true;
+    const dr=document.getElementById('tabs'), ov=document.getElementById('taboverlay');
+    const setOpen=v=>{ dr.classList.toggle('open',v); ov.classList.toggle('show',v); };
+    document.getElementById('tabburger').onclick=()=>setOpen(!dr.classList.contains('open'));
+    ov.onclick=()=>setOpen(false);
+    window._drawerClose=()=>setOpen(false);
+  }
+  bar.querySelectorAll('.tab').forEach(btn => {
+    btn.onclick = ()=>{
+      activeTab = btn.dataset.tab;
+      gridEditMode = false;
+      localStorage.setItem('home.tab', activeTab);
+      if(window._drawerClose) window._drawerClose();
+      renderTabs();
+      render();
+    };
+  });
+  renderRooms();   // the room chips in the header live the same life as the tabs
+}
+
+// Room chips in the header, right of the Yashome logo + the create button
+function renderRooms(){
+  const bar = document.getElementById('roomsbar');
+  if(!bar) return;
+  bar.innerHTML = ROOMS.map(r => {
+    const tid = 'room:' + r.id;
+    return `<button class="roomchip ${tid===activeTab?'active':''}" data-tab="${escapeHtml(tid)}">${escapeHtml(r.name)}<span class="badge">${(r.devices||[]).length}</span></button>`;
+  }).join('')
+  + '<button class="roomchip" id="addroom-chip" title="' + i18n('New room (living zone)') + '">\uff0b</button>';
+  bar.querySelectorAll('.roomchip[data-tab]').forEach(btn => {
+    btn.onclick = ()=>{
+      activeTab = btn.dataset.tab;
+      gridEditMode = false;
+      localStorage.setItem('home.tab', activeTab);
+      renderTabs();
+      render();
+    };
+  });
+  document.getElementById('addroom-chip').onclick = ()=> addRoomPrompt();
+}
+
+let favEditMode = false;
+let favDeleteMode = false;
+let favSelected = new Set();   // keys "device/code" picked for deletion
+
+function render(){
+  const app=$('#app'); app.innerHTML='';
+  if(activeTab.startsWith('room:')){ renderRoom(app, activeTab.slice(5)); return; }
+  if(activeTab === 'fav'){ renderFavorites(app); return; }
+  if(activeTab === 'auto'){ renderAutomations(app); return; }
+  const devs = devsForTab(activeTab);
+  if(!devs.length){
+    app.innerHTML = '<div class="skeleton">' + i18n('\u2014 no devices on this tab \u2014') + '</div>';
+    return;
+  }
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;padding:8px 16px 0;flex-wrap:wrap;align-items:center';
+  if(devs.length > 1){
+    const ord = document.createElement('button');
+    ord.className = 'dlg-btn' + (gridEditMode ? ' primary' : '');
+    ord.textContent = gridEditMode ? i18n('Done') : i18n('\u270e Order');
+    ord.onclick = ()=>{ gridEditMode = !gridEditMode; render(); };
+    bar.append(ord);
+    if(gridEditMode){
+      const hint = document.createElement('span');
+      hint.style.cssText = 'font-size:13px;color:var(--dim)';
+      hint.textContent = i18n('drag the tiles into the order you want');
+      bar.append(hint);
+    }
+  }
+  if(bar.children.length) app.append(bar);
+  const tabDef = TABS.find(t => t.id === activeTab);
+  const g=document.createElement('div');
+  g.className = 'grid' + (tabDef && tabDef.compact ? ' compact' : '');
+  g.dataset.scope = activeTab;
+  for(const d of devs){
+    const cd = card(d);
+    cd.dataset.dev = d.id;
+    if(gridEditMode) armGridDrag(cd, g, activeTab, parent => saveTabOrder(activeTab, parent));
+    g.appendChild(cd);
+  }
+  app.append(g);
+  for(const cd of g.children) applyTileSize(cd, activeTab, cd.dataset.dev, g);
+  if(g.classList.contains('compact')) packGrid(g);
+}
+
+let gridEditMode = false;   // "Order" on device grids (tabs and rooms)
+let resizing = false;       // a gesture is in progress (resize/drag) -- do not repack
+
+// Masonry for .grid.compact: 8px tracks (see CSS), the span is computed from the real
+// content height of the card. Recomputed after render, on resize and on the WS tick
+// (card content changes height, e.g. a brightness slider that appeared).
+// Tile width in columns: explicit (resized), otherwise 1
+function tileW(cd, scope, cols){
+  const s = (TILE_SIZES[scope] || {})[cd.dataset.dev] || {};
+  if(s.w) return Math.min(s.w, cols);
+  return 1;
+}
+
+function packGrid(g){
+  const rowH = 8, gap = GRID_GAP;
+  const kids = Array.from(g.children);
+  const cols = gridColCount(g);
+  const scope = g.dataset.scope || activeTab;
+  // two passes (otherwise every card = a relayout of the whole grid): first let every
+  // card release its height -- align-self:start gives the box its natural content height,
+  // a stretched box cannot be measured; then place them all in one go
+  for(const cd of kids){
+    // do NOT reset gridRowStart/End: the grid would then reflow automatically, its
+    // height would drop and the browser would clip scrollTop -- the page jumps up on
+    // every refresh. align-self:start already gives the natural height.
+    cd.style.alignSelf = 'start';
+  }
+  const hs = kids.map(cd => cd.getBoundingClientRect().height);
+  // we lay out ourselves: pinned ones (col) go to their column, the rest to the
+  // shortest one; free[c] = the first free 8px track of column c
+  const free = new Array(cols).fill(0);
+  kids.forEach((cd, i) => {
+    cd.style.alignSelf = '';
+    const s = (TILE_SIZES[scope] || {})[cd.dataset.dev] || {};
+    const w = tileW(cd, scope, cols);
+    const spanRows = Math.max(1, Math.ceil((hs[i] + gap) / (rowH + gap)));
+    let col;
+    if(Number.isInteger(s.col) && s.col >= 0){
+      col = Math.min(s.col, cols - w);
+    }else{
+      col = 0; let best = Infinity;
+      for(let c = 0; c + w <= cols; c++){
+        const m = Math.max(...free.slice(c, c + w));
+        if(m < best){ best = m; col = c; }
+      }
+    }
+    const row = Math.max(...free.slice(col, col + w));
+    cd.style.gridColumnStart = String(col + 1);
+    cd.style.gridColumnEnd = 'span ' + w;
+    cd.style.gridRowStart = String(row + 1);
+    cd.style.gridRowEnd = 'span ' + spanRows;
+    for(let c = col; c < col + w; c++) free[c] = row + spanRows;
+    cd.dataset.col = col;
+    cd.dataset.colspan = w;
+  });
+}
+
+function packGrids(){
+  const sc = document.scrollingElement || document.documentElement;
+  const y = sc.scrollTop;
+  document.querySelectorAll('.grid.compact').forEach(packGrid);
+  if(sc.scrollTop !== y) sc.scrollTop = y;
+}
+
+window.addEventListener('resize', ()=>{
+  clearTimeout(window._packT);
+  window._packT = setTimeout(packGrids, 120);
+});
+
+// Tile reorder mode: a shield over the card swallows clicks on its controls
+// (otherwise dragging would flip switches), drag is on the card, the corner
+// handle resizes.
+function armGridDrag(cd, g, scope, persistOrder){
+  cd.classList.add('editing');
+  const shield = el('div');
+  shield.style.cssText = 'position:absolute;inset:0;z-index:4';
+  shield.onclick = ev => ev.stopPropagation();
+  cd.append(shield);
+  attachDragReorder(cd, '.card', (parent, info) => {
+    if(g.classList.contains('compact') && info && info.x != null){
+      dropIntoColumn(g, scope, cd, info.x, info.y, () => persistOrder(parent));
+    }else{
+      persistOrder(parent);
+    }
+  });
+  attachResizer(cd, g, scope);
+}
+
+// Manual placement: a dropped tile is PINNED to the column under the pointer
+// and placed vertically where it was dropped; unpinned ones keep finding their own place.
+async function dropIntoColumn(g, scope, cd, x, y, persistOrder){
+  const cols = gridColCount(g);
+  const gr = g.getBoundingClientRect();
+  const colW = (gr.width - (cols - 1) * GRID_GAP) / cols;
+  const w = tileW(cd, scope, cols);
+  const col = Math.max(0, Math.min(
+    Math.floor((x - gr.left) / (colW + GRID_GAP)), cols - w));
+  // position within the column: before its first tile whose centre is below the drop point
+  const inCol = Array.from(g.children).filter(k => {
+    if(k === cd) return false;
+    const c0 = +k.dataset.col, cw = +k.dataset.colspan || 1;
+    return c0 <= col && col < c0 + cw;
+  }).sort((a, b) => (+a.style.gridRowStart || 0) - (+b.style.gridRowStart || 0));
+  const before = inCol.find(k => {
+    const r = k.getBoundingClientRect();
+    return y < r.top + r.height / 2;
+  });
+  if(before) g.insertBefore(cd, before);
+  else if(inCol.length) g.insertBefore(cd, inCol[inCol.length - 1].nextSibling);
+  const s = (TILE_SIZES[scope] = TILE_SIZES[scope] || {})[cd.dataset.dev] || {};
+  TILE_SIZES[scope][cd.dataset.dev] = {w: s.w || 0, h: s.h || 0, col};
+  packGrid(g);
+  persistOrder();
+  try{
+    await api('/api/tile_sizes/'+encodeURIComponent(scope), {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({device: cd.dataset.dev, w: s.w || 0, h: s.h || 0, col})
+    });
+  }catch(e){ notifyFail(i18n('Not saved: ') + e.message); }
+}
+
+const GRID_GAP = 10;
+
+function gridColCount(g){
+  return getComputedStyle(g).gridTemplateColumns.split(' ').length;
+}
+
+// Saved tile size: w in columns (clamped to what fits), h = min-height
+function applyTileSize(cd, scope, dev, g){
+  const s = (TILE_SIZES[scope] || {})[dev];
+  if(!s) return;
+  if(s.w) cd.style.gridColumn = 'span ' + Math.min(s.w, gridColCount(g));
+  if(s.h) cd.style.minHeight = s.h + 'px';
+}
+
+function attachResizer(cd, g, scope){
+  const rz = el('div','resizer','\u25e2');
+  rz.title = i18n('Resize the tile; double-click for auto size');
+  cd.append(rz);
+  rz.ondblclick = async ev=>{
+    ev.stopPropagation();
+    cd.style.gridColumn = ''; cd.style.minHeight = '';
+    if(TILE_SIZES[scope]) delete TILE_SIZES[scope][cd.dataset.dev];
+    if(g.classList.contains('compact')) packGrid(g);
+    try{
+      await api('/api/tile_sizes/'+encodeURIComponent(scope), {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({device: cd.dataset.dev, w: 0, h: 0, col: -1})
+      });
+    }catch(e){ notifyFail(i18n('Not saved: ') + e.message); }
+  };
+  rz.addEventListener('pointerdown', e=>{
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    const pid = e.pointerId;
+    const cols = gridColCount(g);
+    const colW = (g.getBoundingClientRect().width - (cols-1)*GRID_GAP) / cols;
+    const start = cd.getBoundingClientRect();
+    let w = Math.max(1, Math.round((start.width + GRID_GAP) / (colW + GRID_GAP)));
+    let h = Math.round(start.height);
+    // leave the grid alone during the gesture (otherwise the tile jumps under the hand):
+    // draw a ghost of the future size, apply once on release
+    resizing = true;
+    const ghost = el('div','rzghost');
+    ghost.style.left = start.left + 'px';
+    ghost.style.top = start.top + 'px';
+    document.body.append(ghost);
+    const draw = ()=>{
+      ghost.style.width = (w*colW + (w-1)*GRID_GAP) + 'px';
+      ghost.style.height = h + 'px';
+      ghost.textContent = w + i18n(' qty \u00d7 ') + h + 'px';
+    };
+    draw();
+    const move = ev=>{
+      if(ev.pointerId !== pid) return;
+      ev.preventDefault();
+      w = Math.min(cols, Math.max(1, Math.round(
+            (start.width + ev.clientX - e.clientX + GRID_GAP) / (colW + GRID_GAP))));
+      h = Math.max(40, Math.round(start.height + ev.clientY - e.clientY));
+      draw();
+    };
+    const up = async ev=>{
+      if(ev.pointerId !== pid) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      resizing = false;
+      ghost.remove();
+      if(ev.type === 'pointercancel') return;
+      cd.style.gridColumn = 'span ' + w;
+      // height not above the natural one -- do not fix it (let the content decide)
+      cd.style.minHeight = ''; cd.style.alignSelf = 'start';
+      const nat = cd.getBoundingClientRect().height;
+      cd.style.alignSelf = '';
+      const hKeep = h > nat + 8 ? h : 0;
+      if(hKeep) cd.style.minHeight = hKeep + 'px';
+      if(g.classList.contains('compact')) packGrid(g);
+      const prev = (TILE_SIZES[scope] || {})[cd.dataset.dev] || {};
+      const col = Number.isInteger(prev.col) ? prev.col : -1;
+      (TILE_SIZES[scope] = TILE_SIZES[scope] || {})[cd.dataset.dev] = {w, h: hKeep, col};
+      try{
+        await api('/api/tile_sizes/'+encodeURIComponent(scope), {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({device: cd.dataset.dev, w, h: hKeep, col})
+        });
+      }catch(e){ notifyFail(i18n('Not saved: ') + e.message); }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+}
+
+async function saveTabOrder(tabId, parent){
+  const order = Array.from(parent.children).map(x => x.dataset.dev).filter(Boolean);
+  TAB_ORDER[tabId] = order;
+  try{
+    await api('/api/tab_order/'+encodeURIComponent(tabId), {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({order})
+    });
+  }catch(e){ notifyFail(i18n('Not saved: ') + e.message); }
+}
+
+// -- Rooms (living zones) -----------------------------------------------------
+// Named device groups; one device may live in several rooms at once. CRUD --
+// /api/rooms, the room's membership is replaced as a whole (PUT).
+function roomById(rid){ return ROOMS.find(r => r.id === rid); }
+
+async function reloadRooms(){
+  try{ ROOMS = await api('/api/rooms'); }catch(e){}
+  renderTabs();
+  render();
+}
+
+async function addRoomPrompt(){
+  const name = (prompt(i18n('Room name (e.g. "Bedroom"):')) || '').trim();
+  if(!name) return;
+  try{
+    const r = await api('/api/rooms', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name})
+    });
+    activeTab = 'room:' + r.room.id;
+    localStorage.setItem('home.tab', activeTab);
+  }catch(e){ alert(i18n('Error: ')+e.message); }
+  await reloadRooms();
+}
+
+function renderRoom(app, rid){
+  const room = roomById(rid);
+  if(!room){   // the room was deleted / failed to load -- do not leave an empty tab
+    activeTab = 'fav'; localStorage.setItem('home.tab','fav');
+    renderTabs(); render(); return;
+  }
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;padding:8px 16px 0;flex-wrap:wrap';
+  const add = document.createElement('button');
+  add.className = 'dlg-btn primary';
+  add.textContent = i18n('\uff0b Devices');
+  add.title = i18n('Choose which devices live in this room');
+  add.onclick = ()=> openRoomPicker(room.id);
+  const ren = document.createElement('button');
+  ren.className = 'dlg-btn';
+  ren.textContent = i18n('\u270e Rename');
+  ren.onclick = async ()=>{
+    const name = (prompt(i18n('New room name:'), room.name) || '').trim();
+    if(!name || name === room.name) return;
+    try{
+      await api('/api/rooms/'+encodeURIComponent(room.id), {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name})
+      });
+    }catch(e){ alert(i18n('Error: ')+e.message); }
+    await reloadRooms();
+  };
+  const del = document.createElement('button');
+  del.className = 'dlg-btn danger';
+  del.textContent = i18n('\u{1f5d1} Delete');
+  del.onclick = async ()=>{
+    if(!confirm(`${i18n('Delete room "')}${room.name}${i18n('"? The devices stay, only the group disappears.')}`)) return;
+    try{
+      await api('/api/rooms/'+encodeURIComponent(room.id), {method:'DELETE'});
+    }catch(e){ alert(i18n('Error: ')+e.message); }
+    activeTab = 'fav'; localStorage.setItem('home.tab','fav');
+    await reloadRooms();
+  };
+  bar.append(add, ren, del);
+  const devs = (room.devices||[]).map(id => BY_ID[id]).filter(Boolean)
+  ;
+  if(devs.length > 1){
+    const ord = document.createElement('button');
+    ord.className = 'dlg-btn' + (gridEditMode ? ' primary' : '');
+    ord.textContent = gridEditMode ? i18n('Done') : i18n('\u270e Order');
+    ord.onclick = ()=>{ gridEditMode = !gridEditMode; render(); };
+    bar.append(ord);
+  }
+  app.append(bar);
+  if(!devs.length){
+    app.append(el('div','skeleton',i18n('\u2014 no devices in this room yet: "\uff0b Devices" \u2014')));
+    return;
+  }
+  const g = document.createElement('div'); g.className='grid compact';
+  g.dataset.scope = activeTab;
+  for(const d of devs){
+    const cd = card(d);
+    cd.dataset.dev = d.id;
+    if(gridEditMode) armGridDrag(cd, g, activeTab, async parent => {
+      // visible order + the room's invisible (missing) members at the tail
+      const visible = Array.from(parent.children).map(x => x.dataset.dev).filter(Boolean);
+      const rest = (room.devices||[]).filter(id => !visible.includes(id));
+      room.devices = visible.concat(rest);
+      try{
+        await api('/api/rooms/'+encodeURIComponent(room.id), {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({devices: room.devices})
+        });
+      }catch(e){ notifyFail(i18n('Not saved: ') + e.message); }
+    });
+    g.appendChild(cd);
+  }
+  app.append(g);
+  for(const cd of g.children) applyTileSize(cd, activeTab, cd.dataset.dev, g);
+  packGrid(g);
+}
+
+function openRoomPicker(rid){
+  const room = roomById(rid); if(!room) return;
+  const md = document.getElementById('md');
+  const selected = new Set(room.devices || []);
+  const pickable = DEVICES.slice().sort((a,b)=> (a.name||a.id).localeCompare(b.name||b.id, LANG));
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${i18n('Devices:')} ${escapeHtml(room.name)}</h2>
+      <div class="sub">${i18n('Click devices to put them into the room. One device may be in several rooms.')}</div>
+    </div>
+    <div class="body">
+      <section style="padding-top:0;border-top:0">
+        <div class="picker-list">
+          ${pickable.map(d=>{
+            const others = ROOMS.filter(r => r.id !== rid && (r.devices||[]).includes(d.id)).map(r=>r.name);
+            const on = selected.has(d.id);
+            return `<div class="picker-dev">
+                      <button class="picker-chan ${on?'active':''}" data-dev="${escapeHtml(d.id)}"
+                              style="width:100%;text-align:left">
+                        <span class="pick-mark">${on?'\u2713':'\uff0b'}</span> ${escapeHtml(d.name)}<span class="picker-meta"> \u00b7 ${escapeHtml(d.category||d.transport||'')}${others.length?i18n(' \u00b7 also in: ')+escapeHtml(others.join(', ')):''}</span>
+                      </button>
+                    </div>`;
+          }).join('')}
+        </div>
+      </section>
+      <section style="display:flex;gap:10px;justify-content:flex-end">
+        <button id="room-pick-cancel" class="dlg-btn">${i18n('Cancel')}</button>
+        <button id="room-pick-save" class="dlg-btn primary">${i18n('Save')}</button>
+      </section>
+    </div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  openModalId = '__room_picker__';
+  md.querySelectorAll('[data-dev]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.dev;
+      if(selected.has(id)) selected.delete(id); else selected.add(id);
+      const on = selected.has(id);
+      btn.classList.toggle('active', on);
+      const mark = btn.querySelector('.pick-mark');
+      if(mark) mark.textContent = on ? '\u2713' : '\uff0b';
+    };
+  });
+  md.querySelector('#room-pick-cancel').onclick = ()=> closeModal();
+  md.querySelector('#room-pick-save').onclick = async ()=>{
+    // order: the previous membership (minus removed), then the newly added alphabetically
+    const prev = (room.devices||[]).filter(id => selected.has(id));
+    const added = pickable.map(d=>d.id).filter(id => selected.has(id) && !prev.includes(id));
+    try{
+      await api('/api/rooms/'+encodeURIComponent(room.id), {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({devices: prev.concat(added)})
+      });
+    }catch(e){ alert(i18n('Error: ')+e.message); return; }
+    closeModal();
+    await reloadRooms();
+  };
+}
+
+
+// Central "Automations" tab -- one unified list over /api/rules (bindings +
+// schedule + inching), with a guided WHEN -> IF -> THEN builder. Creation writes
+// through the proven /api/bindings + /api/automation endpoints.
+const ACT_LABELS = {on:i18n('On'), off:i18n('Off'), toggle:i18n('Toggle'),
+                    bright_up:i18n('Brighter'), bright_down:i18n('Darker')};
+const ACTIONS = [['on',i18n('On')],['off',i18n('Off')],['toggle',i18n('Toggle')],
+                 ['bright_up',i18n('Brighter')],['bright_down',i18n('Darker')]];
+const COND_OPS = [['<','<'],['>','>'],['<=','\u2264'],['>=','\u2265'],
+                  ['==','='],['!=','\u2260'],['on',i18n('on')],['off',i18n('off')]];
+const DOW = [i18n('Mon'),i18n('Tue'),i18n('Wed'),i18n('Thu'),i18n('Fri'),i18n('Sat'),i18n('Sun')];
+const GESTURE_WORDS = {single: 'press', true: 'triggered', false: 'cleared', below: 'below threshold', above: 'above threshold'};
+// human title of a rule, composed here so it follows the UI language (the server sends structure)
+function ruleTitle(r){
+  const w = (r.when && r.when[0]) || {}, t = (r.then && r.then[0]) || {};
+  if(r.kind === 'binding'){
+    const g = whenGesture(w.gesture);
+    return `${w.device_name}: ${g} \u2192 ${t.device_name} ${ACT_LABELS[t.action] || t.action}` + (t.for ? ` ${i18n('for')} ${t.for}${i18n('s')}` : '');
+  }
+  if(r.kind === 'schedule'){
+    const tm = (w.times && w.times[0]) || {}, days = tm.days || [];
+    const dl = days.length === 7 ? '' : ' (' + days.map(d => DOW[d - 1]).join(',') + ')';
+    return `${t.device_name}: ${i18n(t.action === 'on' ? 'on' : 'off')} ${i18n('at')} ${tm.time}${dl}`;
+  }
+  if(r.kind === 'inching') return `${t.device_name}: ${i18n('auto-off')} ${t.after}${i18n('s')} ${i18n('after turning on')}`;
+  return r.title || r.id;
+}
+let RULES = [];
+
+function buttonSources(){ return DEVICES.filter(d => controlsOf(d).trig_txt.length); }
+function sensorSources(){ return DEVICES.filter(d => sensorBindControls(d, controlsOf(d)).length); }
+function condDevices(){ return DEVICES.filter(d => { const C=controlsOf(d);
+  return C.sensors.length || C.switches.length; }); }
+
+// Chips are built from the rule's structure in the UI language; the server's English
+// `label` is only the last resort for a shape this page does not know.
+// a device category as a word of the UI language (the id itself is data: switch, sensor, ...)
+function catLabel(c){ return c ? i18n('category:' + c).replace(/^category:/, '') : ''; }
+function whenGesture(g){
+  if(GESTURE_LABELS[g]) return GESTURE_LABELS[g];
+  if(GESTURE_WORDS[g]) return i18n(GESTURE_WORDS[g]);
+  return gestureLabel(g);
+}
+function whenChip(w){
+  if(w.type === 'button') return `${escapeHtml(w.device_name)}: ${escapeHtml(whenGesture(w.gesture))}`;
+  if(w.type === 'sensor'){
+    const g = whenGesture(w.gesture);
+    const t = (w.threshold!=null) ? ` ${g} ${w.threshold}` : ` ${g}`;
+    return `${escapeHtml(w.device_name)}${escapeHtml(t)}`;
+  }
+  if(w.type === 'time'){
+    const tm = (w.times && w.times[0]) || {}, days = tm.days || [];
+    const dl = days.length === 7 ? '' : ' (' + days.map(d => DOW[d - 1]).join(',') + ')';
+    return `\u23f0 ${escapeHtml((tm.time || w.label || '') + dl)}`;
+  }
+  if(w.type === 'state') return `${escapeHtml(w.device_name)} ${escapeHtml(i18n(w.label || ''))}`;
+  return escapeHtml(i18n(w.label || ''));
+}
+function condChip(c){
+  const op = (COND_OPS.find(o=>o[0]===c.op)||[])[1] || c.op;
+  const dn = (BY_ID[c.device]||{}).name || c.device;
+  return (c.op==='on'||c.op==='off') ? `${escapeHtml(dn)} ${escapeHtml(op)}`
+                                     : `${escapeHtml(dn)} ${escapeHtml(op)} ${escapeHtml(String(c.value))}`;
+}
+function thenChip(t){
+  let act = t.after!=null ? `${i18n('off after')} ${t.after}${i18n('s')}`
+          : (ACT_LABELS[t.action]||t.action);
+  if(t.for) act += ` ${i18n('for')} ${t.for}${i18n('s')}`;
+  return `${escapeHtml(t.device_name)} ${escapeHtml(act)}`;
+}
+function ruleFlowHtml(r){
+  let h = r.when.map(w=>`<span class="rule-chip when">${whenChip(w)}</span>`).join('');
+  for(const c of (r.conditions||[]))
+    h += `<span class="rule-arrow">\u00b7</span><span class="rule-chip cond">${condChip(c)}</span>`;
+  if(r.time_window){
+    const tw = r.time_window;
+    h += `<span class="rule-arrow">\u00b7</span><span class="rule-chip cond">\u{1f551} ${
+      escapeHtml(tw.from)}\u2013${escapeHtml(tw.to)}</span>`;
+  }
+  h += `<span class="rule-arrow">\u2192</span>` +
+       r.then.map(t=>`<span class="rule-chip then">${thenChip(t)}</span>`).join('');
+  return h;
+}
+
+async function renderAutomations(app, keepScroll){
+  const y = window.scrollY;
+  if(!keepScroll) app.innerHTML = '<div class="skeleton">' + i18n('Loading\u2026') + '</div>';
+  try { RULES = await api('/api/rules'); } catch(e){ RULES = []; }
+  if(activeTab !== 'auto') return;   // switched away while loading: do not draw into another tab
+  renderTabs();                      // the tab badge counts rules: show the fresh number now
+  const wrap = el('div','auto-wrap');
+  const tb = el('div','auto-toolbar');
+  tb.innerHTML = `<div style="color:var(--dim);font-size:13px">${RULES.length} ${
+    i18nPlural('rule', RULES.length)}</div>
+    <div style="display:flex;gap:8px">
+    <button class="addbtn" style="width:auto;margin:0;padding:10px 16px" id="rb-new">${i18n('\uff0b Add')}</button></div>`;
+  wrap.append(tb);
+  if(!RULES.length){
+    wrap.append(el('div','auto-empty',
+      i18n('No automations yet.') + '<br>' + i18n('Press "\uff0b Add" to create the first one:') + '<br>'+
+      '<i>' + i18n('when something happened \u2192 (if a condition holds) \u2192 do an action.') + '</i>'));
+  } else {
+    for(const r of RULES) wrap.append(ruleCard(r));
+  }
+  app.innerHTML = ''; app.append(wrap);
+  document.getElementById('rb-new').onclick = ()=> openRuleBuilder(null);
+  if(keepScroll) window.scrollTo(0, y);   // enable/delete redraws in place, no jump to the top
+}
+
+
+function ruleCard(r){
+  const c = el('div','rule-card'+(r.enabled?'':' off'));
+  c.innerHTML = `
+    <div class="rule-main">
+      <div class="rule-title">${escapeHtml(ruleTitle(r))}<span class="rule-kind">${
+        {binding:i18n('trigger'),schedule:i18n('schedule'),inching:i18n('auto-off')}[r.kind]||''}</span></div>
+      <div class="rule-flow">${ruleFlowHtml(r)}</div>
+    </div>
+    <div class="rule-actions">
+      <div class="rule-actions-top">
+        <button class="rule-run" title="${i18n('Run the action now')}">\u25b6</button>
+        <div class="toggle ${r.enabled?'on':''}" title="${i18n('enable/disable the rule')}"></div>
+      </div>
+      <button class="rule-del" title="${i18n('Delete')}">\u00d7</button>
+    </div>`;
+  c.querySelector('.rule-main').onclick = ()=> openRuleBuilder(r);
+  c.querySelector('.rule-run').onclick = async (e)=>{
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    btn.disabled = true; const prev = btn.textContent; btn.textContent = '\u2026';
+    try{
+      await api('/api/rules/run', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:r.id})});
+      btn.textContent = '\u2713';
+      setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
+    }catch(err){
+      btn.textContent = prev; btn.disabled = false;
+      alert(i18n('Error: ')+err.message);
+    }
+  };
+  c.querySelector('.toggle').onclick = async (e)=>{
+    e.stopPropagation();
+    const on = !c.querySelector('.toggle').classList.contains('on');
+    try{
+      await api('/api/rules/enable', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id:r.id, enabled:on})});
+      renderAutomations($('#app'), true);
+    }catch(err){ alert(i18n('Error: ')+err.message); }
+  };
+  c.querySelector('.rule-del').onclick = async (e)=>{
+    e.stopPropagation();
+    if(!confirm(i18n('Delete the rule?\n')+ruleTitle(r))) return;
+    try{
+      await api('/api/rules/delete', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:r.id})});
+      renderAutomations($('#app'), true);
+    }catch(err){ alert(i18n('Error: ')+err.message); }
+  };
+  return c;
+}
+
+// ---------- Rule builder (WHEN -> IF -> THEN) ----------
+function optsHtml(pairs, sel){
+  return pairs.map(([v,l])=>`<option value="${escapeHtml(String(v))}"${
+    String(v)===String(sel)?' selected':''}>${escapeHtml(l)}</option>`).join('');
+}
+function devOpts(list, sel){
+  return optsHtml(list.map(d=>[d.id, d.name]), sel);
+}
+function switchTargetOpts(sel){ return devOpts(switchTargetsList(), sel); }
+function codeOptsFor(devId, kinds, sel){
+  const d = BY_ID[devId]; if(!d) return '';
+  const cs = (d.controls||[]).filter(c=>kinds.includes(c.kind));
+  return optsHtml(cs.map(c=>[c.code, c.label||c.code]), sel);
+}
+function daysPickerHtml(sel){
+  const s = sel || [1,2,3,4,5,6,7];
+  return `<div class="rb-days">`+DOW.map((n,i)=>
+    `<button type="button" class="rb-day${s.includes(i+1)?' on':''}" data-d="${i+1}">${n}</button>`
+  ).join('')+`</div>`;
+}
+
+function openRuleBuilder(rule){
+  openModalId = '__rule_builder__';
+  const edit = !!rule;
+  // derive initial trigger type from an existing rule
+  let ttype = 'button';
+  if(edit){
+    const w = rule.when[0];
+    ttype = w.type === 'sensor' ? 'sensor' : w.type === 'time' ? 'time'
+          : w.type === 'state' ? 'deviceon' : 'button';
+  }
+  const md = document.getElementById('md');
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${edit?i18n('Edit'):i18n('New')} ${i18n('automation')}</h2>
+    </div>
+    <div class="body">
+      <div class="rb-step"><h4>${i18n('When')}</h4>
+        <div class="rb-row"><label>${i18n('Event')}</label>
+          <select id="rb-ttype">
+            <option value="button">${i18n('Button pressed')}</option>
+            <option value="sensor">${i18n('Sensor triggered')}</option>
+            <option value="time">${i18n('Time reached')}</option>
+            <option value="deviceon">${i18n('Device turned on')}</option>
+          </select></div>
+        <div id="rb-tfields"></div>
+      </div>
+      <div class="rb-step" id="rb-condstep"><h4>${i18n('If (optional)')}</h4>
+        <div id="rb-conds"></div>
+        <button type="button" id="rb-addcond" class="rb-day" style="width:auto;padding:6px 12px">${i18n('\uff0b condition')}</button>
+        <div id="rb-twin" style="margin-top:12px"></div>
+      </div>
+      <div class="rb-step"><h4>${i18n('Then')}</h4><div id="rb-afields"></div></div>
+      <div id="rb-msg" style="color:var(--bad);min-height:18px;margin:6px 2px"></div>
+      <button class="addbtn" id="rb-save">${edit?i18n('Save'):i18n('Create')}</button>
+    </div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+
+  const tsel = document.getElementById('rb-ttype');
+  tsel.value = ttype;
+  tsel.onchange = ()=>{ rbTriggerFields(tsel.value, null); rbActionFields(tsel.value, null);
+                        rbToggleCond(tsel.value); };
+  rbTriggerFields(ttype, edit?rule:null);
+  rbActionFields(ttype, edit?rule:null);
+  rbToggleCond(ttype);
+  rbRenderConds(edit ? (rule.conditions||[]) : []);
+  rbRenderTimeWindow(edit ? rule.time_window : null);
+  document.getElementById('rb-addcond').onclick = ()=> rbAddCondRow({});
+  document.getElementById('rb-save').onclick = ()=> rbSave(edit ? rule : null);
+}
+
+function rbToggleCond(type){
+  document.getElementById('rb-condstep').style.display =
+    (type==='button'||type==='sensor') ? '' : 'none';
+}
+
+function rbTriggerFields(type, rule){
+  const box = document.getElementById('rb-tfields');
+  const w = rule ? rule.when[0] : null;
+  if(type==='button'){
+    box.innerHTML = `<div class="rb-row"><label>${i18n('Button')}</label>
+        <select id="rb-bdev">${devOpts(buttonSources(), w?w.device:'')}</select>
+        <select id="rb-bgest"></select></div>`;
+    const dsel = document.getElementById('rb-bdev');
+    const rebuild = ()=>{
+      const d = BY_ID[dsel.value]; const C = d?controlsOf(d):{trig_txt:[]};
+      const opts = [];
+      for(const t of C.trig_txt){
+        const gs = (t.values||[]).filter(v=>v==='single'||/_single$/.test(v));
+        for(const g of gs) opts.push([`${t.code}|${g}`, gestureLabel(g)]);
+      }
+      document.getElementById('rb-bgest').innerHTML = optsHtml(opts,
+        w ? `${w.code}|${w.gesture}` : '');
+    };
+    dsel.onchange = rebuild; rebuild();
+  } else if(type==='sensor'){
+    box.innerHTML = `<div class="rb-row"><label>${i18n('Sensor')}</label>
+        <select id="rb-sdev">${devOpts(sensorSources(), w?w.device:'')}</select>
+        <select id="rb-scode"></select></div>
+      <div class="rb-row"><label>${i18n('When')}</label>
+        <select id="rb-sedge"></select>
+        <input id="rb-sthr" type="number" step="any" placeholder="${i18n('limit')}" style="width:90px;display:none">
+        <input id="rb-shyst" type="number" step="any" placeholder="${i18n('hyst.')}" style="width:80px;display:none"></div>`;
+    const dsel = document.getElementById('rb-sdev');
+    const rebuildCode = ()=>{
+      const d = BY_ID[dsel.value]; const C = d?controlsOf(d):{};
+      const ss = d ? sensorBindControls(d, C) : [];
+      document.getElementById('rb-scode').innerHTML =
+        optsHtml(ss.map(s=>[s.code, s.label||s.code]), w?w.code:'');
+      rebuildEdge();
+    };
+    const rebuildEdge = ()=>{
+      const d = BY_ID[dsel.value]; const C = d?controlsOf(d):{};
+      const code = document.getElementById('rb-scode').value;
+      const s = (d?sensorBindControls(d,C):[]).find(x=>x.code===code) || {};
+      const numeric = s.vtype === 'num';
+      const edges = numeric ? [['below',i18n('went below')],['above',i18n('went above')]]
+                            : [['true',i18n('triggered')],['false',i18n('cleared')]];
+      document.getElementById('rb-sedge').innerHTML = optsHtml(edges, w?w.gesture:'');
+      const showThr = numeric;
+      document.getElementById('rb-sthr').style.display = showThr?'':'none';
+      document.getElementById('rb-shyst').style.display = showThr?'':'none';
+      if(w && w.threshold!=null) document.getElementById('rb-sthr').value = w.threshold;
+      if(w && w.hyst!=null) document.getElementById('rb-shyst').value = w.hyst;
+    };
+    dsel.onchange = rebuildCode;
+    document.getElementById('rb-scode').onchange = rebuildEdge;
+    rebuildCode();
+  } else if(type==='time'){
+    const times = (w&&w.times&&w.times[0]) ? w.times[0] : {time:'08:00', days:[1,2,3,4,5,6,7]};
+    box.innerHTML = `<div class="rb-row"><label>${i18n('Time')}</label>
+        <input id="rb-time" type="time" value="${times.time||'08:00'}"></div>
+      <div class="rb-row"><label>${i18n('Days')}</label>${daysPickerHtml(times.days)}</div>`;
+    box.querySelectorAll('.rb-day').forEach(b=> b.onclick=()=>b.classList.toggle('on'));
+  } else if(type==='deviceon'){
+    const dev = rule ? rule.then[0].device : '';
+    const code = rule ? rule.then[0].code : '';
+    box.innerHTML = `<div class="rb-row"><label>${i18n('Device')}</label>
+        <select id="rb-odev">${switchTargetOpts(dev)}</select>
+        <select id="rb-ocode">${codeOptsFor(dev||switchTargetsList()[0]?.id, ['switch'], code)}</select></div>
+      <div class="bindcaption">${i18n('fires whenever this channel turns on')}</div>`;
+    const dsel = document.getElementById('rb-odev');
+    dsel.onchange = ()=>{ document.getElementById('rb-ocode').innerHTML =
+        codeOptsFor(dsel.value, ['switch'], ''); };
+  }
+}
+
+function rbActionFields(type, rule){
+  const box = document.getElementById('rb-afields');
+  if(type==='deviceon'){
+    const after = rule ? (rule.then[0].after||5) : 5;
+    box.innerHTML = `<div class="rb-row"><label>${i18n('Auto-off after')}</label>
+        <input id="rb-after" type="number" min="1" value="${after}" style="width:90px"> ${i18n('sec')}</div>`;
+    return;
+  }
+  const t = rule ? rule.then[0] : null;
+  const acts = (type==='time') ? [['on',i18n('On')],['off',i18n('Off')]] : ACTIONS;
+  const forHtml = (type==='time') ? '' : `
+    <div class="rb-row"><label>${i18n('Duration')}</label>
+      <input id="rb-for" type="number" min="0" placeholder="${i18n('0 = permanently')}"
+             style="width:130px" value="${t&&t.for?t.for:''}"> ${i18n('sec')}
+      <select id="rb-retrig" style="display:none">
+        <option value="restart">${i18n('restart')}</option>
+        <option value="extend">${i18n('extend')}</option>
+        <option value="ignore">${i18n('ignore')}</option>
+      </select></div>
+    <div class="bindcaption" id="rb-forcap" style="display:none">
+      ${i18n('turns on and reverts after N seconds (a repeated trigger follows the rule)')}</div>`;
+  box.innerHTML = `<div id="rb-adev">
+      <div class="rb-row"><label>${i18n('Device')}</label>
+        <select id="rb-atgt">${switchTargetOpts(t?t.device:'')}</select>
+        <select id="rb-acode"></select></div>
+      <div class="rb-row"><label>${i18n('Action')}</label>
+        <select id="rb-aact">${optsHtml(acts, t?t.action:'')}</select></div>${forHtml}
+    </div>`;
+  const tsel = document.getElementById('rb-atgt');
+  const csel = ()=> document.getElementById('rb-acode');
+  const syncActs = ()=>{
+    const aact = document.getElementById('rb-aact');
+    const wanted = (type==='time') ? [['on',i18n('On')],['off',i18n('Off')]] : ACTIONS;
+    const cur = aact.value;
+    aact.innerHTML = optsHtml(wanted, wanted.some(w=>w[0]===cur) ? cur
+                                    : (t ? t.action : ''));
+    const forRow = document.getElementById('rb-for');
+    if(forRow) forRow.parentElement.style.display =
+      (aact.value==='on'||aact.value==='off') ? '' : 'none';
+  };
+  const rebuild = ()=>{ csel().innerHTML =
+      codeOptsFor(tsel.value, type==='time' ? ['switch'] : ['switch','bright'], t?t.code:'');
+    syncActs(); };
+  tsel.onchange = rebuild; rebuild();
+  csel().addEventListener('change', syncActs);
+  if(type!=='time'){
+    const fin = document.getElementById('rb-for');
+    const rtg = document.getElementById('rb-retrig');
+    const cap = document.getElementById('rb-forcap');
+    const aact = document.getElementById('rb-aact');
+    if(rule && rule.retrigger) rtg.value = rule.retrigger;
+    const sync = ()=>{ const on = +fin.value > 0;
+      rtg.style.display = on?'':'none'; cap.style.display = on?'':'none';
+      const okAct = aact.value==='on'||aact.value==='off';
+      fin.parentElement.style.display = okAct?'':'none'; };
+    fin.oninput = sync; aact.onchange = sync; sync();
+  }
+
+}
+
+function rbRenderConds(conds){
+  document.getElementById('rb-conds').innerHTML = '';
+  (conds||[]).forEach(c=> rbAddCondRow(c));
+}
+function rbAddCondRow(c){
+  const box = document.getElementById('rb-conds');
+  const row = el('div','rb-cond-row');
+  row.innerHTML = `
+    <select class="rbc-dev">${devOpts(condDevices(), c.device||'')}</select>
+    <select class="rbc-code"></select>
+    <select class="rbc-op">${optsHtml(COND_OPS, c.op||'on')}</select>
+    <input class="rbc-val" type="number" step="any" placeholder="${i18n('value')}" style="width:80px" value="${c.value!=null?escapeHtml(String(c.value)):''}">
+    <button type="button" class="rb-del">\u00d7</button>`;
+  box.append(row);
+  const dsel = row.querySelector('.rbc-dev');
+  const rebuild = ()=>{ row.querySelector('.rbc-code').innerHTML =
+      codeOptsFor(dsel.value, ['sensor','switch'], c.code||''); };
+  dsel.onchange = rebuild; rebuild();
+  const opsel = row.querySelector('.rbc-op');
+  const valToggle = ()=>{ row.querySelector('.rbc-val').style.display =
+      (opsel.value==='on'||opsel.value==='off')?'none':''; };
+  opsel.onchange = valToggle; valToggle();
+  row.querySelector('.rb-del').onclick = ()=> row.remove();
+}
+function rbReadConds(){
+  const out = [];
+  document.querySelectorAll('#rb-conds .rb-cond-row').forEach(row=>{
+    const device = row.querySelector('.rbc-dev').value;
+    const code = row.querySelector('.rbc-code').value;
+    const op = row.querySelector('.rbc-op').value;
+    if(!device||!code) return;
+    const cond = {device, code, op};
+    if(op!=='on'&&op!=='off'){ const v = row.querySelector('.rbc-val').value;
+      cond.value = v===''?null:(isNaN(+v)?v:+v); }
+    out.push(cond);
+  });
+  return out;
+}
+function rbRenderTimeWindow(tw){
+  const box = document.getElementById('rb-twin');
+  if(!box) return;
+  const on = !!tw;
+  box.innerHTML = `
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="rb-tw-on" ${on?'checked':''}> ${i18n('only within the time window')}</label>
+    <div id="rb-tw-fields" style="display:${on?'':'none'};margin-top:8px">
+      <div class="rb-row"><label>${i18n('From')}</label>
+        <input id="rb-tw-from" type="time" value="${tw&&tw.from?tw.from:'22:00'}">
+        <label style="margin:0 8px">${i18n('to')}</label>
+        <input id="rb-tw-to" type="time" value="${tw&&tw.to?tw.to:'07:00'}"></div>
+      <div class="rb-row"><label>${i18n('Days')}</label>${daysPickerHtml(tw?tw.days:null)}</div>
+    </div>`;
+  const chk = document.getElementById('rb-tw-on');
+  const f = document.getElementById('rb-tw-fields');
+  chk.onchange = ()=>{ f.style.display = chk.checked?'':'none'; };
+  f.querySelectorAll('.rb-day').forEach(b=> b.onclick=()=>b.classList.toggle('on'));
+}
+function rbReadTimeWindow(){
+  const chk = document.getElementById('rb-tw-on');
+  if(!chk || !chk.checked) return null;
+  const from = document.getElementById('rb-tw-from').value;
+  const to = document.getElementById('rb-tw-to').value;
+  if(!from || !to) return null;
+  const days = [...document.querySelectorAll('#rb-tw-fields .rb-day.on')].map(b=>+b.dataset.d);
+  return {from, to, days: days.length?days:[1,2,3,4,5,6,7]};
+}
+
+async function rbSave(editRule){
+  const msg = document.getElementById('rb-msg'); msg.textContent='';
+  const type = document.getElementById('rb-ttype').value;
+  // An edit writes the new rule FIRST and removes the old one only after that
+  // succeeded (and only if it is a different rule): a rejected form loses nothing.
+  let newId = null;
+  try{
+    if(type==='button' || type==='sensor'){
+      let body;
+      {
+        const tgt = document.getElementById('rb-atgt').value;
+        const tcode = document.getElementById('rb-acode').value;
+        const action = document.getElementById('rb-aact').value;
+        if(!tgt||!tcode) throw new Error(i18n('pick the target device'));
+        body = {target:tgt, code:tcode, action, conditions: rbReadConds()};
+        const forEl = document.getElementById('rb-for');
+        const forv = forEl ? +(forEl.value||0) : 0;
+        if(forv>0 && (action==='on'||action==='off')){
+          body.for_sec = forv;
+          body.retrigger = document.getElementById('rb-retrig').value;
+        }
+      }
+      const tw = rbReadTimeWindow();
+      if(tw) body.time_window = tw;
+      let src, scode, gest;
+      if(type==='button'){
+        src = document.getElementById('rb-bdev').value;
+        [scode, gest] = document.getElementById('rb-bgest').value.split('|');
+      } else {
+        src = document.getElementById('rb-sdev').value;
+        scode = document.getElementById('rb-scode').value;
+        gest = document.getElementById('rb-sedge').value;
+        if(gest==='below'||gest==='above'){
+          const thr = document.getElementById('rb-sthr').value;
+          if(thr==='') throw new Error(i18n('enter a limit'));
+          body.threshold = +thr;
+          const h = document.getElementById('rb-shyst').value;
+          if(h!=='') body.hyst = +h;
+        }
+      }
+      if(!src||!gest) throw new Error(i18n('pick a trigger'));
+      newId = `b|${src}|${scode}|${gest}`;
+      await api(`/api/bindings/${encodeURIComponent(src)}/${encodeURIComponent(scode)}/${encodeURIComponent(gest)}`,
+        {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    } else if(type==='time'){
+      const dev = document.getElementById('rb-atgt').value;
+      const code = document.getElementById('rb-acode').value;
+      const action = document.getElementById('rb-aact').value;
+      const time = document.getElementById('rb-time').value;
+      if(!dev||!code||!time) throw new Error(i18n('fill in the device and the time'));
+      const days = [...document.querySelectorAll('#rb-tfields .rb-day.on')].map(b=>+b.dataset.d);
+      if(!days.length) throw new Error(i18n('pick at least one day'));
+      const cur = await api(`/api/automation/${encodeURIComponent(dev)}/${encodeURIComponent(code)}`); // no fallback: posting an empty list would wipe the channel's schedule
+      // editing a row of this same channel: replace it in one write instead of delete + add
+      const old = editRule && editRule.id.startsWith(`a|${dev}/${code}|sched|`) ? editRule.id.split('|') : null;
+      const rest = (cur.schedule||[]).filter(r => !(old && r.time === old[3] && (r.action||'on') === old[4]));
+      const sched = rest.concat([{time, days, action}]);
+      newId = old ? editRule.id : `a|${dev}/${code}|sched|${time}|${action}`;
+      await api(`/api/automation/${encodeURIComponent(dev)}/${encodeURIComponent(code)}`,
+        {method:'POST', headers:{'Content-Type':'application/json'},
+         body: JSON.stringify({inching_sec:cur.inching_sec||0, schedule:sched})});
+    } else if(type==='deviceon'){
+      const dev = document.getElementById('rb-odev').value;
+      const code = document.getElementById('rb-ocode').value;
+      const after = +document.getElementById('rb-after').value;
+      if(!dev||!code||!(after>0)) throw new Error(i18n('fill in the device and the time'));
+      newId = `a|${dev}/${code}|inch`;
+      const cur = await api(`/api/automation/${encodeURIComponent(dev)}/${encodeURIComponent(code)}`); // no fallback: posting an empty list would wipe the channel's schedule
+      await api(`/api/automation/${encodeURIComponent(dev)}/${encodeURIComponent(code)}`,
+        {method:'POST', headers:{'Content-Type':'application/json'},
+         body: JSON.stringify({inching_sec:after, schedule:cur.schedule||[]})});
+    }
+    if(editRule && editRule.id !== newId){
+      await api('/api/rules/delete', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:editRule.id})});
+    }
+    closeModal();
+    activeTab = 'auto'; localStorage.setItem('home.tab','auto');
+    renderTabs(); render();
+  }catch(e){ msg.textContent = i18n('Error: ')+e.message; }
+}
+
+
+function renderFavorites(app){
+  const tb = document.createElement('div');
+  tb.className='fav-toolbar';
+  if(favDeleteMode){
+    const n = favSelected.size;
+    tb.innerHTML = `
+      <div style="font-size:13px;color:var(--dim)">${i18n('pick the cards to delete')}</div>
+      <div style="display:flex;gap:8px">
+        <button id="fav-del-go" class="danger" ${n?'':'disabled'}>${i18n('Delete')}${n?` (${n})`:''}</button>
+        <button id="fav-del-cancel">${i18n('Cancel')}</button>
+      </div>`;
+  }else{
+    const btns = favEditMode
+      ? `<button id="fav-add" class="primary">${i18n('\uff0b Add')}</button>
+         <button id="fav-edit" class="active">${i18n('Done')}</button>`
+      : `<button id="fav-add" class="primary">${i18n('\uff0b Add')}</button>
+         <button id="fav-edit">${i18n('\u270e Order')}</button>
+         <button id="fav-del">${i18n('\u{1f5d1} Delete')}</button>`;
+    tb.innerHTML = `
+      <div style="font-size:13px;color:var(--dim)">${
+        favEditMode ? i18n('drag the cards into the order you want') : ''
+      }</div>
+      <div style="display:flex;gap:8px">${btns}</div>`;
+  }
+  app.append(tb);
+  if(!FAVORITES.length){
+    app.append(el('div','fav-empty',i18n('Empty so far. Press "\uff0b Add" to pick channels.')));
+  }else{
+    const g = el('div','fav-grid');
+    FAVORITES.forEach(f => g.appendChild(favCard(f)));
+    app.append(g);
+  }
+  if(favDeleteMode){
+    document.getElementById('fav-del-cancel').onclick = ()=>{
+      favDeleteMode = false; favSelected.clear(); render();
+    };
+    const go = document.getElementById('fav-del-go');
+    if(go) go.onclick = async ()=>{
+      const targets = FAVORITES.filter(f => favSelected.has(`${f.device}/${f.code}`));
+      const gone = new Set();
+      for(const f of targets){
+        try{
+          await api(`/api/favorites/${encodeURIComponent(f.device)}/${encodeURIComponent(f.code)}`, {method:'DELETE'});
+          gone.add(`${f.device}/${f.code}`);
+        }catch(e){ notifyFail(i18n('Could not remove from favourites: ') + e.message); }
+      }
+      FAVORITES = FAVORITES.filter(f => !gone.has(`${f.device}/${f.code}`));
+      favDeleteMode = false; favSelected.clear();
+      renderTabs(); render();
+    };
+    return;
+  }
+  document.getElementById('fav-add').onclick = ()=> openPicker();
+  document.getElementById('fav-edit').onclick = ()=>{
+    favEditMode = !favEditMode; render();
+  };
+  const delBtn = document.getElementById('fav-del');
+  if(delBtn) delBtn.onclick = ()=>{
+    favDeleteMode = true; favEditMode = false; favSelected.clear(); render();
+  };
+}
+
+function favCard(f){
+  const d = BY_ID[f.device];
+  const c = el('div','fav-card');
+  c.id = `fav_${f.device}_${f.code}`;
+  c.dataset.device = f.device;
+  c.dataset.code = f.code;
+
+  if(favDeleteMode){
+    const key = `${f.device}/${f.code}`;
+    c.classList.add('selectable');
+    if(favSelected.has(key)) c.classList.add('selected');
+    c.append(el('div','selmark', favSelected.has(key) ? '\u2713' : ''));
+    c.append(el('div','alias', escapeHtml(f.alias || f.code)));
+    if(!d) c.append(el('div','orphan',i18n('\u2014 device is gone \u2014')));
+    c.onclick = ()=>{
+      if(favSelected.has(key)) favSelected.delete(key); else favSelected.add(key);
+      render();
+    };
+    return c;
+  }
+
+  if(!d){
+    c.innerHTML = `<div class="alias">${i18n('\u2014 device is gone \u2014')}</div>`;
+    return c;
+  }
+  if(favEditMode) c.classList.add('editing');
+
+  const alias = el('div','alias', escapeHtml(f.alias));
+  c.append(alias);
+
+  const dot = el('div','bigdot');
+  dot.id = `favdot_${f.device}_${f.code}`;
+  c.append(dot);
+
+  if(favEditMode){
+    attachDragReorder(c);
+  } else {
+    const bright = brightForCode(d, f.code);
+    if(bright){
+      // dimmable: the CIRCLE fills yellow = brightness; tap=on/off,
+      // swipe on the circle=brightness, long-press=editor.
+      const fill = el('div','dotfill'); fill.id = `dotfill_${d.id}_${bright.code}`;
+      dot.classList.add('dimdot'); dot.prepend(fill);
+      const pc = el('div','dimpc'); pc.id = `dimpc_${d.id}_${bright.code}`;
+      c.append(pc);
+      attachDimmerDot(dot, d, bright,
+        ()=> sendControl(f.device, f.code, !isOn(f.device, f.code)),
+        ()=> openFavEditor(f));
+    } else {
+      attachLongPress(c, ()=> sendControl(f.device, f.code, !isOn(f.device, f.code)),
+                         ()=> openFavEditor(f));
+    }
+  }
+  return c;
+}
+
+// Drag a card to reorder. Strategy: lift the card with a transform that
+// follows the pointer, highlight the drop-target under the pointer, swap DOM
+// only on release. Avoids visual snapping during drag.
+// selector = siblings to swap with; onDrop(parent) = persist the new order
+// (default persists FAVORITES -- the original consumer of this drag).
+function attachDragReorder(card, selector = '.fav-card', onDrop = null){
+  let dragging = false;
+  let pid = -1;
+  let grabX = 0, grabY = 0;
+  let dropTarget = null;
+  let dropAfter = false;   // pointer right of the centre / below the target -- insert AFTER it
+
+  const setDropTarget = t=>{
+    if(dropTarget === t) return;
+    dropTarget?.classList.remove('drop-target');
+    dropTarget = t;
+    dropTarget?.classList.add('drop-target');
+  };
+
+  // Missed the cards (grid holes, gaps, margins) -- snap to the geometrically
+  // nearest one, otherwise a drop into the void is silently rolled back.
+  const nearestCard = (x, y)=>{
+    let best = null, bd = 150*150;   // no snapping beyond 150px
+    for(const k of card.parentElement.children){
+      if(k === card || !k.matches(selector)) continue;
+      const r = k.getBoundingClientRect();
+      const dx = Math.max(r.left - x, 0, x - r.right);
+      const dy = Math.max(r.top - y, 0, y - r.bottom);
+      const d = dx*dx + dy*dy;
+      if(d < bd){ bd = d; best = k; }
+    }
+    return best;
+  };
+
+  const onMove = (e)=>{
+    if(!dragging || e.pointerId !== pid) return;
+    e.preventDefault();
+    card.style.transform = `translate(${e.clientX - grabX}px, ${e.clientY - grabY}px)`;
+    card.style.visibility = 'hidden';
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    card.style.visibility = '';
+    let t = under?.closest(selector);
+    if(!(t && t !== card && t.parentElement === card.parentElement)) t = null;
+    if(!t) t = nearestCard(e.clientX, e.clientY);
+    if(t){
+      const r = t.getBoundingClientRect();
+      dropAfter = e.clientY > r.bottom
+               || (e.clientY >= r.top && e.clientX > r.left + r.width/2);
+    }
+    setDropTarget(t);
+  };
+
+  const finish = async (e)=>{
+    if(!dragging || (e && e.pointerId !== pid)) return;
+    dragging = false;
+    resizing = false;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', finish);
+    card.classList.remove('dragging');
+    card.style.transform = '';
+    card.style.visibility = '';
+    const t = dropTarget;
+    setDropTarget(null);
+    if(t){
+      const parent = card.parentElement;
+      if(dropAfter) parent.insertBefore(card, t.nextSibling);
+      else          parent.insertBefore(card, t);
+      if(onDrop){ onDrop(parent, {x: e && e.clientX, y: e && e.clientY}); return; }
+      const newOrder = Array.from(parent.children)
+        .map(c => ({device: c.dataset.device, code: c.dataset.code}))
+        .filter(x => x.device);
+      FAVORITES = newOrder
+        .map(o => FAVORITES.find(f => f.device===o.device && f.code===o.code))
+        .filter(Boolean);
+      try{
+        await api('/api/favorites/reorder', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({order: FAVORITES.map(f=>`${f.device}/${f.code}`)})
+        });
+      }catch(e){ notifyFail(i18n('Not saved: ') + e.message); }
+    }
+  };
+
+  card.addEventListener('pointerdown', e=>{
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    dragging = true;
+    resizing = true;   // freeze WS-driven repacking for the duration of the gesture
+    pid = e.pointerId;
+    grabX = e.clientX; grabY = e.clientY;
+    card.classList.add('dragging');
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    e.preventDefault();
+  });
+}
+
+// Long-press handler: short tap fires `onShort`; press held >550ms fires `onLong`
+// (vibrates briefly on phones if supported)
+function attachLongPress(elx, onShort, onLong){
+  let timer = null;
+  let fired = false;
+  let startX = 0, startY = 0;
+  const LONG_MS = 550;
+  const start = (x, y) => {
+    fired = false; startX = x; startY = y;
+    timer = setTimeout(()=>{
+      fired = true;
+      try{ navigator.vibrate?.(30); }catch(e){}
+      onLong();
+    }, LONG_MS);
+  };
+  const cancel = () => { if(timer){ clearTimeout(timer); timer = null; } };
+  const end = () => {
+    if(timer){ clearTimeout(timer); timer = null; if(!fired) onShort(); }
+  };
+  elx.addEventListener('pointerdown', e => { start(e.clientX, e.clientY); });
+  elx.addEventListener('pointerup',   e => { end(); });
+  elx.addEventListener('pointercancel', cancel);
+  elx.addEventListener('pointerleave',  cancel);
+  elx.addEventListener('pointermove',   e => {
+    if(Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) cancel();
+  });
+  elx.addEventListener('contextmenu', e => { e.preventDefault(); if(fired) return; cancel(); fired = true; onLong(); });
+}
+
+async function removeFav(f){
+  try{
+    await api(`/api/favorites/${encodeURIComponent(f.device)}/${encodeURIComponent(f.code)}`, {method:'DELETE'});
+  }catch(e){ notifyFail(i18n('Could not remove from favourites: ') + e.message); return; }
+  FAVORITES = FAVORITES.filter(x => !(x.device===f.device && x.code===f.code));
+  renderTabs(); render();
+}
+
+async function renameFav(f, newAlias){
+  if(!newAlias || newAlias === f.alias) return;
+  try{
+    await api(`/api/favorites/${encodeURIComponent(f.device)}/${encodeURIComponent(f.code)}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({alias: newAlias})
+    });
+    f.alias = newAlias;
+  }catch(e){ alert(i18n('Error: ')+e.message); render(); }
+}
+
+async function addFavorite(device, code, alias){
+  try{
+    const r = await api(`/api/favorites/${encodeURIComponent(device)}/${encodeURIComponent(code)}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({alias})
+    });
+    const existing = FAVORITES.findIndex(f => f.device===device && f.code===code);
+    if(existing >= 0) FAVORITES[existing] = r.favorite;
+    else FAVORITES.push(r.favorite);
+  }catch(e){ alert(i18n('Error: ')+e.message); return false; }
+  return true;
+}
+
+function openFavEditor(f){
+  const md = document.getElementById('md');
+  const have = new Set(FAVORITES.map(x => `${x.device}/${x.code}`));
+  const switchDevs = DEVICES.filter(dev => (dev.controls||[]).some(c => c.kind==='switch'));
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${i18n('Edit favourites')}</h2>
+      <div class="sub">${i18n('Name + source (switch / channel)')}</div>
+    </div>
+    <div class="body">
+      <section style="display:flex;gap:10px;justify-content:space-between;align-items:center;
+                      padding-top:0;border-top:0">
+        <button id="fav-edit-delete" class="dlg-btn danger">${i18n('Delete')}</button>
+        <button id="fav-edit-cancel" class="dlg-btn">${i18n('Cancel')}</button>
+        <button id="fav-edit-save"   class="dlg-btn primary">${i18n('Save')}</button>
+      </section>
+      <section>
+        <h3>${i18n('Name')}</h3>
+        <input id="fav-edit-alias" type="text" value="${escapeHtml(f.alias)}"
+               style="width:100%;background:var(--card2);border:1px solid var(--line);
+                      color:var(--txt);border-radius:10px;padding:10px 12px;
+                      font:inherit;font-size:16px;box-sizing:border-box">
+      </section>
+      <section>
+        <h3>${i18n('Source')}</h3>
+        <div class="picker-list">
+          ${switchDevs.map(dev=>{
+            const switches = (dev.controls||[]).filter(c => c.kind==='switch');
+            const isMulti = switches.length > 1;
+            return `<div class="picker-dev">
+                      <div class="picker-name">${escapeHtml(dev.name)}<span class="picker-meta">${escapeHtml(dev.category||'')}${isMulti?' \u00b7 '+switches.length+i18n(' channels'):''}</span></div>
+                      <div class="picker-channels">${
+                        switches.map((c, i)=>{
+                          const key = `${dev.id}/${c.code}`;
+                          const isCurrent = (dev.id === f.device && c.code === f.code);
+                          const taken = have.has(key) && !isCurrent;
+                          const label = isMulti ? (c.label || String(i+1)) : (c.label || i18n('Power'));
+                          const cls = isCurrent ? 'picker-chan active' : (taken ? 'picker-chan exists' : 'picker-chan');
+                          return `<button class="${cls}" data-key="${escapeHtml(key)}" ${taken?'disabled':''}>
+                                    ${isCurrent?'\u25cf ':(taken?'\u2713 ':'')}${escapeHtml(label)}
+                                  </button>`;
+                        }).join('')
+                      }</div>
+                    </div>`;
+          }).join('')}
+        </div>
+      </section>
+    </div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  openModalId = '__fav_editor__';
+
+  let selected = {device: f.device, code: f.code};
+  md.querySelectorAll('.picker-chan').forEach(btn=>{
+    if(btn.classList.contains('exists')) return;
+    btn.onclick = ()=>{
+      md.querySelectorAll('.picker-chan').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const cut = btn.dataset.key.lastIndexOf('/');   // a code never has a /
+      const dev = btn.dataset.key.slice(0, cut), code = btn.dataset.key.slice(cut + 1);
+      selected = {device: dev, code};
+    };
+  });
+  md.querySelector('#fav-edit-cancel').onclick = ()=> closeModal();
+  md.querySelector('#fav-edit-delete').onclick = async ()=>{
+    if(!confirm(i18n('Remove from favourites?'))) return;
+    await removeFav(f);
+    closeModal();
+  };
+  md.querySelector('#fav-edit-save').onclick = async ()=>{
+    const newAlias = md.querySelector('#fav-edit-alias').value.trim() || f.alias;
+    const sourceChanged = (selected.device !== f.device || selected.code !== f.code);
+    try{
+      if(sourceChanged){
+        // remove old, add new with new key (preserve position)
+        const idx = FAVORITES.findIndex(x => x.device===f.device && x.code===f.code);
+        await api(`/api/favorites/${encodeURIComponent(f.device)}/${encodeURIComponent(f.code)}`, {method:'DELETE'});
+        const r = await api(`/api/favorites/${encodeURIComponent(selected.device)}/${encodeURIComponent(selected.code)}`, {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({alias: newAlias})
+        });
+        // splice into local list to preserve position, then reorder on server
+        FAVORITES = FAVORITES.filter(x => !(x.device===f.device && x.code===f.code));
+        if(idx >= 0){
+          FAVORITES.splice(idx, 0, r.favorite);
+          await api('/api/favorites/reorder', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({order: FAVORITES.map(x=>`${x.device}/${x.code}`)})
+          });
+        } else {
+          FAVORITES.push(r.favorite);
+        }
+      } else if(newAlias !== f.alias){
+        await renameFav(f, newAlias);
+      }
+      closeModal();
+      renderTabs(); render();
+    }catch(e){ alert(i18n('Error: ')+e.message); }
+  };
+}
+
+function openPicker(){
+  const md = document.getElementById('md');
+  const have = new Set(FAVORITES.map(f => `${f.device}/${f.code}`));
+  // Filter devices that have at least one switch-kind control
+  const switchDevs = DEVICES.filter(d => (d.controls||[]).some(c => c.kind==='switch'));
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${i18n('Add to favourites')}</h2>
+      <div class="sub">${i18n('Click the channel you need. On multi-gang switches pick the specific channel.')}</div>
+    </div>
+    <div class="body">
+      <div class="picker-list">
+        ${switchDevs.map(d=>{
+          const switches = (d.controls||[]).filter(c => c.kind === 'switch');
+          const isMulti = switches.length > 1;
+          return `<div class="picker-dev">
+                    <div class="picker-name">${escapeHtml(d.name)}<span class="picker-meta">${escapeHtml(catLabel(d.category))}${isMulti?' \u00b7 '+switches.length+i18n(' channels'):''}</span></div>
+                    <div class="picker-channels">${
+                      switches.map((c, i)=>{
+                        const key = `${d.id}/${c.code}`;
+                        const exists = have.has(key);
+                        const label = isMulti ? (c.label || String(i+1)) : (c.label || i18n('Power'));
+                        const dname = `${d.name} \u00b7 ${label}`;
+                        return `<button class="picker-chan ${exists?'exists':''}"
+                                        data-key="${escapeHtml(key)}"
+                                        data-name="${escapeHtml(dname)}"
+                                        ${exists?'disabled':''}>
+                                  ${exists?'\u2713 ':''}${escapeHtml(label)}
+                                </button>`;
+                      }).join('')
+                    }</div>
+                  </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  md.querySelectorAll('.picker-chan').forEach(btn=>{
+    if(btn.classList.contains('exists')) return;
+    btn.onclick = async ()=>{
+      const cut = btn.dataset.key.lastIndexOf('/');   // a code never has a /
+      const device = btn.dataset.key.slice(0, cut), code = btn.dataset.key.slice(cut + 1);
+      const ok = await addFavorite(device, code, btn.dataset.name);
+      if(ok){ closeModal(); renderTabs(); render(); }
+    };
+  });
+  openModalId = '__picker__';
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, m=>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function el(tag, cls, html){
+  const e=document.createElement(tag); if(cls)e.className=cls;
+  if(html!=null) e.innerHTML=html; return e;
+}
+
+// Inline brightness slider shared by device cards and favorite tiles.
+// Card and fav tabs never render at the same time, so reusing the same
+// element id (br_<id>_<code>) is collision-free; syncBright() patches it.
+function brightRow(d, b){
+  const brow=el('div','brightrow');
+  brow.innerHTML = `<span class="brlbl" style="font-size:12px;opacity:.75">${escapeHtml(b.label||b.code)}</span><input type="range" min="0" max="100" value="0"
+      id="br_${escapeHtml(d.id)}_${escapeHtml(b.code)}"><span class="brpc" id="brpc_${escapeHtml(d.id)}_${escapeHtml(b.code)}">\u2014</span>`;
+  brow.onclick = ev=>ev.stopPropagation();
+  const sl = brow.querySelector('input');
+  // keep slider drags from triggering the card's long-press / fav toggle
+  ['pointerdown','pointerup','pointermove'].forEach(ev =>
+    sl.addEventListener(ev, e => e.stopPropagation()));
+  sl.oninput = ()=>{
+    const pc=document.getElementById(`brpc_${d.id}_${b.code}`);
+    if(pc) pc.textContent = sl.value+'%';
+    pending[d.id+'/'+b.code] = {t:Date.now(), v:+sl.value};
+  };
+  sl.onchange = ()=>{ sendControl(d.id, b.code, +sl.value); };
+  return brow;
+}
+
+// One gang of a multi-channel dimmer as a single group: button, bar, percent.
+// Anonymous dots in one row plus a detached list of sliders below made it
+// guesswork which slider drove which channel.
+function dimGroupRow(d, s, b){
+  const box = el('div','dimgroup');
+  box.onclick = ev=>ev.stopPropagation();
+  const row = el('div','brightrow');
+  // Channel label sits outside the pill so a 2-gang card stays identifiable
+  // ("1"/"Living room") without stealing room from the three in-pill zones.
+  const lbl = el('span','brlbl');
+  lbl.style.cssText = 'font-size:12px;opacity:.75';
+  lbl.textContent = s.label || '';
+  // The pill is a 3-zone rocker: tap left = dimmer, centre = on/off, right =
+  // brighter; a drag anywhere sets the level by finger position. "-", the live
+  // %, and "+" label the three zones. The yellow fill shows the real level and
+  // its visibility is gated by .on (driven by the switch state), so an off
+  // channel reads empty. The pill travel spans the channel's usable window
+  // [floor, ceil]; the gear opens that window's editor.
+  const dot = el('div','dot dimdot dimpill');
+  dot.id = `sw_${d.id}_${s.code}`;
+  dot.style.cssText = 'width:auto;min-width:104px;max-width:52%;height:34px;'
+                    + 'padding:0 10px;border-radius:17px;font-size:13px;'
+                    + 'justify-content:space-between;gap:6px;white-space:nowrap;'
+                    + 'touch-action:none;cursor:pointer';
+  const fill = el('div','dotfill');
+  fill.id = `dotfill_${d.id}_${b.code}`;
+  const minus = el('span','', '\u2212');
+  minus.style.cssText = 'font-weight:700;opacity:.7';
+  const pct = el('span','', '');
+  pct.id = `dimpc_${d.id}_${b.code}`;               // setDimFill writes % here
+  pct.style.cssText = 'font-weight:700;min-width:34px;text-align:center';
+  const plus = el('span','', '+');
+  plus.style.cssText = 'font-weight:700;opacity:.7';
+  dot.append(fill, minus, pct, plus);
+  if(isOn(d.id, s.code)) dot.classList.add('on');
+  attachDimZones(dot, d, s, b);
+  setDimFill(d, b, favLevel(d, b));                 // seed % + fill before first state push
+  row.append(lbl, dot);
+  box.append(row);
+  return box;
+}
+
+// The group pill's gesture: a plain tap picks a zone (left third dims a step,
+// centre toggles on/off, right third brightens a step), while any drag past a
+// few px sets the level continuously by finger position along the width. Pointer
+// capture follows the finger past the edge; only the centre tap can turn off.
+//
+// Stepping works on the tenth INDEX of the [floor, ceil] window and rounds to the
+// nearest tenth, deliberately not floor/ceil: the lamp echoes back a level a
+// point or two off what we sent (30 comes back as 29, 20 as 21), and flooring
+// that echo recomputes the very same step, so +/- would sit there refusing to
+// move. Rounding absorbs the drift, so every tap advances exactly one tenth.
+function attachDimZones(dot, d, s, b){
+  let pid = -1, startX = 0, moved = false;
+  const posAt = x=>{
+    const r = dot.getBoundingClientRect();
+    return Math.max(0, Math.min(100, Math.round((x - r.left) / (r.width || 1) * 100)));
+  };
+  const previewUi = ui=>{
+    pending[d.id+'/'+b.code] = {t:Date.now(), v:ui};
+    setDimFill(d, b, ui);
+  };
+  dot.addEventListener('pointerdown', e=>{
+    e.stopPropagation();
+    pid = e.pointerId; startX = e.clientX; moved = false;
+    try{ dot.setPointerCapture(pid); }catch(_){}
+  });
+  dot.addEventListener('pointermove', e=>{
+    if(e.pointerId !== pid) return;
+    if(!moved && Math.abs(e.clientX - startX) > 6) moved = true;
+    if(moved) previewUi(uiFromPos(b, posAt(e.clientX)));
+  });
+  dot.addEventListener('pointerup', e=>{
+    if(e.pointerId !== pid) return;
+    e.stopPropagation();
+    try{ dot.releasePointerCapture(pid); }catch(_){}
+    pid = -1;
+    if(moved){                                   // a drag: send the positioned level
+      sendControl(d.id, b.code, pending[d.id+'/'+b.code].v);
+      if(!isOn(d.id, s.code)) sendControl(d.id, s.code, true);
+      return;
+    }
+    const r = dot.getBoundingClientRect();
+    const rel = (e.clientX - r.left) / (r.width || 1);
+    if(rel >= 0.34 && rel <= 0.66){              // centre zone: on/off
+      sendControl(d.id, s.code, !isOn(d.id, s.code));
+      return;
+    }
+    const f = dimFloor(b), c = dimCeil(b), span = (c - f) || 1;
+    let k = Math.round((favLevel(d, b) - f) / span * 10);   // nearest tenth, not floor
+    k = Math.max(0, Math.min(10, k)) + (rel < 0.34 ? -1 : 1);
+    k = Math.max(0, Math.min(10, k));
+    const ui = Math.max(1, Math.min(100, Math.round(f + k * span / 10)));
+    sendControl(d.id, b.code, ui);
+    if(!isOn(d.id, s.code)) sendControl(d.id, s.code, true);
+    previewUi(ui);
+  });
+  dot.addEventListener('pointercancel', ()=>{
+    try{ dot.releasePointerCapture(pid); }catch(_){}
+    pid = -1;
+    delete pending[d.id+'/'+b.code];               // never sent: show the real level again
+    setDimFill(d, b, favLevel(d, b));
+  });
+  dot.addEventListener('click', e=>e.stopPropagation());
+}
+
+function colorRow(d, c){
+  const row = el('div','brightrow');
+  const cur = (STATE[d.id] && STATE[d.id].values && STATE[d.id].values[c.code]) || c.default || '#00b0ff';
+  row.innerHTML = `<span class="brlbl" style="font-size:12px;opacity:.75">${escapeHtml(c.label||i18n('Colour'))}</span>`;
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.id = `col_${d.id}_${c.code}`; inp.value = cur;
+  inp.style.cssText = 'flex:1;min-width:0;height:28px;padding:0;border:0;background:none;cursor:pointer';
+  ['pointerdown','pointerup','pointermove','click'].forEach(ev => inp.addEventListener(ev, e => e.stopPropagation()));
+  inp.onchange = () => { sendControl(d.id, c.code, inp.value); };
+  row.append(inp);
+  row.onclick = ev => ev.stopPropagation();
+  return row;
+}
+
+function syncBright(d, b, val){
+  if(val==null) return;
+  const p=pending[d.id+'/'+b.code];
+  if(p && Date.now()-p.t < 4000) return;   // honour just-dragged value
+  const span=(b.max-b.min)||1;
+  const ui=Math.max(0,Math.min(100,Math.round((val-b.min)/span*100)));
+  const sl=document.getElementById(`br_${d.id}_${b.code}`);   // extra card slider, if any
+  if(sl){ sl.value=ui; const pc=document.getElementById(`brpc_${d.id}_${b.code}`); if(pc) pc.textContent=ui+'%'; }
+  setDimFill(d, b, ui);                                       // circle fill (fav + card)
+}
+
+// Per-channel usable brightness window. The pill's 0..100 travel maps into
+// [floor, ceil] (raw UI percent), because the LED wired to a gang may only light
+// from ~15% and reach full by ~60%. Unset => full 0..100, i.e. identity.
+function dimFloor(b){ return Math.max(0, Math.min(99, +b.floor||0)); }
+function dimCeil(b){ const c=(b.ceil==null?100:+b.ceil); return Math.max(dimFloor(b)+1, Math.min(100, c)); }
+function hasDimWindow(b){ return dimFloor(b)>0 || dimCeil(b)<100; }
+function posFromUi(b, ui){ const f=dimFloor(b), c=dimCeil(b); return Math.max(0, Math.min(100, Math.round((ui-f)/(c-f)*100))); }
+function uiFromPos(b, pos){ const f=dimFloor(b), c=dimCeil(b); return Math.max(1, Math.min(100, Math.round(f + pos/100*(c-f)))); }
+
+// brightness level 0-100, honouring an in-flight drag
+function favLevel(d, b){
+  // a level the user just set wins for a moment (the device has not echoed it yet);
+  // after that the reported level counts, or +/- would keep stepping from an old value
+  const key=d.id+'/'+b.code, p=pending[key];
+  if(p && Date.now()-p.t < 3000) return p.v;
+  if(p) delete pending[key];
+  const val=STATE[d.id]?.values?.[b.code];
+  if(val==null) return 0;
+  const span=(b.max-b.min)||1;
+  return Math.max(0,Math.min(100,Math.round((val-b.min)/span*100)));
+}
+
+// fill the dimmer CIRCLE to the level; floor visual at 12% so 1% is clearly on.
+// % shows as a small label below the circle. Fill opacity is gated by .on in CSS.
+function setDimFill(d, b, lvl){
+  // an ON light parked at the device floor brightness computes 0% -- show it
+  // as 1% so the circle fills and the % label reads "on" instead of blank.
+  if(lvl===0){
+    const vals=STATE[d.id]?.values;
+    // the switch on THIS gang, not simply the first one
+    const sw=ctlForCode(d, b.code, 'switch') || controlsOf(d).switches[0];
+    if(vals && sw && vals[sw.code]) lvl=1;
+  }
+  const fill=document.getElementById(`dotfill_${d.id}_${b.code}`);
+  let disp = lvl;                    // what the % readout and pill width show
+  if(fill){
+    if(fill.parentElement && fill.parentElement.classList.contains('dimpill')){
+      // horizontal pill: fills across its usable window, so a level at floor reads
+      // 0% and at ceil reads 100% -- the whole travel is meaningful
+      disp = hasDimWindow(b) ? posFromUi(b, lvl) : lvl;
+      fill.style.width = (disp>0 ? disp : 0) + '%';
+    } else {
+      // round dot: floor the visual at 12% so 1% still reads as "on"
+      fill.style.height = (lvl>0 ? Math.max(lvl,12) : 0) + '%';
+    }
+  }
+  const pc=document.getElementById(`dimpc_${d.id}_${b.code}`);
+  if(pc) pc.textContent = lvl>0 ? disp+'%' : '';
+}
+
+// Dimmer gesture on the round control: vertical swipe = brightness (min 1%),
+// tap = toggle, long-press = optional (editor on fav tiles). Fixed sensitivity
+// so the small circle is still easy to sweep; pointer capture follows the finger
+// beyond the circle. stopPropagation keeps the card's modal-open quiet.
+function attachDimmerDot(dot, d, b, toggleFn, longpressFn){
+  let pid=-1, startY=0, startLvl=0, moved=false, lp=false, lpTimer=null;
+  const SENS=160;   // px of vertical drag for a full 0->100 sweep
+  dot.style.touchAction='none';
+  const calc=y=>Math.max(1,Math.min(100,Math.round(startLvl + (startY-y)/SENS*100)));
+  dot.addEventListener('pointerdown', e=>{
+    e.stopPropagation();
+    pid=e.pointerId; startY=e.clientY; moved=false; lp=false;
+    startLvl=favLevel(d,b)||1;
+    try{ dot.setPointerCapture(pid); }catch(_){}
+    if(longpressFn) lpTimer=setTimeout(()=>{ lp=true; longpressFn(); }, 600);
+  });
+  dot.addEventListener('pointermove', e=>{
+    if(e.pointerId!==pid) return;
+    if(!moved && Math.abs(startY-e.clientY)>6){ moved=true; clearTimeout(lpTimer); }
+    if(moved){ const lvl=calc(e.clientY); pending[d.id+'/'+b.code]={t:Date.now(),v:lvl}; setDimFill(d,b,lvl); }
+  });
+  dot.addEventListener('pointerup', e=>{
+    if(e.pointerId!==pid) return;
+    e.stopPropagation(); clearTimeout(lpTimer);
+    try{ dot.releasePointerCapture(pid); }catch(_){}
+    pid=-1;
+    if(lp) return;
+    if(!moved && Math.abs(startY-e.clientY)>6){ const lvl=calc(e.clientY); pending[d.id+'/'+b.code]={t:Date.now(),v:lvl}; setDimFill(d,b,lvl); moved=true; }
+    if(moved){ sendControl(d.id, b.code, pending[d.id+'/'+b.code].v); }
+    else { toggleFn(); }
+  });
+  dot.addEventListener('pointercancel', ()=>{ clearTimeout(lpTimer); pid=-1; });
+  dot.addEventListener('click', e=>e.stopPropagation());
+}
+
+// Gang suffix of a control code: 'state_l2' -> 'l2', 'brightness' -> ''.
+function chanOf(code){
+  for(const base of ['state','brightness'])
+    if(String(code||'').startsWith(base))
+      return String(code).slice(base.length).replace(/^_/,'');
+  return '';
+}
+
+// The control of `kind` on the SAME gang as `code`. A multi-gang dimmer has one
+// brightness per channel, so a favourite tile on gang 2 must not fill from gang
+// 1's level. Returns null rather than a wrong channel.
+function ctlForCode(d, code, kind){
+  const list = (d.controls||[]).filter(c=>c.kind===kind);
+  if(!list.length) return null;
+  const want = chanOf(code);
+  if(want) return list.find(c => chanOf(c.code) === want) || null;
+  // Fall back to "the one obvious control" ONLY when there is nothing to confuse it
+  // with. A card with two switches (power + backlight) used to pair BOTH with the
+  // first slider, and rendered as a two-gang dimmer that drove one channel twice.
+  const sw = (d.controls||[]).filter(c => c.kind === 'switch' && !c.card_toggle);
+  return (list.length === 1 && sw.length === 1) ? list[0] : null;
+}
+function brightForCode(d, code){ return ctlForCode(d, code, 'bright'); }
+
+function controlsOf(d){
+  const k = type => d.controls.filter(c=>c.kind===type);
+  return {
+    switches: k('switch'),
+    brights:  k('bright'),
+    colors:   k('color'),
+    sensors:  k('sensor'),
+    sens_txt: k('sensor_text'),
+    set_int:  k('setting_int'),
+    set_enum: k('setting_enum'),
+    set_bool: k('setting_bool'),
+    trig_txt: k('trigger_text'),
+  };
+}
+
+function autoVis(d){
+  const auto = isOn(d.id,'auto');
+  document.querySelectorAll(`.brightrow[data-dev="${CSS.escape(d.id)}"][data-when]`).forEach(r=>{
+    r.style.display = ((r.dataset.when==='auto') === !!auto) ? '' : 'none';
+  });
+}
+
+function card(d){
+  const c=el('div','card'); c.id='c_'+d.id;
+  const C = controlsOf(d);
+
+  // top: name + meta
+  c.append(el('div','name', escapeHtml(d.name)));
+
+  // middle: info + sensors
+  const info=el('div','info');
+  const sens=el('div','sens');
+  for(const s of C.sensors){
+    sens.innerHTML += `<span id="sens_${escapeHtml(d.id)}_${escapeHtml(s.code)}">${escapeHtml(s.label||s.code)}: <b>\u2014</b>${escapeHtml(s.unit||'')}</span>`;
+  }
+  if(C.sensors.length) info.append(sens);
+  // an unsupported device has no real controls -- say why instead of showing a
+  // bare card the user cannot act on
+  info.append(el('div','meta', d.unsupported
+    ? `${escapeHtml(d.transport||'')} ${i18n('\u00b7 z2m did not recognise the model \u2014 nothing to control')}`
+    : `${escapeHtml(catLabel(d.category))} \u00b7 ${escapeHtml(d.transport||'')}`));
+  c.append(info);
+
+
+
+  // bottom: switch dots with labels
+  const row=el('div','switches'+(C.switches.length<=1?' center':''));
+  // Fallback for a lone dimmable whose brightness can't be paired to its switch
+  // by gang suffix -- it still gets the round swipe dot.
+  const dimB = (C.switches.length===1 && C.brights.length===1) ? C.brights[0] : null;
+  // Every switch paired with the brightness on its own gang renders as one group
+  // row (oval 3-zone rocker + %). One channel or many -- same widget, so a single
+  // dimmer looks and behaves exactly like a gang of a multi-channel one.
+  const dimPairs = C.switches
+    .filter(s => !s.card_toggle)
+    .map(s => ({s, b: brightForCode(d, s.code)}))
+    .filter(p => p.b);
+  const grouped = dimPairs.length >= 1;
+  const pairedSw = new Set(grouped ? dimPairs.map(p=>p.s.code) : []);
+  const pairedBr = new Set(grouped ? dimPairs.map(p=>p.b.code) : []);
+  if(C.switches.length){
+    for(let i=0;i<C.switches.length;i++){
+      const s=C.switches[i];
+      if(s && s.card_toggle) continue;
+      if(pairedSw.has(s.code)) continue;
+      const wrap=el('div','dotwrap');
+      const dot=el('div','dot');
+      dot.id=`sw_${d.id}_${s.code}`;
+      if(C.switches.length>1) dot.textContent = i+1;
+      const lbl=el('div','dotlabel', escapeHtml(s.label || (C.switches.length>1?String(i+1):'')));
+      lbl.id='swlbl_'+d.id+'_'+s.code;
+      // caption = the state word: for the single unnamed toggle (On/Off)
+      // and for any with text_on/text_off (a lock: Locked/Unlocked instead of a "Locked" caption under a dark dot)
+      if((!s.label && C.switches.length===1) || s.text_on || s.text_off){
+        lbl.dataset.state='1'; lbl.dataset.on = s.text_on || i18n('Switched on'); lbl.dataset.off = s.text_off || i18n('Switched off');
+      }
+      wrap.append(dot, lbl);
+      if(i===0 && dimB){
+        const fill=el('div','dotfill'); fill.id=`dotfill_${d.id}_${dimB.code}`;
+        dot.classList.add('dimdot'); dot.prepend(fill);
+        const pc=el('div','dimpc'); pc.id=`dimpc_${d.id}_${dimB.code}`;
+        wrap.append(pc);
+        attachDimmerDot(dot, d, dimB, ()=> sendControl(d.id, s.code, !isOn(d.id,s.code)));
+      } else {
+        wrap.onclick = ev=>{
+          ev.stopPropagation();
+          sendControl(d.id, s.code, !isOn(d.id,s.code));
+        };
+      }
+      row.append(wrap);
+    }
+  } else if(!grouped){
+    row.append(el('div','meta',i18n('\u2014 no switches \u2014')));
+  }
+  if(row.childElementCount) c.append(row);   // all channels grouped -> no dot row
+
+  // sliders only for brightness controls not bound to a dimmer dot
+  for(const cc of C.colors){ c.append(colorRow(d, cc)); }
+  for(const s of C.switches.filter(x=>x.card_toggle)){
+    const trow=el('div','brightrow'); trow.onclick=ev=>ev.stopPropagation();
+    const lbl=el('span','brlbl'); lbl.style.cssText='font-size:12px;opacity:.75;flex:1'; lbl.textContent=s.label||s.code;
+    const tg=el('div','toggle'); tg.id=`sw_${d.id}_${s.code}`;
+    if(isOn(d.id,s.code)) tg.classList.add('on');
+    tg.onclick=ev=>{ ev.stopPropagation(); const nv=!isOn(d.id,s.code); sendControl(d.id,s.code,nv); tg.classList.toggle('on',nv); autoVis(d); };
+    trow.append(lbl,tg); c.append(trow);
+  }
+  for(const p of dimPairs){                  // one row per gang: dot, bar, %
+    if(grouped) c.append(dimGroupRow(d, p.s, p.b));
+  }
+  for(const b of C.brights){
+    if(b===dimB || pairedBr.has(b.code)) continue;
+    const r=brightRow(d,b);
+    if(b.when){ r.dataset.when=b.when; r.dataset.dev=d.id;
+      r.style.display = ((b.when==="auto")===!!isOn(d.id,"auto")) ? "" : "none"; }
+    c.append(r);
+  }
+  autoVis(d);
+
+  // on-card enum: toggle "effects/static" + a dropdown to choose the effect
+  for(const s of C.set_enum.filter(x=>x.on_card)){
+    const OFFOPT = (s.off_option || 'Static');   // a device value, never translated
+    const erow = el('div','enumrow');
+    erow.style.cssText = 'display:flex;align-items:center;gap:10px;margin-top:8px';
+    erow.onclick = ev=>ev.stopPropagation();
+    const lbl = el('span','', escapeHtml(s.label||s.code));
+    lbl.style.cssText = 'font-size:12px;opacity:.75;min-width:52px';
+    const tgl = el('div','toggle');
+    tgl.id = `cet_${d.id}_${s.code}`;
+    const sel = document.createElement('select');
+    sel.id = `ces_${d.id}_${s.code}`;
+    sel.style.cssText = 'flex:1;background:#1b2330;color:#dfe7f3;border:1px solid #2a3547;border-radius:8px;padding:6px 8px;font-size:13px';
+    for(const opt of (s.range||[]).filter(o=>o!==OFFOPT)){
+      const o = document.createElement('option');
+      o.value = opt; o.textContent = (s.labels||{})[opt] || opt;
+      sel.append(o);
+    }
+    tgl.onclick = ev=>{
+      ev.stopPropagation();
+      const on = tgl.classList.contains('on');
+      sendControl(d.id, s.code, on ? OFFOPT : sel.value);
+    };
+    sel.onchange = ev=>{ ev.stopPropagation(); sendControl(d.id, s.code, sel.value); };
+    ['pointerdown','pointerup','click'].forEach(e=>sel.addEventListener(e, ev=>ev.stopPropagation()));
+    erow.append(lbl, tgl, sel);
+    c.append(erow);
+  }
+
+  // event flash dot (buttons and remotes)
+  if(d.category === 'button' || d.controls.some(x=>x.kind==='trigger_text')){
+    c.append(el('div','eventdot'));
+  }
+
+  c.onclick = ()=> openModal(d.id);
+  return c;
+}
+
+function isOn(id, code){
+  const st = STATE[id]; if(!st || !st.online) return false;
+  return !!st.values?.[code];
+}
+
+function updateCards(){
+  // fav-dots
+  for(const f of FAVORITES){
+    const dot = document.getElementById(`favdot_${f.device}_${f.code}`);
+    if(!dot) continue;
+    const st = STATE[f.device];
+    const fc = document.getElementById(`fav_${f.device}_${f.code}`);
+    if(!st || !st.online){
+      if(fc) fc.classList.add('offline');
+      dot.classList.remove('on');
+      continue;
+    }
+    if(fc) fc.classList.remove('offline');
+    const on = !!st.values?.[f.code];
+    dot.classList.toggle('on', on);
+    if(fc) fc.classList.toggle('on', on);
+    const dd = BY_ID[f.device];
+    if(dd) for(const b of controlsOf(dd).brights)
+      syncBright(dd, b, st.values?.[b.code]);
+  }
+  for(const d of DEVICES){
+    const card=document.getElementById('c_'+d.id);
+    if(!card) continue;
+    const st=STATE[d.id];
+    if(!st){ card.classList.add('offline'); continue; }
+    card.classList.toggle('offline', !st.online);
+    if(!st.online) continue;
+
+    const v=st.values||{};
+    let anyOn=false;
+    for(const ctl of d.controls){
+      const val=v[ctl.code];
+      if(ctl.kind==='switch'){
+        const dot=document.getElementById(`sw_${d.id}_${ctl.code}`);
+        if(dot) dot.classList.toggle('on', !!val);
+        const swl=document.getElementById(`swlbl_${d.id}_${ctl.code}`);
+        if(swl && swl.dataset.state) swl.textContent = val ? swl.dataset.on : swl.dataset.off;
+        if(val) anyOn=true;
+      }
+      if(ctl.kind==='sensor'){
+        const cell=document.getElementById(`sens_${d.id}_${ctl.code}`);
+        if(cell) cell.querySelector('b').textContent =
+          val==null ? '\u2014' : (typeof val==='boolean' ? (val?i18n('yes'):i18n('no')) : val);
+      }
+      if(ctl.kind==='bright') syncBright(d, ctl, val);
+      if(ctl.kind==='setting_enum' && ctl.on_card){
+        const OFFOPT = (ctl.off_option || 'Static');
+        const tgl=document.getElementById(`cet_${d.id}_${ctl.code}`);
+        const sel=document.getElementById(`ces_${d.id}_${ctl.code}`);
+        const active = val!=null && val!==OFFOPT;
+        if(tgl) tgl.classList.toggle('on', active);
+        if(sel && active && document.activeElement!==sel) sel.value = val;
+      }
+    }
+    card.classList.toggle('any-on', anyOn);
+
+    // event flash for button devices
+    if(st.last_event_ts){
+      const ageMs = Date.now() - st.last_event_ts*1000;
+      card.classList.toggle('eventflash', ageMs < 30000);
+    } else {
+      card.classList.remove('eventflash');
+    }
+  }
+}
+
+// ---------- Modal ----------
+function openModal(id){
+  openModalId = id;
+  _modalLastEventTs = 0;
+  buildModal();
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(){
+  if(openModalId === '__zigbee_pair__') stopZigbeePair();
+  openModalId = null;
+  if(_focusBeforeModal && document.body.contains(_focusBeforeModal)) _focusBeforeModal.focus();
+  _focusBeforeModal = null;
+  document.getElementById('bd').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+
+/* Build modal HTML ONCE on open. updateModal() only patches values
+   so that <details> stays expanded and scroll position stays put. */
+function buildModal(){
+  const id = openModalId; const d = BY_ID[id];
+  const C  = controlsOf(d);
+  const md = document.getElementById('md');
+
+  // Per-channel groups: pair every switch with the brightness on its own gang so
+  // name, toggle, slider and threshold window live together. Brights that can't
+  // be paired (rare) trail as slider-only groups; pure switches stay toggle-only.
+  const chanPairs = C.switches.map(s => ({s, b: brightForCode(d, s.code)}));
+  const pairedBr = new Set(chanPairs.filter(p=>p.b).map(p=>p.b.code));
+  const loneBrights = C.brights.filter(b => !pairedBr.has(b.code));
+  const rename = s => C.switches.length>1
+    ? ` <button class="renbtn" data-ren-chan="${escapeHtml(s.code)}" title="${i18n('Rename channel')}">\u270e</button>` : '';
+  const chanGroup = (s, b) => {
+    const name = (s && s.label) || (b && b.label) || i18n('Channel');
+    const head = s ? `
+        <div class="row">
+          <span class="rlabel">${escapeHtml(name)}${rename(s)}</span>
+          <div class="toggle" id="m_sw_${escapeHtml(s.code)}" data-code="${escapeHtml(s.code)}" data-act="toggle"></div>
+        </div>` : `
+        <div class="row"><span class="rlabel">${escapeHtml(name)}</span></div>`;
+    const bright = b ? `
+        <div class="row">
+          <span class="rlabel" style="opacity:.7">${i18n('Brightness')}</span>
+          <span class="rval"><b id="m_pct_${escapeHtml(b.code)}">0</b>%</span>
+        </div>
+        <input type="range" id="m_br_${escapeHtml(b.code)}" min="0" max="100" value="0"
+               data-code="${escapeHtml(b.code)}" data-min="${escapeHtml(String(b.min))}" data-max="${escapeHtml(String(b.max))}" data-act="bright">
+        <div class="dimwin">
+          <span>${i18n('Limits: min')}</span>
+          <input type="number" min="0" max="100" id="m_dmin_${escapeHtml(b.code)}" data-code="${escapeHtml(b.code)}" data-act="dimwin" value="${dimFloor(b)}">
+          <span>${i18n('max')}</span>
+          <input type="number" min="0" max="100" id="m_dmax_${escapeHtml(b.code)}" data-code="${escapeHtml(b.code)}" data-act="dimwin" value="${dimCeil(b)}">
+          <span style="opacity:.6">${i18n('% (0/100 = no limits)')}</span>
+        </div>` : '';
+    return `<div class="chgroup">${head}${bright}</div>`;
+  };
+  const sectSwitches = (chanPairs.length || loneBrights.length) ? `
+    <section><h3>${i18n('Controls')}</h3>${
+      chanPairs.map(p => chanGroup(p.s, p.b)).join('') +
+      loneBrights.map(b => chanGroup(null, b)).join('')
+    }</section>` : '';
+  const sectBright = '';   // brightness now lives inside each channel group above
+
+  const sensList = [...C.sensors, ...C.sens_txt];   // triggers (action) live in bindings + the press log, not here
+  const sectSensors = sensList.length ? `
+    <section><h3>${i18n('Readings')}</h3>${
+      sensList.map(s=>`
+        <div class="row${s.advanced?' adv':''}">
+          <span class="rlabel">${escapeHtml(s.label||s.code)} <span class="rval">(${escapeHtml(s.code)})</span></span>
+          <span class="rval"><b id="m_sn_${escapeHtml(s.code)}">\u2014</b> ${escapeHtml(s.unit||'')}</span>
+        </div>`).join('')
+    }</section>` : '';
+
+  const settings = [...C.set_bool, ...C.set_enum, ...C.set_int];
+  // Order: primary first, advanced after (visible, just faded).
+  settings.sort((a,b)=> (a.advanced?1:0)-(b.advanced?1:0));
+  const sectSet = settings.length ? `<section><h3>${i18n('Settings')}</h3>${settings_html(d, settings)}</section>` : '';
+
+  // Schedule/inching and binding editors moved out of the modal -- all rule
+  // creation/editing now lives in the unified "Automations" tab (the modal
+  // shows participation read-only below). Kept the editors out to avoid a second
+  // path that could clobber rules.
+  // Events log (for any device with trigger_text or for debugging)
+  const sectEvents = C.trig_txt.length ? `
+    <section>
+      <h3>${i18n('Press log')}</h3>
+      <div class="evlog" id="m_evlog">${i18n('\u2014 no events \u2014')}</div>
+    </section>` : '';
+
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2 id="m_name"><span id="m_name_txt">${escapeHtml(d.name)}</span> <button class="renbtn" id="m_ren_dev"
+          title="${i18n('Rename (label only)')}">\u270e</button>${
+        d.transport === 'z2m' ? ` <button class="renbtn" id="m_ren_z2m"
+          title="${i18n('Rename in zigbee2mqtt: changes the device name itself (and the MQTT topics), moves bindings, favourites and automations')}">\u{1f3f7}</button>` : ''}</h2>
+      <div class="sub">${escapeHtml(catLabel(d.category))} \u00b7 ${escapeHtml(d.transport||'')} \u00b7 ${escapeHtml(d.model||'\u2014')} \u00b7 ${escapeHtml(d.ip||'')}
+           <span id="m_online"></span></div>
+    </div>
+    <div class="body">
+      ${sectSwitches}${sectBright}${sectSensors}${sectSet}${sectEvents}
+      <section><h3>${i18n('Used in automations')}</h3>
+        <div id="m_rules" style="font-size:13px;color:var(--dim)">\u2026</div></section>
+      <section><details><summary>${i18n('Raw state')}</summary><pre class="raw" id="m_raw">\u2014</pre></details></section>
+    </div>`;
+
+  // wire handlers ONCE. Rename buttons are bound here, not via inline
+  // onclick="fn('${id}')": a z2m friendly_name with a quote in it was an XSS.
+  const rd = document.getElementById('m_ren_dev'); if(rd) rd.onclick = ()=> renameDevice(d.id);
+  const rz = document.getElementById('m_ren_z2m'); if(rz) rz.onclick = ()=> renameZ2mKey(d.id);
+  md.querySelectorAll('[data-ren-chan]').forEach(b=>{ b.onclick = ()=> renameChannel(d.id, b.dataset.renChan); });
+  md.querySelectorAll('[data-act="toggle"],[data-act="set_bool"]').forEach(elx=>{
+    elx.onclick = ()=>{
+      const code = elx.dataset.code;
+      const on = elx.classList.contains('on');
+      elx.classList.toggle('on', !on);
+      sendControl(d.id, code, !on);
+    };
+  });
+  md.querySelectorAll('[data-act="bright"]').forEach(elx=>{
+    elx.oninput = ()=>{
+      const pct = document.getElementById('m_pct_'+elx.dataset.code);
+      if(pct) pct.textContent = elx.value;
+      pending[d.id+'/'+elx.dataset.code] = {t:Date.now(), v:+elx.value};
+    };
+    elx.onchange = ()=>{ sendControl(d.id, elx.dataset.code, +elx.value); };
+  });
+  md.querySelectorAll('[data-act="dimwin"]').forEach(inp=>{
+    inp.onchange = async ()=>{
+      const code = inp.dataset.code;
+      const lo = document.getElementById('m_dmin_'+code);
+      const hi = document.getElementById('m_dmax_'+code);
+      try{
+        const r = await api(`/api/devices/${encodeURIComponent(d.id)}/channel/${encodeURIComponent(code)}/dimrange`,
+                            {method:'POST', headers:{'Content-Type':'application/json'},
+                             body:JSON.stringify({floor:+lo.value||0, ceil:+hi.value||100})});
+        const bb = controlsOf(d).brights.find(x=>x.code===code);
+        if(bb){ bb.floor = r.floor; bb.ceil = r.ceil; }   // shared with the card widget
+        if(lo) lo.value = r.floor;                        // reflect clamp/clear (0/100)
+        if(hi) hi.value = r.ceil;
+      }catch(err){ inp.style.borderColor = 'var(--bad)'; }
+    };
+  });
+  md.querySelectorAll('[data-act="set_enum"]').forEach(btn=>{
+    btn.onclick = ()=>{
+      btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('sel'));
+      btn.classList.add('sel');
+      sendControl(d.id, btn.dataset.code, btn.dataset.value);
+    };
+  });
+  md.querySelectorAll('[data-act="set_int"]').forEach(inp=>{
+    inp.onchange = ()=>{
+      const val = parseInt(inp.value,10);
+      if(!isNaN(val)) sendControl(d.id, inp.dataset.code, val);
+    };
+  });
+
+  // schedule/inching + binding editors removed from the modal -- managed in the
+  // "Automations" tab. Keep the press journal + participation view.
+  if(C.trig_txt.length) loadEventsLog(d.id);
+  loadDeviceRules(d.id);
+
+  updateModal();   // fill initial values
+}
+
+const ROLE_LABELS = {trigger:i18n('trigger'), condition:i18n('condition'), action:i18n('action')};
+async function loadDeviceRules(devId){
+  const box = document.getElementById('m_rules');
+  if(!box) return;
+  let rules = [];
+  try { rules = await api(`/api/devices/${encodeURIComponent(devId)}/rules`); }
+  catch(e){ box.textContent = i18n('\u2014 failed to load \u2014'); return; }
+  if(!rules.length){ box.textContent = i18n('\u2014 in none \u2014'); return; }
+  box.innerHTML = '';
+  for(const r of rules){
+    const row = el('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;'+
+      'border-top:1px dashed var(--line)';
+    const badges = r.roles.map(role=>
+      `<span class="role-badge ${escapeHtml(role)}">${escapeHtml(ROLE_LABELS[role]||role)}</span>`).join('');
+    row.innerHTML = `
+      <div style="flex:1;min-width:0;cursor:pointer${r.enabled?'':';opacity:.5'}">
+        <span style="color:var(--txt)">${escapeHtml(ruleTitle(r))}</span>${badges}</div>
+      <div class="toggle ${r.enabled?'on':''}" style="flex:none"></div>`;
+    row.querySelector('div').onclick = ()=>{
+      closeModal(); activeTab='auto'; localStorage.setItem('home.tab','auto');
+      renderTabs(); render();
+    };
+    row.querySelector('.toggle').onclick = async (e)=>{
+      e.stopPropagation();
+      const on = !row.querySelector('.toggle').classList.contains('on');
+      try{
+        await api('/api/rules/enable', {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({id:r.id, enabled:on})});
+        loadDeviceRules(devId);
+      }catch(err){ alert(i18n('Error: ')+err.message); }
+    };
+    box.append(row);
+  }
+}
+
+// ---------- Bindings UI ----------
+function switchTargetsList(){
+  // Targets a rule may control: a switch or a dimmer
+  return DEVICES.filter(d => (d.controls||[]).some(c =>
+    c.kind==='switch' || c.kind==='bright'));
+}
+
+const GESTURE_LABELS = {
+  'click':        i18n('1\u00d7 click'),
+  'double_click': i18n('2\u00d7 double'),
+  'press':        i18n('\u23f5 long'),
+  'single':       i18n('Pressed'),
+  'true':         i18n('became "yes"'),
+  'false':        i18n('became "no"'),
+  'below':        i18n('below'),
+  'above':        i18n('above'),
+};
+function gestureLabel(g){
+  if(GESTURE_LABELS[g]) return GESTURE_LABELS[g];
+  const m = String(g).match(/^(\d+)_single$/);
+  return m ? (i18n('Button ')+m[1]) : g;
+}
+
+function sensorBindControls(d, C){
+  return C.sensors.filter(s => s.code!=='battery' && s.code!=='linkquality');
+}
+
+async function loadEventsLog(id){
+  const box = document.getElementById('m_evlog');
+  if(!box) return;
+  try{
+    const r = await api(`/api/devices/${encodeURIComponent(id)}/events`);
+    const items = r.items || [];
+    if(!items.length){ box.innerHTML = i18n('\u2014 no events \u2014'); return; }
+    box.innerHTML = items.slice().reverse().map(ev => {
+      const dt = new Date(ev.ts*1000);
+      const time = dt.toTimeString().slice(0,8);
+      const gloss = GESTURE_LABELS[ev.value] || ev.value;
+      const fired = ev.fired ? ` <span class="vchip" style="background:#1d4d3a">\u25b6 ${escapeHtml(ev.fired)}</span>` : '';
+      return `<div class="ev">${time} \u2014 <b>${escapeHtml(ev.code)}</b><span class="vchip">${escapeHtml(String(gloss))}</span>${fired}</div>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML = `<span style="color:var(--bad)">${i18n('Error:')} ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+
+/* Patch only dynamic values; never touches structure */
+let _modalLastEventTs = 0;
+
+function updateModal(){
+  const id = openModalId;
+  if(!id || id === '__picker__' || id === '__fav_editor__' || id === '__add_device__'
+        || id === '__room_picker__') return;
+  const d = BY_ID[id]; if(!d) return;
+  const st = STATE[id] || {online:false};
+  const v = st.values || {};
+  const md = document.getElementById('md');
+
+  // Re-fetch events log if a new button event came in
+  if(st.last_event_ts && st.last_event_ts !== _modalLastEventTs){
+    _modalLastEventTs = st.last_event_ts;
+    if(document.getElementById('m_evlog')) loadEventsLog(d.id);
+  }
+
+  const onEl = document.getElementById('m_online');
+  if(onEl) onEl.innerHTML = st.online
+    ? `<span style="color:var(--ok)">\u25cf ${i18n('online')}</span>`
+    : `<span style="color:var(--bad)">\u25cf ${i18n('offline')}</span>`;
+
+  for(const ctl of d.controls){
+    const val = v[ctl.code];
+    if(ctl.kind==='switch' || ctl.kind==='setting_bool'){
+      const t = document.getElementById('m_sw_'+ctl.code) ||
+                md.querySelector(`[data-code="${CSS.escape(ctl.code)}"][data-act="set_bool"]`);
+      if(t) t.classList.toggle('on', !!val);
+    }
+    if(ctl.kind==='bright'){
+      const sl = document.getElementById('m_br_'+ctl.code);
+      const pc = document.getElementById('m_pct_'+ctl.code);
+      const pkey = d.id+'/'+ctl.code;
+      const p = pending[pkey];
+      const fresh = p && Date.now()-p.t < 4000;
+      if(sl && !fresh && val!=null){
+        const span = ctl.max - ctl.min;
+        const ui = Math.round((val-ctl.min)/span*100);
+        sl.value = ui; if(pc) pc.textContent = ui;
+      }
+    }
+    if(ctl.kind==='sensor' || ctl.kind==='sensor_text' || ctl.kind==='trigger_text'){
+      const cell = document.getElementById('m_sn_'+ctl.code);
+      if(cell){
+        cell.textContent = val==null ? '\u2014' : (typeof val==='boolean' ? (val?i18n('yes'):i18n('no')) : val);
+        cell.classList.toggle('blob', typeof val==='string' && val.length > 24);
+      }
+    }
+    if(ctl.kind==='setting_enum'){
+      const buttons = md.querySelectorAll(`[data-code="${CSS.escape(ctl.code)}"][data-act="set_enum"]`);
+      buttons.forEach(b => b.classList.toggle('sel', b.dataset.value === String(val)));
+    }
+    if(ctl.kind==='setting_int'){
+      const inp = md.querySelector(`[data-code="${CSS.escape(ctl.code)}"][data-act="set_int"]`);
+      if(inp && document.activeElement !== inp && val!=null) inp.value = val;
+    }
+  }
+  const raw = document.getElementById('m_raw');
+  if(raw) raw.textContent = JSON.stringify(st.raw||{}, null, 2);
+}
+
+function settings_html(d, list){
+  let h='';
+  for(const s of list){
+    const adv = s.advanced ? ' adv' : '';
+    if(s.kind==='setting_bool'){
+      h += `<div class="row${adv}">
+              <span class="rlabel">${escapeHtml(s.label)}</span>
+              <div class="toggle" data-code="${escapeHtml(s.code)}" data-act="set_bool"></div>
+            </div>`;
+    } else if(s.kind==='setting_enum'){
+      h += `<div class="row${adv}"><span class="rlabel">${escapeHtml(s.label)}</span></div>
+            <div class="enum${adv?' adv':''}">${
+              s.range.map(opt=>`<button data-code="${escapeHtml(s.code)}" data-value="${escapeHtml(opt)}" data-act="set_enum">${
+                escapeHtml((s.labels||{})[opt]||opt)
+              }</button>`).join('')
+            }</div>`;
+    } else if(s.kind==='setting_int'){
+      h += `<div class="row${adv}">
+              <span class="rlabel">${escapeHtml(s.label)}</span>
+              <div class="num">
+                <input type="number" min="${escapeHtml(String(s.min))}" max="${escapeHtml(String(s.max))}"
+                       data-code="${escapeHtml(s.code)}" data-act="set_int">
+                <span class="unit">${escapeHtml(s.unit||'')}</span>
+              </div>
+            </div>`;
+    }
+  }
+  return h;
+}
+
+async function renameChannel(id, code){
+  const d = BY_ID[id]; if(!d) return;
+  const c = (d.controls||[]).find(x=>x.code===code); if(!c) return;
+  const cur = c.label || code;
+  const raw = prompt(i18n('Channel name (empty = default):'), cur);
+  if(raw === null) return;
+  const name = raw.trim();
+  if(name === cur) return;
+  try{
+    const r = await api(`/api/devices/${encodeURIComponent(id)}/channel/${encodeURIComponent(code)}/rename`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name}),
+    });
+    c.label = r.label;
+    if(openModalId===id) openModal(id);
+    render();
+  }catch(e){ alert(i18n('Could not rename the channel: ')+e.message); }
+}
+
+// Two different things, on purpose. renameDevice() sets a display label only.
+// This one changes the device's IDENTITY in zigbee2mqtt -- the friendly_name IS
+// the key here and it is part of every MQTT topic -- so the server migrates all
+// references in one step.
+async function renameZ2mKey(id){
+  const to = (prompt(i18n('New device name in zigbee2mqtt (this changes the MQTT topics too):'), id) || '').trim();
+  if(!to || to === id) return;
+  try{
+    const r = await api('/api/zigbee/device/rename', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id, to}),
+    });
+    const m = r.migrated || {};
+    // everything the server moved, not a hand-picked few (the keys are the server's section names)
+    const parts = Object.entries(m).filter(([, n]) => n).map(([k, n]) => `${i18n(k.replace(/_/g, ' ') + ':')} ${n}`);
+    let msg = `${i18n('Done:')} ${id} -> ${to}` + (parts.length ? `${i18n('\nMoved --')} ${parts.join(', ')}` : '');
+    alert(msg);
+    closeModal();
+    DEVICES = localizeDevices(await api('/api/devices'));
+    BY_ID = Object.fromEntries(DEVICES.map(x => [x.id, x]));
+    await loadFavorites();
+    renderTabs(); render();
+  }catch(e){ alert(i18n('Could not rename: ')+e.message); }
+}
+
+async function renameDevice(id){
+  const d = BY_ID[id]; if(!d) return;
+  const name = (prompt(i18n('New device name:'), d.name) || '').trim();
+  if(!name || name === d.name) return;
+  try{
+    const r = await api(`/api/devices/${encodeURIComponent(id)}/rename`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name}),
+    });
+    d.name = r.name;
+    const nt = document.getElementById('m_name_txt');
+    if(nt) nt.textContent = r.name;          // only the text: both rename buttons stay
+    const cn = document.querySelector('#c_'+CSS.escape(id)+' .name');
+    if(cn) cn.textContent = r.name;
+  }catch(e){ alert(i18n('Could not rename: ')+e.message); }
+}
+
+// One dialog per burst: with the broker down every tap fails, and a per-tap
+// alert() made the app unusable exactly when you needed to read the reason.
+let _lastFailNote = 0;
+function notifyFail(msg){
+  const now = Date.now();
+  if(now - _lastFailNote < 5000) { console.warn(msg); return; }
+  _lastFailNote = now;
+  alert(msg);
+}
+
+
+async function sendControl(id, code, value){
+  const prev = STATE[id]?.values ? STATE[id].values[code] : undefined;
+  if(STATE[id]?.values) STATE[id].values[code] = value;
+  optimistic[id+'/'+code] = {value, expires: Date.now() + OPT_HOLD_MS};
+  updateCards();
+  try{
+    await api(`/api/devices/${encodeURIComponent(id)}/control`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code, value}),
+    });
+    return true;
+  }catch(e){
+    // The command did NOT happen. Holding the optimistic value for the full
+    // OPT_HOLD_MS showed a lie (lamp "on" while the room stays dark) and hid the
+    // error, so drop the hold, put the old value back and say it out loud.
+    delete optimistic[id+'/'+code];
+    if(STATE[id]?.values && prev !== undefined) STATE[id].values[code] = prev;
+    updateCards();
+    notifyFail(`${i18n('Could not run:')} ${e.message}`);
+    console.warn('control fail', id, code, e.message);
+    return false;
+  }
+}
+
+// ---------- Add device flow ----------
+let _zbPoll = null;
+
+
+function openAddDevice(){
+  const md = document.getElementById('md');
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${i18n('Add device')}</h2>
+      <div class="sub">${i18n('Choose how the device joins the home.')}</div>
+    </div>
+    <div class="body">
+      <section>
+        <div class="row" id="ad-zb" style="cursor:pointer">
+          <span class="rlabel">\u{1f4e1} Zigbee<br><span style="color:var(--dim);font-weight:400;font-size:12px">${i18n('Puts the coordinator into pairing mode')}</span></span>
+          <button class="dlg-btn primary">${i18n('Pairing')}</button>
+        </div>
+        <div class="row" id="ad-esp" style="cursor:pointer">
+          <span class="rlabel">\u{1f4f6} ESPHome / WiFi<br><span style="color:var(--dim);font-weight:400;font-size:12px">${i18n('Finds ESP nodes already publishing to MQTT')}</span></span>
+          <button class="dlg-btn primary">${i18n('Find')}</button>
+        </div>
+      </section>
+    </div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  openModalId = '__add_device__';
+  md.querySelector('#ad-zb').onclick  = openZigbeePair;
+  md.querySelector('#ad-esp').onclick = openEsphomeAdd;
+}
+
+
+// Tab buckets offered for a freshly added ESPHome node (see TABS above).
+const ESP_CATS = [['switch',i18n('Switches')],['sensor',i18n('Sensors')],
+                  ['indicator',i18n('Indicators')],['other',i18n('Other')]];
+
+async function openEsphomeAdd(){
+  const md = document.getElementById('md');
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${i18n('Add ESPHome')}</h2>
+      <div class="sub">${i18n('Nodes that are')} <b>${i18n('already online')}</b> ${i18n('and publish MQTT discovery.')}
+        ${i18n('"OK" creates a dashboard card for the node \u2014 it adds it here, to the interface,')}
+        ${i18n('not to the network. A brand-new device will not appear here until it is online:')}
+        ${i18n('connect it to Wi-Fi and MQTT first. If the node is online but missing here, its')}
+        ${i18n('yaml has no')} <code>mqtt:</code> ${i18n('with')} <code>discovery: true</code>.</div>
+    </div>
+    <div class="body"><section><h3>${i18n('Found')}</h3>
+      <div id="esp-list"><div class="bindcaption">${i18n('Scanning MQTT\u2026')}</div></div>
+    </section></div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  openModalId = '__esphome_add__';
+  let r;
+  try{ r = await api('/api/esphome/discover'); }
+  catch(e){
+    const l = document.getElementById('md').querySelector('#esp-list');
+    if(l) l.innerHTML = `<div class="bindcaption" style="color:var(--bad)">${i18n('Scan failed:')} ${escapeHtml(String(e.message||e))}</div>`;
+    return;
+  }
+  if(openModalId !== '__esphome_add__') return;   // closed while scanning
+  renderEsphomeList(r.nodes || []);
+}
+
+// Rendered once per discovery -- no polling here, so nothing can steal focus
+// from the name field the way the Zigbee list used to.
+function renderEsphomeList(nodes){
+  const list = document.getElementById('md').querySelector('#esp-list');
+  if(!list) return;
+  if(!nodes.length){
+    list.innerHTML = '<div class="bindcaption">' + i18n('Nothing found. The node needs an mqtt: block in its yaml.') + '</div>';
+    return;
+  }
+  list.innerHTML = nodes.map(n=>{
+    // alive: 'online' | 'offline' | null. null = the node never published its LWT, so it is
+    // already gone and only its retained configs are left on the broker. Those hang around
+    // forever and confuse this list -- they need cleaning up, not "adding".
+    const live = n.alive === 'online' ? i18n('online')
+               : n.alive === 'offline' ? i18n('off') : i18n('leftover on the broker, no node');
+    const sub = [n.model, `${n.n_controls} ${i18n('channels')}`, live].filter(Boolean).join(' \u00b7 ');
+    if(n.alive == null && !n.registered) return `<div class="row">
+      <span class="rlabel">\u26a0 ${escapeHtml(n.title)}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${escapeHtml(sub)} ${i18n('\u2014 nothing to add, the node does not answer')}</span></span>
+      <button class="dlg-btn esp-purge" data-node="${escapeHtml(n.node)}">${i18n('Clean up')}</button></div>`;
+    if(n.registered) return `<div class="row">
+      <span class="rlabel">\u2713 ${escapeHtml(n.title)}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${escapeHtml(sub)} ${i18n('\u00b7 already added as "')}${escapeHtml(n.device_id||'')}"</span></span>
+      <button class="dlg-btn esp-del" data-node="${escapeHtml(n.node)}" data-id="${escapeHtml(n.device_id||'')}">${i18n('Remove')}</button></div>`;
+    if(!n.n_controls) return `<div class="row">
+      <span class="rlabel">${escapeHtml(n.title)}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${i18n('no supported channels')}${(n.skipped||[]).length ? ` ${i18n('\u00b7 skipped:')} ${escapeHtml(n.skipped.slice(0,4).join(', '))}` : ''}</span></span></div>`;
+    return `<div class="row" style="flex-wrap:wrap;gap:8px">
+      <span class="rlabel">${escapeHtml(n.title)}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${escapeHtml(sub)}</span></span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap">
+        <input class="esp-name" data-node="${escapeHtml(n.node)}" placeholder="${i18n('name')}"
+          value="${escapeHtml(n.title)}"
+          style="background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font:inherit;width:140px">
+        <select class="esp-cat" data-node="${escapeHtml(n.node)}"
+          style="background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 8px;font:inherit">
+          ${ESP_CATS.map(([v,l])=>`<option value="${v}">${escapeHtml(l)}</option>`).join('')}
+        </select>
+        <button class="dlg-btn primary esp-add" data-node="${escapeHtml(n.node)}">OK</button>
+      </span></div>`;
+  }).join('');
+  list.querySelectorAll('.esp-purge').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const node = btn.dataset.node;
+      if(!confirm(`${i18n('Remove the retained configs of "')}${node}${i18n('"?\n\nThe node itself is not touched \u2014 if it ever comes back online, its configs are published again.')}`)) return;
+      btn.disabled = true; btn.textContent = '\u2026';
+      try{
+        await api('/api/esphome/purge_discovery', {method:'POST',
+          headers:{'Content-Type':'application/json'}, body: JSON.stringify({node})});
+        openEsphomeAdd();        // redrawing the list is the confirmation
+      }catch(e){
+        btn.disabled = false; btn.textContent = i18n('Clean up');
+        alert(i18n('Failed: ') + (e.message||e));
+      }
+    };
+  });
+  list.querySelectorAll('.esp-del').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.id, node = btn.dataset.node;
+      if(!id){ alert(i18n('This device was added by hand \u2014 remove it from mqtt_devices.json')); return; }
+      if(!confirm(`${i18n('Remove "')}${id}${i18n('" from the dashboard? The device itself is not touched.')}`)) return;
+      btn.disabled = true; btn.textContent = '\u2026';
+      try{
+        await api('/api/esphome/remove', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({id}),
+        });
+        DEVICES = localizeDevices(await api('/api/devices'));
+        BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
+        renderTabs(); render();
+        const hit = nodes.find(x => x.node === node);
+        if(hit){ hit.registered = false; hit.device_id = null; }
+        renderEsphomeList(nodes);
+      }catch(e){
+        btn.disabled = false; btn.textContent = i18n('Remove');
+        alert(i18n('Could not remove: ') + (e.message || e));
+      }
+    };
+  });
+  list.querySelectorAll('.esp-add').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const node = btn.dataset.node;
+      const nm = list.querySelector(`.esp-name[data-node="${CSS.escape(node)}"]`);
+      const ct = list.querySelector(`.esp-cat[data-node="${CSS.escape(node)}"]`);
+      // Onboarding a node that is not answering produces a card that is offline
+      // forever -- almost always a retired node still advertising itself through
+      // retained configs. Say so, and only proceed if that is really the intent.
+      const hitNow = nodes.find(x => x.node === node);
+      let force = false;
+      if(hitNow && hitNow.alive !== 'online'){
+        const why = hitNow.alive === 'offline' ? i18n('node is off')
+                                               : i18n('node is gone, only its leftovers on the broker');
+        if(!confirm(`"${hitNow.title}": ${why}${i18n('.\n\nThe card will be offline and its controls')} `
+                    + `${i18n('will do nothing. Add it anyway?')}`)) return;
+        force = true;
+      }
+      btn.disabled = true; btn.textContent = '\u2026';
+      try{
+        const res = await api('/api/esphome/add', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({node, name:(nm && nm.value || '').trim(),
+                                category:(ct && ct.value) || 'switch', force}),
+        });
+        DEVICES = localizeDevices(await api('/api/devices'));
+        BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
+        renderTabs(); render();
+        // mark it locally instead of re-scanning MQTT (a rescan costs ~6s)
+        const hit = nodes.find(x => x.node === node);
+        if(hit){ hit.registered = true; hit.device_id = res.id; }
+        renderEsphomeList(nodes);
+      }catch(e){
+        btn.disabled = false; btn.textContent = 'OK';
+        alert(i18n('Could not add: ') + (e.message || e));
+      }
+    };
+  });
+}
+
+async function openZigbeePair(){
+  const md = document.getElementById('md');
+  md.innerHTML = `
+    <div class="head">
+      <button class="closebtn" onclick="closeModal()">\u00d7</button>
+      <h2>${i18n('Add Zigbee')}</h2>
+      <div class="sub">${i18n('Pairing mode is on. Put the device into pairing \u2014 usually')}
+        ${i18n('hold the button 5\u201310 s until it blinks fast. Whatever is found appears below.')}</div>
+    </div>
+    <div class="body">
+      <div id="zb-banner" style="font-size:13px;color:var(--ok);text-align:center;margin-bottom:10px">${i18n('Enabling pairing\u2026')}</div>
+      <section>
+        <h3>${i18n('Discovered')}</h3>
+        <div id="zb-list"><div class="bindcaption">${i18n('Nothing yet. Waiting for devices\u2026')}</div></div>
+      </section>
+    </div>`;
+  document.getElementById('bd').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  openModalId = '__zigbee_pair__';
+  try{ await api('/api/zigbee/pair/start', {method:'POST'}); }
+  catch(e){ const b=md.querySelector('#zb-banner'); if(b) b.innerHTML =
+    `<span style="color:var(--bad)">${i18n('Could not enable pairing:')} ${escapeHtml(String(e.message||e))}</span>`; }
+  // closed while start was on its way: its stop may have run first, so stop once more
+  if(openModalId !== '__zigbee_pair__'){ api('/api/zigbee/pair/stop', {method:'POST'}).catch(()=>{}); return; }
+  if(_zbPoll) clearInterval(_zbPoll);
+  zbPoll();
+  _zbPoll = setInterval(zbPoll, 2000);
+}
+
+async function stopZigbeePair(){
+  if(_zbPoll){ clearInterval(_zbPoll); _zbPoll = null; }
+  try{ await api('/api/zigbee/pair/stop', {method:'POST'}); }catch(e){}
+}
+
+function tabForCategory(cat){
+  const t = TABS.find(t => (t.cats||[]).includes(cat));
+  return t ? t.label : i18n('Other');
+}
+
+async function zbPoll(){
+  if(openModalId !== '__zigbee_pair__') return;
+  let s;
+  try{ s = await api('/api/zigbee/pair/status'); }catch(e){ return; }
+  const md = document.getElementById('md');
+  const banner = md.querySelector('#zb-banner');
+  if(banner) banner.textContent = s.active
+    ? `${i18n('Pairing stays open for')} ${s.remaining} ${i18n('s \u2014 put the device into pairing')}`
+    : i18n('The pairing window is closed. Close and reopen to extend it.');
+  const list = md.querySelector('#zb-list');
+  if(!list) return;
+  const orphans = s.orphans || [];
+  // The poll fires every 2s. Rewriting innerHTML unconditionally destroyed and
+  // recreated the name <input> on every tick: the value was carried over but the
+  // focus and the caret were not, so typing a name was practically impossible.
+  // Re-render ONLY when the server-side data actually changed, and even then put
+  // focus and selection back where the user had them.
+  const sig = JSON.stringify([
+    s.found.map(f => [f.ieee, f.interview, f.registered, f.name, f.category, f.unsupported]),
+    orphans.map(o => [o.id, o.ieee]),
+  ]);
+  if(list.dataset.sig === sig) return;
+  const ae = document.activeElement;
+  const focusIeee = (ae && ae.classList && ae.classList.contains('zb-name'))
+    ? ae.dataset.ieee : null;
+  const selStart = focusIeee ? ae.selectionStart : null;
+  const selEnd   = focusIeee ? ae.selectionEnd   : null;
+  if(!s.found.length && !orphans.length){
+    list.innerHTML = '<div class="bindcaption">' + i18n('Nothing yet. Waiting for devices\u2026') + '</div>';
+    list.dataset.sig = sig;
+    return;
+  }
+  // preserve any name the user is typing across a re-render
+  const typed = {};
+  list.querySelectorAll('.zb-name').forEach(i => typed[i.dataset.ieee] = i.value);
+  list.innerHTML = s.found.map(f=>{
+    const title = escapeHtml(f.description || f.model || f.friendly_name);
+    const sub = escapeHtml([f.vendor, f.model].filter(Boolean).join(' \u00b7 ') || f.ieee);
+    if(f.registered){
+      const raw = String(f.name||'').startsWith('0x');
+      const cur = typed[f.ieee] !== undefined ? typed[f.ieee] : (raw ? '' : f.name);
+      const shown = raw ? (f.description || f.model || f.name) : f.name;
+      return `<div class="row" style="flex-wrap:wrap;gap:8px">
+        <span class="rlabel">\u2713 ${escapeHtml(shown)}
+          <span style="color:var(--dim);font-weight:400">\u2192 ${escapeHtml(tabForCategory(f.category))} ${i18n('\u00b7 added')}</span>
+          ${f.unsupported ? `<br><span style="color:var(--warn,#e0a030);font-weight:400;font-size:12px">${i18n('z2m did not recognise the device \u2014 nothing to control. Remove it and pair again closer to the coordinator.')}</span>` : ''}</span>
+        <span style="display:flex;gap:6px">
+          <input class="zb-name" data-ieee="${escapeHtml(f.ieee)}" data-fn="${escapeHtml(f.friendly_name)}"
+            placeholder="${i18n('device name')}" value="${escapeHtml(cur)}"
+            style="background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font:inherit;width:150px">
+          <button class="dlg-btn zb-add" data-ieee="${escapeHtml(f.ieee)}">${i18n('Rename')}</button>
+        </span></div>`;
+    }
+    if(f.interview !== 'done'){
+      const txt = f.interview === 'failed' ? i18n('interview failed') : i18n('identifying\u2026');
+      return `<div class="row"><span class="rlabel">${title}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${sub}</span></span>
+        <span style="color:var(--dim)">${txt}</span></div>`;
+    }
+    const dflt = typed[f.ieee] !== undefined ? typed[f.ieee] : (f.model || '');
+    return `<div class="row" style="flex-wrap:wrap;gap:8px">
+      <span class="rlabel">${title}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${sub}</span></span>
+      <span style="display:flex;gap:6px">
+        <input class="zb-name" data-ieee="${escapeHtml(f.ieee)}" data-fn="${escapeHtml(f.friendly_name)}"
+          placeholder="${i18n('device name')}" value="${escapeHtml(dflt)}"
+          style="background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font:inherit;width:150px">
+        <button class="dlg-btn primary zb-add" data-ieee="${escapeHtml(f.ieee)}">OK</button>
+      </span></div>`;
+  }).join('') + (orphans.length ? `
+    <div class="bindcaption" style="margin-top:12px">${i18n('Unidentified on the network (from earlier attempts)')}</div>
+    ${orphans.map(o => `<div class="row">
+      <span class="rlabel">${escapeHtml(o.name)}<br><span style="color:var(--dim);font-weight:400;font-size:12px">${escapeHtml(o.ieee || '')} ${i18n('\u00b7 z2m could not identify the model')}</span></span>
+      <button class="dlg-btn zb-del" data-id="${escapeHtml(o.id)}">${i18n('Delete')}</button>
+    </div>`).join('')}` : '');
+  list.dataset.sig = sig;
+  if(focusIeee){
+    const back = list.querySelector(`.zb-name[data-ieee="${CSS.escape(focusIeee)}"]`);
+    if(back){ back.focus(); try{ back.setSelectionRange(selStart, selEnd); }catch(e){} }
+  }
+  list.querySelectorAll('.zb-del').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.id;
+      if(!confirm(`${i18n('Delete "')}${id}${i18n('" from the Zigbee network?')}`)) return;
+      btn.disabled = true; btn.textContent = '\u2026';
+      try{
+        let r = await api('/api/zigbee/device/remove', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({id}),
+        });
+        // a device that never answered needs the forced database-level drop
+        if(!r.removed) r = await api('/api/zigbee/device/remove', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({id, force:true}),
+        });
+        if(!r.removed) throw new Error(i18n('z2m did not release the device'));
+        DEVICES = localizeDevices(await api('/api/devices'));
+        BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
+        renderTabs(); render();
+        list.dataset.sig = '';        // force the next poll to redraw
+        zbPoll();
+      }catch(e){
+        btn.disabled = false; btn.textContent = i18n('Delete');
+        alert(i18n('Could not delete: ') + (e.message || e));
+      }
+    };
+  });
+  list.querySelectorAll('.zb-add').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const ieee = btn.dataset.ieee;
+      const inp = list.querySelector(`.zb-name[data-ieee="${CSS.escape(ieee)}"]`);
+      const name = (inp && inp.value || '').trim();
+      const fn = inp ? inp.dataset.fn : '';
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '\u2026';
+      try{
+        await api('/api/zigbee/pair/add', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ieee, friendly_name: fn, name}),
+        });
+        DEVICES = localizeDevices(await api('/api/devices'));         // refresh list+tabs, keep WS + modal
+        BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
+        renderTabs(); render();
+        list.dataset.sig = '';        // force the next poll to redraw
+        zbPoll();
+      }catch(e){
+        btn.disabled = false; btn.textContent = orig;
+        alert(i18n('Failed: ') + (e.message || e));
+      }
+    };
+  });
+}
+
+
+// PWA: register service worker + custom "Install" button (Chrome auto-prompt
+// isn't guaranteed; the button fires the captured beforeinstallprompt).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+(function(){
+  let prompt = null;
+  const btn = document.getElementById('install-btn');
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); prompt = e; if(btn) btn.hidden = false; });
+  addEventListener('appinstalled', () => { if(btn) btn.hidden = true; });
+  if (btn) btn.onclick = async () => {
+    if (!prompt) return;
+    prompt.prompt(); await prompt.userChoice; prompt = null; btn.hidden = true;
+  };
+})();
+
+init().catch(e=>{
+  $('#app').innerHTML = `<div class="skeleton">${i18n('Error:')} ${escapeHtml(e.message)}</div>`;
+});
+
+// --- auto-refresh structural data on resume -------------------------------
+// Devices / favorites load once in init(); live values come
+// over WebSocket. When the PWA is backgrounded and config changes server-side
+// (new favorite, freshly paired device), the running tab never re-fetches the
+// list. Re-pull it whenever the app regains visibility or focus, throttled so a
+// visibility+focus burst doesn't double-fetch, and skip re-render mid-modal.
+let _lastSoftReload = 0;
+async function softReload(){
+  const now = Date.now();
+  if (now - _lastSoftReload < 3000) return;
+  _lastSoftReload = now;
+  try {
+    DEVICES = localizeDevices(await api('/api/devices'));
+    BY_ID = Object.fromEntries(DEVICES.map(d => [d.id, d]));
+    await loadFavorites();
+    try { RULES = await api('/api/rules'); } catch(e){ }
+    if (!openModalId) { renderTabs(); render(); }
+  } catch(e){ /* offline / transient -- WS reconnect recovers live state */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') softReload();
+});
+window.addEventListener('focus', softReload);
+
+
+</script>
+</body>
+</html>

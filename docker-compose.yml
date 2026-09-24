@@ -1,0 +1,65 @@
+# Yashome: the three services that make a home. Settings come from .env (see
+# secrets.env.example); `make install` fills it in. zigbee2mqtt runs only when
+# COMPOSE_PROFILES=zigbee is set (make install / make update set it from Z2M_SERIAL).
+name: yashome
+
+services:
+  home:
+    build: .
+    restart: unless-stopped
+    # runs as your user so the JSON files it writes stay yours, not root's
+    user: "${PUID:-1000}:${PGID:-1000}"
+    mem_limit: 512m
+    env_file: .env
+    environment:
+      - HOME=/tmp
+      - MQTT_HOST=${MQTT_HOST:-mosquitto}
+      # MQTT_PORT in .env is the HOST port; inside the compose network the broker is always 1883
+      - MQTT_PORT=1883
+      - TZ=${TZ:-UTC}
+    ports:
+      - "${DASHBOARD_PORT:-8765}:8765"
+    volumes:
+      - .:/app
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      # the directory, not single files: `make secrets` replaces passwd by inode
+      - ./config/mosquitto:/mosquitto/config:ro
+      - ./config/mosquitto/data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt:2.12.0
+    restart: unless-stopped
+    profiles: ["zigbee"]
+    mem_limit: 512m
+    environment:
+      - TZ=${TZ:-UTC}
+    devices:
+      # the coordinator stick by its stable /dev/serial/by-id name (Z2M_SERIAL in .env)
+      - "${Z2M_SERIAL:-/dev/null}:/dev/ttyUSB0"
+    volumes:
+      - ./config/zigbee2mqtt:/app/data
+      - /run/udev:/run/udev:ro
+    ports:
+      - "${Z2M_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - mosquitto

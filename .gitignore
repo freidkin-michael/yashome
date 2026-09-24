@@ -1,0 +1,29 @@
+# your settings and secrets
+/.env
+/.env.*
+config/mosquitto/passwd
+config/mosquitto/acl
+config/zigbee2mqtt/secret.yaml
+
+# your devices and rules: created from examples/ by `make install`, written by the dashboard
+/mqtt_devices.json
+/settings.json
+
+# runtime state written by the backend and the containers
+/status_cache.json
+/pending_timers.json
+/pending_timers.corrupt-*.json
+*.tmp
+config/mosquitto/data/
+config/zigbee2mqtt/configuration.yaml
+config/zigbee2mqtt/database.db*
+config/zigbee2mqtt/state.json
+config/zigbee2mqtt/coordinator_backup.json
+config/zigbee2mqtt/configuration_backup_*.yaml
+config/zigbee2mqtt/*.log
+config/zigbee2mqtt/log/
+
+# python
+__pycache__/
+*.pyc
+.venv/

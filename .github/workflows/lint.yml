@@ -1,0 +1,14 @@
+name: lint
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim
+    steps:
+      - uses: actions/checkout@v4
+      - run: apt-get update -qq && apt-get install -y -qq --no-install-recommends nodejs make >/dev/null
+      - run: pip install -q -r requirements.txt ruff==0.16.8
+      - run: make lint
+      - run: python -m unittest discover -s tests -v
