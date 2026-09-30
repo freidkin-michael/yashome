@@ -1,0 +1,30 @@
+{
+  "_version": 1,
+  "names": {},
+  "channel_names": {},
+  "channel_dimrange": {},
+  "bindings": {},
+  "favorites": [
+    {"device": "boiler", "code": "power", "alias": "Boiler"}
+  ],
+  "rooms": [
+    {"id": "r1", "name": "Bathroom", "devices": ["boiler"]},
+    {"id": "r2", "name": "Garage", "devices": ["garage"]}
+  ],
+  "tab_order": {},
+  "tile_sizes": {},
+  "automations": {
+    "boiler/power": {
+      "inching_sec": 3600,
+      "schedule": [
+        {"time": "06:00", "days": [1, 2, 3, 4, 5], "action": "on"},
+        {"time": "18:00", "days": [1, 2, 3, 4, 5, 6, 7], "action": "on"}
+      ]
+    }
+  },
+  "rules_disabled": [
+    "a|boiler/power|sched|06:00|on",
+    "a|boiler/power|sched|18:00|on",
+    "a|boiler/power|inch"
+  ]
+}

@@ -1,0 +1,629 @@
+{
+ "0x000000000000010b": {
+  "controls": [
+   {
+    "_label0": "Signal",
+    "code": "linkquality",
+    "kind": "sensor",
+    "label": "Signal",
+    "ro": true,
+    "scale": 1,
+    "unit": "lqi",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "sensor",
+   "id": "0x000000000000010b",
+   "ieee": "0x000000000000010b",
+   "model": null,
+   "name": "0x000000000000010b",
+   "unsupported": true
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "linkquality": 77
+   },
+   "values": {
+    "linkquality": 77
+   }
+  }
+ },
+ "Corridor motion": {
+  "controls": [
+   {
+    "_label0": "Motion",
+    "code": "occupancy",
+    "kind": "sensor",
+    "label": "Motion",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "bool"
+   },
+   {
+    "_label0": "Illuminance",
+    "code": "illuminance",
+    "kind": "sensor",
+    "label": "Illuminance",
+    "ro": true,
+    "scale": 1,
+    "unit": "lx",
+    "vtype": "num"
+   },
+   {
+    "_label0": "Battery",
+    "code": "battery",
+    "kind": "sensor",
+    "label": "Battery",
+    "ro": true,
+    "scale": 1,
+    "unit": "%",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "sensor",
+   "id": "Corridor motion",
+   "ieee": "0x0000000000000107",
+   "model": "PIR",
+   "name": "Corridor motion",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "battery": 77,
+    "illuminance": 77,
+    "occupancy": true
+   },
+   "values": {
+    "battery": 77,
+    "illuminance": 77,
+    "occupancy": true
+   }
+  }
+ },
+ "Door contact": {
+  "controls": [
+   {
+    "_label0": "Contact",
+    "code": "contact",
+    "kind": "sensor",
+    "label": "Contact",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "bool"
+   },
+   {
+    "_label0": "Battery",
+    "code": "battery",
+    "kind": "sensor",
+    "label": "Battery",
+    "ro": true,
+    "scale": 1,
+    "unit": "%",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "sensor",
+   "id": "Door contact",
+   "ieee": "0x0000000000000109",
+   "model": "DOOR",
+   "name": "Door contact",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "battery": 77,
+    "contact": true
+   },
+   "values": {
+    "battery": 77,
+    "contact": true
+   }
+  }
+ },
+ "Garden lights": {
+  "controls": [
+   {
+    "_label0": "",
+    "code": "state",
+    "kind": "switch",
+    "label": ""
+   },
+   {
+    "_label0": "Buttons",
+    "code": "action",
+    "kind": "trigger_text",
+    "label": "Buttons",
+    "ro": true,
+    "values": [
+     "single"
+    ]
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "switch",
+   "id": "Garden lights",
+   "ieee": "0x000000000000010e",
+   "model": "SWBTN",
+   "name": "Garden lights",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "last_event": {
+    "code": "action",
+    "value": "single"
+   },
+   "online": true,
+   "raw": {
+    "state": "ON"
+   },
+   "values": {
+    "state": true
+   }
+  }
+ },
+ "Hall 1 gang": {
+  "controls": [
+   {
+    "_label0": "",
+    "code": "state",
+    "kind": "switch",
+    "label": ""
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "switch",
+   "id": "Hall 1 gang",
+   "ieee": "0x0000000000000101",
+   "model": "SW1",
+   "name": "Hall 1 gang",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "availability": "offline",
+   "online": false,
+   "raw": {
+    "state": "ON"
+   },
+   "values": {
+    "state": true
+   }
+  }
+ },
+ "Hall 3 gang": {
+  "controls": [
+   {
+    "_label0": "left",
+    "code": "state_left",
+    "kind": "switch",
+    "label": "left"
+   },
+   {
+    "_label0": "center",
+    "code": "state_center",
+    "kind": "switch",
+    "label": "center"
+   },
+   {
+    "_label0": "right",
+    "code": "state_right",
+    "kind": "switch",
+    "label": "right"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "switch",
+   "id": "Hall 3 gang",
+   "ieee": "0x0000000000000102",
+   "model": "SW3",
+   "name": "Hall 3 gang",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "state_center": "ON",
+    "state_left": "ON",
+    "state_right": "ON"
+   },
+   "values": {
+    "state_center": true,
+    "state_left": true,
+    "state_right": true
+   }
+  }
+ },
+ "Heater plug": {
+  "controls": [
+   {
+    "_label0": "",
+    "code": "state",
+    "kind": "switch",
+    "label": ""
+   },
+   {
+    "_label0": "Power",
+    "code": "power",
+    "kind": "sensor",
+    "label": "Power",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "num"
+   },
+   {
+    "_label0": "Current",
+    "code": "current",
+    "kind": "sensor",
+    "label": "Current",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "num"
+   },
+   {
+    "_label0": "Voltage",
+    "code": "voltage",
+    "kind": "sensor",
+    "label": "Voltage",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "num"
+   },
+   {
+    "_label0": "Energy",
+    "code": "energy",
+    "kind": "sensor",
+    "label": "Energy",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "switch",
+   "id": "Heater plug",
+   "ieee": "0x0000000000000104",
+   "model": "PLUG",
+   "name": "Heater plug",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "current": 77,
+    "energy": 77,
+    "power": 77,
+    "state": "ON",
+    "voltage": 77
+   },
+   "values": {
+    "current": 77,
+    "energy": 77,
+    "power": 77,
+    "state": true,
+    "voltage": 77
+   }
+  }
+ },
+ "Kitchen climate": {
+  "controls": [
+   {
+    "_label0": "Temperature",
+    "code": "temperature",
+    "kind": "sensor",
+    "label": "Temperature",
+    "ro": true,
+    "scale": 1,
+    "unit": "\u00b0C",
+    "vtype": "num"
+   },
+   {
+    "_label0": "Humidity",
+    "code": "humidity",
+    "kind": "sensor",
+    "label": "Humidity",
+    "ro": true,
+    "scale": 1,
+    "unit": "%",
+    "vtype": "num"
+   },
+   {
+    "_label0": "Battery",
+    "code": "battery",
+    "kind": "sensor",
+    "label": "Battery",
+    "ro": true,
+    "scale": 1,
+    "unit": "%",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "sensor",
+   "id": "Kitchen climate",
+   "ieee": "0x0000000000000108",
+   "model": "TH",
+   "name": "Kitchen climate",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "battery": 77,
+    "humidity": 77,
+    "temperature": 77
+   },
+   "values": {
+    "battery": 77,
+    "humidity": 77,
+    "temperature": 77
+   }
+  }
+ },
+ "Living dimmer": {
+  "controls": [
+   {
+    "_label0": "1",
+    "code": "state_l1",
+    "kind": "switch",
+    "label": "1"
+   },
+   {
+    "_label0": "Brightness 1",
+    "code": "brightness_l1",
+    "kind": "bright",
+    "label": "Brightness 1",
+    "max": 1000,
+    "min": 0
+   },
+   {
+    "_label0": "2",
+    "code": "state_l2",
+    "kind": "switch",
+    "label": "2"
+   },
+   {
+    "_label0": "Brightness 2",
+    "code": "brightness_l2",
+    "kind": "bright",
+    "label": "Brightness 2",
+    "max": 1000,
+    "min": 0
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "switch",
+   "id": "Living dimmer",
+   "ieee": "0x0000000000000103",
+   "model": "DIM2",
+   "name": "Living dimmer",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "brightness_l1": 77,
+    "brightness_l2": 77,
+    "state_l1": "ON",
+    "state_l2": "ON"
+   },
+   "values": {
+    "brightness_l1": 77,
+    "brightness_l2": 77,
+    "state_l1": true,
+    "state_l2": true
+   }
+  }
+ },
+ "Sink leak": {
+  "controls": [
+   {
+    "_label0": "Water leak",
+    "code": "water_leak",
+    "kind": "sensor",
+    "label": "Water leak",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "bool"
+   },
+   {
+    "_label0": "Tamper",
+    "code": "tamper",
+    "kind": "sensor",
+    "label": "Tamper",
+    "ro": true,
+    "scale": 1,
+    "unit": "",
+    "vtype": "bool"
+   },
+   {
+    "_label0": "Battery",
+    "code": "battery",
+    "kind": "sensor",
+    "label": "Battery",
+    "ro": true,
+    "scale": 1,
+    "unit": "%",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "sensor",
+   "id": "Sink leak",
+   "ieee": "0x000000000000010a",
+   "model": "LEAK",
+   "name": "Sink leak",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "battery": 77,
+    "tamper": true,
+    "water_leak": true
+   },
+   "values": {
+    "battery": 77,
+    "tamper": true,
+    "water_leak": true
+   }
+  }
+ },
+ "Tuya dimmer": {
+  "controls": [
+   {
+    "_label0": "",
+    "code": "state",
+    "kind": "switch",
+    "label": ""
+   },
+   {
+    "_label0": "Brightness",
+    "code": "brightness",
+    "kind": "bright",
+    "label": "Brightness",
+    "max": 254,
+    "min": 0
+   }
+  ],
+  "device": {
+   "_skip_get": true,
+   "category": "switch",
+   "id": "Tuya dimmer",
+   "ieee": "0x0000000000000105",
+   "model": "EF00DIM",
+   "name": "Tuya dimmer",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "brightness": 77,
+    "state": "ON"
+   },
+   "values": {
+    "brightness": 77,
+    "state": true
+   }
+  }
+ },
+ "USB router": {
+  "controls": [
+   {
+    "_label0": "Signal",
+    "code": "linkquality",
+    "kind": "sensor",
+    "label": "Signal",
+    "ro": true,
+    "scale": 1,
+    "unit": "lqi",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "sensor",
+   "id": "USB router",
+   "ieee": "0x000000000000010c",
+   "model": "ROUTER",
+   "name": "USB router",
+   "unsupported": true
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "online": true,
+   "raw": {
+    "linkquality": 77
+   },
+   "values": {
+    "linkquality": 77
+   }
+  }
+ },
+ "_fired": [
+  "('fire', 'Garden lights', 'action', 'single')",
+  "('fire', '\u043f\u0443\u043b\u044c\u0442 1', 'action', 'single')"
+ ],
+ "_topics": [],
+ "\u043f\u0443\u043b\u044c\u0442 1": {
+  "controls": [
+   {
+    "_label0": "Buttons",
+    "code": "action",
+    "kind": "trigger_text",
+    "label": "Buttons",
+    "ro": true,
+    "values": [
+     "1_single",
+     "1_double",
+     "2_hold"
+    ]
+   },
+   {
+    "_label0": "Battery",
+    "code": "battery",
+    "kind": "sensor",
+    "label": "Battery",
+    "ro": true,
+    "scale": 1,
+    "unit": "%",
+    "vtype": "num"
+   }
+  ],
+  "device": {
+   "_skip_get": false,
+   "category": "button",
+   "id": "\u043f\u0443\u043b\u044c\u0442 1",
+   "ieee": "0x0000000000000106",
+   "model": "REMOTE4",
+   "name": "\u043f\u0443\u043b\u044c\u0442 1",
+   "unsupported": false
+  },
+  "offline_when_bridge_down": false,
+  "state": {
+   "last_event": {
+    "code": "action",
+    "value": "single"
+   },
+   "online": true,
+   "raw": {
+    "battery": 77
+   },
+   "values": {
+    "battery": 77
+   }
+  }
+ }
+}

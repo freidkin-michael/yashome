@@ -1,0 +1,33 @@
+# your settings and secrets
+/.env
+/.env.*
+config/mosquitto/dynamic-security.json
+config/mosquitto/passwd
+config/mosquitto/acl
+
+# your devices and rules: created from examples/ by `make install`, written by the dashboard
+/mqtt_devices.json
+/settings.json
+
+# runtime state written by the backend and the containers
+/status_cache.json
+/pending_timers.json
+/pending_timers.corrupt-*.json
+*.tmp
+/.broker-accounts.before
+config/mosquitto/data/
+
+# your own plug-ins (PLUGINS_EXTRA_DIR); plugins/ ships with the core
+/plugins-extra/
+# what plug-ins keep (keys, counters, builds): core.plugin_data(name), never committed
+/plugin-data/
+# an existing zigbee2mqtt data directory (Z2M_DATA_DIR=./config/zigbee2mqtt)
+/config/zigbee2mqtt/
+# your house's words for tools/check_plugins.py
+/.house-words
+/.plugins-detect
+
+# python
+__pycache__/
+*.pyc
+.venv/

@@ -1,0 +1,10 @@
+[
+  {"id": "tv_test", "name": "Test TV", "transport": "webos", "category": "tv",
+   "host": "192.0.2.10", "mac": "00:11:22:33:44:55",
+   "_webos_inputs": {"HDMI 1": "HDMI_1"},
+   "controls": [{"code": "power", "kind": "switch", "label": "Power"},
+                {"code": "volume", "kind": "bright", "label": "Volume", "min": 0, "max": 100},
+                {"code": "input", "kind": "select", "label": "Input", "options": ["HDMI 1"]}]},
+  {"id": "tv_unpaired", "name": "Unpaired TV", "transport": "webos", "host": "192.0.2.11",
+   "controls": [{"code": "power", "kind": "switch", "label": "Power"}]}
+]

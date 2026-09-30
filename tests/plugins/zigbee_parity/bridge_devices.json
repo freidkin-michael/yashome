@@ -1,0 +1,565 @@
+[
+ {
+  "friendly_name": "Coordinator",
+  "type": "Coordinator",
+  "ieee_address": "0x0000000000000000"
+ },
+ {
+  "friendly_name": "Hall 1 gang",
+  "ieee_address": "0x0000000000000101",
+  "type": "Router",
+  "network_address": 101,
+  "definition": {
+   "model": "SW1",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "switch",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state",
+       "access": 7
+      }
+     ]
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Hall 3 gang",
+  "ieee_address": "0x0000000000000102",
+  "type": "Router",
+  "network_address": 102,
+  "definition": {
+   "model": "SW3",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "switch",
+     "endpoint": "left",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state_left",
+       "access": 7
+      }
+     ]
+    },
+    {
+     "type": "switch",
+     "endpoint": "center",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state_center",
+       "access": 7
+      }
+     ]
+    },
+    {
+     "type": "switch",
+     "endpoint": "right",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state_right",
+       "access": 7
+      }
+     ]
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Living dimmer",
+  "ieee_address": "0x0000000000000103",
+  "type": "Router",
+  "network_address": 103,
+  "definition": {
+   "model": "DIM2",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "light",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state_l1",
+       "access": 7
+      },
+      {
+       "type": "numeric",
+       "property": "brightness_l1",
+       "access": 7,
+       "value_max": 1000
+      },
+      {
+       "type": "binary",
+       "property": "state_l2",
+       "access": 7
+      },
+      {
+       "type": "numeric",
+       "property": "brightness_l2",
+       "access": 7,
+       "value_max": 1000
+      },
+      {
+       "type": "numeric",
+       "property": "min_brightness_l1",
+       "access": 7
+      }
+     ]
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Heater plug",
+  "ieee_address": "0x0000000000000104",
+  "type": "Router",
+  "network_address": 104,
+  "definition": {
+   "model": "PLUG",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "switch",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state",
+       "access": 7
+      }
+     ]
+    },
+    {
+     "type": "numeric",
+     "property": "power",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "current",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "voltage",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "energy",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "linkquality",
+     "access": 1
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Tuya dimmer",
+  "ieee_address": "0x0000000000000105",
+  "type": "Router",
+  "network_address": 105,
+  "definition": {
+   "model": "EF00DIM",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "light",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state",
+       "access": 7
+      },
+      {
+       "type": "numeric",
+       "property": "brightness",
+       "access": 7,
+       "value_max": 254
+      }
+     ]
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "manuSpecificTuya"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "\u043f\u0443\u043b\u044c\u0442 1",
+  "ieee_address": "0x0000000000000106",
+  "type": "EndDevice",
+  "network_address": 106,
+  "definition": {
+   "model": "REMOTE4",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "enum",
+     "property": "action",
+     "values": [
+      "1_single",
+      "1_double",
+      "2_hold"
+     ]
+    },
+    {
+     "type": "numeric",
+     "property": "battery",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "linkquality",
+     "access": 1
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Corridor motion",
+  "ieee_address": "0x0000000000000107",
+  "type": "EndDevice",
+  "network_address": 107,
+  "definition": {
+   "model": "PIR",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "binary",
+     "property": "occupancy",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "illuminance",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "battery",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "occupancy_timeout",
+     "access": 7
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Kitchen climate",
+  "ieee_address": "0x0000000000000108",
+  "type": "EndDevice",
+  "network_address": 108,
+  "definition": {
+   "model": "TH",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "numeric",
+     "property": "temperature",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "humidity",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "battery",
+     "access": 1
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Door contact",
+  "ieee_address": "0x0000000000000109",
+  "type": "EndDevice",
+  "network_address": 109,
+  "definition": {
+   "model": "DOOR",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "binary",
+     "property": "contact",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "battery",
+     "access": 1
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Sink leak",
+  "ieee_address": "0x000000000000010a",
+  "type": "EndDevice",
+  "network_address": 110,
+  "definition": {
+   "model": "LEAK",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "binary",
+     "property": "water_leak",
+     "access": 1
+    },
+    {
+     "type": "binary",
+     "property": "tamper",
+     "access": 1
+    },
+    {
+     "type": "numeric",
+     "property": "battery",
+     "access": 1
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "0x000000000000010b",
+  "ieee_address": "0x000000000000010b",
+  "type": "Router",
+  "network_address": 111,
+  "definition": {
+   "model": null,
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "numeric",
+     "property": "linkquality",
+     "access": 1
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "USB router",
+  "ieee_address": "0x000000000000010c",
+  "type": "Router",
+  "network_address": 112,
+  "definition": {
+   "model": "ROUTER",
+   "vendor": "Example",
+   "exposes": []
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "bad|name",
+  "ieee_address": "0x000000000000010d",
+  "type": "Router",
+  "network_address": 113,
+  "definition": {
+   "model": "SW1",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "switch",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state",
+       "access": 7
+      }
+     ]
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ },
+ {
+  "friendly_name": "Garden lights",
+  "ieee_address": "0x000000000000010e",
+  "type": "Router",
+  "network_address": 114,
+  "definition": {
+   "model": "SWBTN",
+   "vendor": "Example",
+   "exposes": [
+    {
+     "type": "switch",
+     "features": [
+      {
+       "type": "binary",
+       "property": "state",
+       "access": 7
+      }
+     ]
+    },
+    {
+     "type": "enum",
+     "property": "action",
+     "values": [
+      "single"
+     ]
+    }
+   ]
+  },
+  "endpoints": {
+   "1": {
+    "clusters": {
+     "input": [
+      "genBasic",
+      "genOnOff"
+     ],
+     "output": []
+    }
+   }
+  }
+ }
+]

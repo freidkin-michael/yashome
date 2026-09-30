@@ -1,0 +1,33 @@
+# Template for config/zigbee2mqtt/configuration.yaml (gitignored -- z2m rewrites
+# it at runtime with the generated network_key/pan_id and the paired devices:
+# map). Copy to configuration.yaml on a fresh deploy; z2m forms the network and
+# fills the rest. Device friendly-names are z2m runtime state, not infra.
+mqtt:
+  base_topic: zigbee2mqtt
+  server: mqtt://mosquitto:1883
+  # secret.yaml (untracked, written from .env by `make secrets`):
+  #   mqtt_user: z2m / mqtt_password: ... / auth_token: ...
+  user: '!secret mqtt_user'
+  password: '!secret mqtt_password'
+serial:
+  port: /dev/ttyUSB0      # by-id passthrough mapped in docker-compose
+  adapter: ember          # Silicon Labs (ZBDongle-E, SLZB-06M); zstack for TI (ZBDongle-P)
+frontend:
+  enabled: true
+  port: 8080
+  auth_token: '!secret auth_token'
+advanced:
+  # Publishes a per-device timestamp of the last contact. Without it a
+  # device that went silent days ago still shows a healthy stale LQI, so
+  # silent-device detection is impossible.
+  last_seen: ISO_8601
+  log_level: info
+  network_key: GENERATE
+  pan_id: GENERATE
+  ext_pan_id: GENERATE
+# online/offline per device (zigbee2mqtt/<name>/availability): the dashboard greys out a
+# dead device and rule conditions stop trusting its last value
+availability:
+  enabled: true
+device_options:
+  retain: true

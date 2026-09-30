@@ -1,0 +1,15 @@
+{
+ "ru": {
+  "Not set up": "Не настроено",
+  "card keys are not set": "ключи карт не заданы",
+  "Refused": "Не принято",
+  "the tag did not verify": "метка не прошла проверку",
+  "not our card": "карта не наша",
+  "this link was used already": "ссылка уже использована",
+  "One moment": "Секунду",
+  "checking the card": "проверяю карту",
+  "the cards are not available, see the server log": "карты недоступны, см. лог сервера",
+  "Accepted": "Принято",
+  "card {card}": "карта {card}"
+ }
+}

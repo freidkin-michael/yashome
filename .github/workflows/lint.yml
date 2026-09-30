@@ -1,0 +1,16 @@
+name: lint
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim
+    steps:
+      - run: apt-get update -qq && apt-get install -y -qq --no-install-recommends nodejs make git >/dev/null
+      - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: pip install -q -r requirements.txt -r requirements-dev.txt
+      - run: make lint
+      - run: python -m unittest discover -s tests -v
+      - run: python -m pytest -q tests/plugins

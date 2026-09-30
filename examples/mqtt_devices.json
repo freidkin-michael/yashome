@@ -1,0 +1,38 @@
+[
+  {
+    "id": "boiler",
+    "name": "Boiler",
+    "category": "switch",
+    "controls": [
+      {"kind": "switch", "code": "power", "label": "Power",
+       "state_topic": "boiler/relay/state", "command_topic": "boiler/relay/command",
+       "payload_on": "ON", "payload_off": "OFF"}
+    ]
+  },
+  {
+    "id": "garage",
+    "name": "Garage",
+    "category": "sensor",
+    "state_topic": "home/garage/state",
+    "availability_topic": "home/garage/availability",
+    "payload_online": "online",
+    "payload_offline": "offline",
+    "controls": [
+      {"kind": "sensor", "code": "temperature", "label": "Temperature", "unit": "\u00b0C", "ro": true},
+      {"kind": "sensor", "code": "humidity", "label": "Humidity", "unit": "%", "ro": true},
+      {"kind": "sensor", "code": "motion", "label": "Motion", "vtype": "bool", "ro": true}
+    ]
+  },
+  {
+    "id": "desk_lamp",
+    "name": "Desk lamp",
+    "category": "switch",
+    "controls": [
+      {"kind": "switch", "code": "power", "label": "Power",
+       "state_topic": "home/desk_lamp/power/state", "command_topic": "home/desk_lamp/power/set",
+       "payload_on": "1", "payload_off": "0"},
+      {"kind": "bright", "code": "brightness", "label": "Brightness", "min": 0, "max": 255,
+       "state_topic": "home/desk_lamp/brightness/state", "command_topic": "home/desk_lamp/brightness/set"}
+    ]
+  }
+]

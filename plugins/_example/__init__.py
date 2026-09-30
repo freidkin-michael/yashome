@@ -1,0 +1,57 @@
+"""hello: a small complete Yashome plug-in. Copy this directory as `hello` into PLUGINS_EXTRA_DIR
+(default: plugins-extra/ next to docker-compose.yml), add hello to PLUGINS in .env, restart the
+backend, and it is live.
+
+Python side: a transport with a device of its own, a rule action, a settings section, a REST
+route and an MQTT topic. ui.js: a tab, an "Add" row, a card decoration, the rule target for the
+action, a toolbar button and a reload callback; i18n.json translates them."""
+import app as core
+
+PLUGIN = {"name": "Hello", "version": "1.0.0"}
+
+# state this plug-in keeps in settings.json under its own key
+_seen: dict = dict(core._cfg_section("hello", {"greetings": 0}))
+core.SETTINGS_SECTIONS["hello"] = lambda: _seen
+
+
+# 1) a transport: how to switch a device whose "transport" is "hello"
+def _apply(cfg, code, val, kind):
+    core.log.info(f"[hello] {cfg['id']}/{code} -> {val}")
+    st = core._status_copy(cfg["id"], {"online": True, "values": {}, "raw": {}})
+    st["values"][code] = bool(val)
+    st["online"] = True
+    core._store_status(cfg["id"], st)
+
+
+core.TRANSPORTS["hello"] = _apply
+core.register_device({"id": "hello_lamp", "name": "Hello lamp", "transport": "hello", "category": "hello",
+                      "controls": [{"kind": "switch", "code": "power", "label": "Power"}]})
+
+
+# 2) a rule action: "greet" - a button can say hello
+def _validate(body):
+    return {"target": "hello", "code": "greet", "action": "greet", "text": str(body.get("text") or "hello")[:64]}
+
+
+def _run(b):
+    _seen["greetings"] = _seen.get("greetings", 0) + 1
+    core.log.info(f"[hello] {b.get('text')} (#{_seen['greetings']})")
+    return {"action": "greet", "text": b.get("text")}
+
+
+core.BINDING_ACTIONS["greet"] = {
+    "validate": _validate, "run": _run,
+    # the rule list shows this; "type" is what ui.js registers its ruleAction under
+    "describe": lambda b: {"type": "hello", "action": "greet", "text": b.get("text"), "title": f"say {b.get('text')}"},
+}
+
+
+# 3) a route and an MQTT topic
+@core.app.get("/api/hello")
+def hello():
+    return {"greetings": _seen.get("greetings", 0)}
+
+
+core.MQTT_SUBSCRIPTIONS.append("hello/ping")
+# a retained message is replayed on every reconnect: an event handler ignores it
+core.MQTT_HANDLERS.append((("hello", "ping"), lambda parts, payload, retain: None if retain else _run({"text": "ping"})))

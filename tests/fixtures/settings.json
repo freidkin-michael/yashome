@@ -1,0 +1,1 @@
+{"_version": 1, "names": {}, "bindings": {}, "favorites": [], "automations": {"lamp/state": {"inching_sec": 0, "schedule": [{"time": "7:00", "days": [1], "action": "on"}]}}}

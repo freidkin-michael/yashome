@@ -1,0 +1,12 @@
+# Copy to tests/plugins/test_<name>.py for plugins/<name>/ and set NAME. The plug-in is already loaded by
+# conftest.py; take its module from there, never import plugins/<name> a second time.
+import sys
+
+import app as core
+
+NAME = "template"
+me = sys.modules["yashome_plugins." + NAME]
+
+
+def test_section_is_registered():
+    assert core.SETTINGS_SECTIONS[me.SECTION] is me._section

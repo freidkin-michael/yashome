@@ -1,0 +1,48 @@
+# Yashome: the broker and the backend. Settings come from .env (see secrets.env.example);
+# `make install` fills it in. A plug-in's own containers (zigbee2mqtt) come from its
+# setup/compose.yml, which `make update` lists in COMPOSE_FILE.
+name: yashome
+
+services:
+  home:
+    build:
+      context: .
+      args:
+        EXTRA_PIP: ${EXTRA_PIP:-}      # Python packages the plug-ins need (docs/plugins.md)
+    restart: unless-stopped
+    # runs as your user so the JSON files it writes stay yours, not root's
+    user: "${PUID:-1000}:${PGID:-1000}"
+    mem_limit: 512m
+    env_file: .env
+    environment:
+      - HOME=/tmp
+      - MQTT_HOST=${MQTT_HOST:-mosquitto}
+      # MQTT_PORT in .env is the HOST port; inside the compose network the broker is always 1883
+      - MQTT_PORT=1883
+      - TZ=${TZ:-UTC}
+    ports:
+      - "${DASHBOARD_PORT:-8765}:8765"
+    volumes:
+      - .:/app
+      # plug-ins of your own beside the shipped plugins/ (docs/plugins.md), read-only
+      - ${PLUGINS_EXTRA_DIR:-./plugins-extra}:/app/plugins-extra:ro
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      # the directory, not single files: `make secrets` replaces dynamic-security.json by inode
+      - ./config/mosquitto:/mosquitto/config:ro
+      - ./config/mosquitto/data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+

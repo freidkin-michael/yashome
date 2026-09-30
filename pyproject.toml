@@ -1,0 +1,12 @@
+# Not a Python package: the backend is one module run by uvicorn in the home image
+# (Python 3.12, requirements.txt). This file only configures ruff.
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+# E402: app.py imports paho mid-file on purpose; E501: long f-strings in log lines;
+# E731: small lambdas as callbacks are idiomatic here. E702/E741: one-line
+# statement chains and short names - style, not defects.
+ignore = ["E402", "E501", "E731", "E702", "E741"]
