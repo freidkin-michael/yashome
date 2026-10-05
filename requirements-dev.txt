@@ -1,0 +1,5 @@
+# what make dev-test and CI add on top of requirements.txt: the plug-ins' tests and their packages
+pytest==8.4.2
+httpx2==2.13.1
+cryptography==50.0.1
+ruff==0.16.8

@@ -1,0 +1,7 @@
+{
+  "climate": {
+    "room_temp_from": {
+      "ac_1": "sensor_1"
+    }
+  }
+}

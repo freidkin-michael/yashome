@@ -1,0 +1,7 @@
+{
+  "accounts": [
+    {"user_key": "MQTT_Z2M_USER", "user_default": "z2m", "password_key": "MQTT_Z2M_PASSWORD",
+     "role": "zigbee2mqtt", "topics": ["zigbee2mqtt/#"]}
+  ],
+  "device_readonly": ["zigbee2mqtt/#"]
+}

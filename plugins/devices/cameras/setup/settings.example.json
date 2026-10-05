@@ -1,0 +1,12 @@
+{
+  "cameras": [
+    {
+      "id": "camera_1",
+      "name": "Camera 1",
+      "snapshot": "http://192.0.2.20/snapshot.jpg",
+      "stream": "http://192.0.2.20/video.mjpg",
+      "user": "viewer",
+      "pass": "${CAMERA_1_PASS}"
+    }
+  ]
+}

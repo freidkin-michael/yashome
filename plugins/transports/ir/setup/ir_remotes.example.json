@@ -1,0 +1,52 @@
+[
+  {
+    "id": "remote_1",
+    "name": "Remote 1",
+    "learned_on": "ir-node-1",
+    "groups": [
+      {
+        "name": "Power",
+        "buttons": [
+          {
+            "id": "power",
+            "name": "Power",
+            "proto": "ir",
+            "code": "9000,-4500,560,-560,560,-1690",
+            "n": 6
+          }
+        ]
+      },
+      {
+        "name": "Volume",
+        "buttons": [
+          {
+            "id": "vol_up",
+            "name": "Volume +",
+            "proto": "ir",
+            "code": "9000,-4500,560,-1690,560,-560",
+            "n": 6
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "remote_2",
+    "name": "Remote 2",
+    "learned_on": "ir-node-1",
+    "groups": [
+      {
+        "name": "Power",
+        "buttons": [
+          {
+            "id": "power",
+            "name": "Power",
+            "proto": "ir",
+            "code": "9000,-4500,560,-1690,560,-1690",
+            "n": 6
+          }
+        ]
+      }
+    ]
+  }
+]

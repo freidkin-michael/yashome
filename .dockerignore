@@ -1,0 +1,9 @@
+# The image holds only the Python dependencies; the code is bind-mounted at runtime.
+.git/
+config/
+docs/
+examples/
+tests/
+__pycache__/
+*.pyc
+.env
