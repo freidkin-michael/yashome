@@ -153,12 +153,6 @@ object HomeApi {
 
     private fun enc(s: String) = android.net.Uri.encode(s)
 
-    /** The player plug-in (Films): a GET or a POST of its API, the answer as JSON. */
-    fun playerGet(ctx: Context, path: String, query: Map<String, String> = emptyMap()) =
-        JSONObject(call(req(ctx, "/api/player$path" + if (query.isEmpty()) "" else "?" + query.entries.joinToString("&") { it.key + "=" + enc(it.value) }).build()))
-
-    fun playerPost(ctx: Context, path: String, body: JSONObject) = JSONObject(call(req(ctx, "/api/player$path").post(jsonBody(body)).build()))
-
     /** What a tickle asks for: {cmds, state (the widget channels that changed; all of them with all=true), t}. */
     fun pull(ctx: Context, all: Boolean): JSONObject {
         val n = NetInfo.report(ctx)                                 // every pull tells the house where the phone is (percent-encoded: a name may hold any letters)
@@ -189,23 +183,32 @@ object HomeApi {
     /** The network report: {gw, wifi_ip, ssid, v}. */
     fun report(ctx: Context, j: JSONObject) { call(req(ctx, "/api/family/me/report").post(jsonBody(j)).build()) }
 
+    /** The answer to a browser that asks to come in (the house's guest access): allowed for `hours` with `scope`, or denied. */
+    fun guestAnswer(ctx: Context, id: String, allow: Boolean, hours: Int, scope: String) {
+        val body = if (allow) JSONObject().put("hours", hours).put("scope", scope) else JSONObject()
+        call(req(ctx, "/api/guest/" + enc(id) + (if (allow) "/allow" else "/deny")).post(jsonBody(body)).build())
+    }
+
+    /** The house's own words of a refusal ({"detail": ...} after "HTTP 4xx: "), else null. */
+    fun detail(e: Exception): String? =
+        try { JSONObject(e.message.orEmpty().substringAfter(": ")).optString("detail").ifEmpty { null } } catch (_: Exception) { null }
+
+    // ---- writing a door card (plug-in nfc): the house holds the keys, the phone only carries the card's commands ----
+    fun nfcWriteStart(ctx: Context, name: String) =
+        JSONObject(call(req(ctx, "/api/nfc/write/start").post(jsonBody(JSONObject().put("name", name))).build()))
+
+    /** resp = the card's whole answer in hex (null for the first command): the next {apdu_hex, step}, or {done, result}. */
+    fun nfcWriteStep(ctx: Context, sid: String, resp: String?): JSONObject {
+        val body = if (resp == null) JSONObject() else JSONObject().put("resp_hex", resp)
+        return JSONObject(call(req(ctx, "/api/nfc/write/" + enc(sid) + "/step").post(jsonBody(body)).build()))
+    }
+
+    fun nfcWriteState(ctx: Context, sid: String) = JSONObject(call(req(ctx, "/api/nfc/write/" + enc(sid)).build()))
+
+    fun nfcWriteCancel(ctx: Context, sid: String) { call(req(ctx, "/api/nfc/write/" + enc(sid)).delete().build()) }
+
     /** TEMPORARY (rotation guard): one line for the house log. */
     fun note(ctx: Context, text: String) { call(req(ctx, "/api/family/me/note").post(jsonBody(JSONObject().put("text", text.take(300)))).build()) }
-
-    // ---- wake-word samples (the "Voice recording" screen) ----
-    fun recordAvailable(ctx: Context) = try { JSONObject(call(req(ctx, "/api/voice/record/available").build())).optBoolean("available") } catch (e: Exception) { false }
-    fun recordState(ctx: Context) = JSONObject(call(req(ctx, "/api/voice/record/state").build()))
-    fun recordPhrases(ctx: Context, n: Int) = JSONObject(call(req(ctx, "/api/voice/record/phrases?n=$n").build())).optJSONArray("phrases") ?: JSONArray()
-    fun recordSample(ctx: Context, speaker: String, label: String, name: String, pcm: ByteArray): JSONObject {
-        val q = "speaker=${enc(speaker)}&label=$label&sat=${enc(satelliteId(ctx))}" + if (name.isNotEmpty()) "&name=${enc(name)}" else ""
-        return JSONObject(call(req(ctx, "/api/voice/record/sample?$q").post(pcm.toRequestBody("application/octet-stream".toMediaType())).build()))
-    }
-    fun recordDelete(ctx: Context, speaker: String, label: String) =
-        JSONObject(call(req(ctx, "/api/voice/record/delete").post(jsonBody(JSONObject().put("speaker", speaker).put("label", label))).build()))
-    fun recordFile(ctx: Context, f: String): ByteArray = http.newCall(req(ctx, "/api/voice/record/file?f=${enc(f)}").build()).execute().use {
-        if (!it.isSuccessful) throw ApiError(it.code, "")
-        it.body?.bytes() ?: ByteArray(0)
-    }
 
     /** A held-button recording (16 kHz mono s16le) up; the answer is the house's decision plus the audio to play. */
     fun ptt(ctx: Context, sat: String, pcm: ByteArray): JSONObject {

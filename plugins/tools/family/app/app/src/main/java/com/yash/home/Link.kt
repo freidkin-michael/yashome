@@ -40,7 +40,14 @@ object Link {
         val r = HomeApi.pull(ctx, all)
         r.optJSONObject("state")?.takeIf { it.length() > 0 }?.let { WidgetState.apply(ctx, it, r.optLong("t", 0L)) }
         val cmds = r.optJSONArray("cmds")
-        for (i in 0 until (cmds?.length() ?: 0)) cmds!!.getJSONObject(i).takeIf { it.optString("cmd") == "update" }?.let { AppUpdate.start(ctx, it) }
+        for (i in 0 until (cmds?.length() ?: 0)) {
+            val c = cmds!!.getJSONObject(i)
+            when (c.optString("cmd")) {
+                "update" -> AppUpdate.start(ctx, c)
+                "guest" -> GuestNotice.show(ctx, c)                      // a browser asks to come in
+                "nfc_write" -> NfcWriteActivity.notify(ctx, c)            // the house waits for a card to write
+            }
+        }
         ctx.getSharedPreferences("yash", Context.MODE_PRIVATE).edit().putLong("pull_ack", r.optLong("t", 0L)).apply()
         HomeApi.adopt(ctx, r.optString("srv"))                       // the house got another address for the phones: move to it
     }
@@ -181,21 +188,5 @@ class ControlRetryWorker(ctx: Context, params: WorkerParameters) : CoroutineWork
         val value: Any = if (d.getString("kind") == "b") d.getBoolean("b", false) else d.getDouble("n", 0.0).let { if (it % 1.0 == 0.0) it.toLong() else it }
         return try { HomeApi.control(applicationContext, d.getString("dev") ?: "", d.getString("code") ?: "", value); Result.success() }
         catch (e: Exception) { Result.retry() }
-    }
-}
-
-/** Voice-recording samples waiting in RecQueue go up when the network allows. */
-class RecUploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
-    companion object {
-        fun enqueue(ctx: Context) {
-            val req = OneTimeWorkRequestBuilder<RecUploadWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
-            WorkManager.getInstance(ctx.applicationContext).enqueueUniqueWork("rec-upload", ExistingWorkPolicy.KEEP, req)
-        }
-    }
-
-    override suspend fun doWork(): Result {
-        RecQueue.flush(applicationContext)
-        return if (RecQueue.pending(applicationContext) > 0) Result.retry() else Result.success()
     }
 }

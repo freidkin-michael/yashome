@@ -1,8 +1,8 @@
 # Yash! - the Android app of the family plug-in
 
 The app of the people of the house: their devices, a ring that sounds even on silent, the house
-state while away, widgets, a quick-settings tile for the lock, a touchpad for a TV player, films,
-"Ask the house" by text or voice. Built by the dashboard (Settings -> House -> Family -> App -> Build
+state while away, widgets, a quick-settings tile for the lock, a touchpad for a TV player,
+"Ask the house" by text or voice, and entry requests: a browser that asks to come in is allowed or denied from a notification. Built by the dashboard (Settings -> House -> Family -> App -> Build
 the app, on the build server's app builder) or by `build.sh` (in a container, any host with docker) -
 both with the house's key; the Family page offers the APK.
 
@@ -10,7 +10,7 @@ both with the house's key; the Family page offers the APK.
 |---|---|
 | `build.sh` | builds `app-release.apk` with the house's key and copies it to `plugin-state/family/yash.apk` (or the directory given) |
 | `app/build.gradle.kts` | the app; Firebase only when `app/google-services.json` is there |
-| `app/src/main/java/com/yash/home/` | `SetupActivity` (pairing, test ring, language), `DashboardActivity`, `RingService` (the alarm), `LiveService` (the house link without Firebase), `Link` (pulls and reports; no service, no heartbeat), `PushService` (Firebase pushes), `Cloud` and `SyncWorker` (Firebase side), `HomeApi` (the house's REST and sockets), `NetInfo` (the network report), `AppUpdate` / `UpdateReceiver` (self-update), widgets (`DeviceWidget`, `DeviceWidgetConfig`, `LockWidget`, `WidgetState`), the lock tile (`LockTileService`, `LockActionActivity`), `MouseActivity` (the touchpad; its receivers come from the touchmouse plug-in), `FilmsActivity` (the player plug-in), `AskActivity` (typed questions and push-to-talk, the voice plug-in), `RecordActivity` and `RecQueue` (wake-phrase samples), `DoorTapActivity` (an NFC door card tapped on the phone) |
+| `app/src/main/java/com/yash/home/` | `SetupActivity` (pairing, test ring, language), `DashboardActivity`, `RingService` (the alarm), `LiveService` (the house link without Firebase), `Link` (pulls and reports; no service, no heartbeat), `PushService` (Firebase pushes), `Cloud` and `SyncWorker` (Firebase side), `HomeApi` (the house's REST and sockets), `NetInfo` (the network report), `AppUpdate` / `UpdateReceiver` (self-update), widgets (`DeviceWidget`, `DeviceWidgetConfig`, `LockWidget`, `WidgetState`), the lock tile (`LockTileService`, `LockActionActivity`), `MouseActivity` (the touchpad; its receivers come from the touchmouse plug-in), `AskActivity` (typed questions and push-to-talk, the voice plug-in), `GuestNotice` and `GuestActivity` (entry requests: the notification and the Allow / Deny screen), `NfcWriteActivity` (writing a door card: the phone carries the house's commands to the card), `DoorTapActivity` (an NFC door card tapped on the phone) |
 | `tools/` | `svg2vd.py`, `ir_icons_to_vd.py`: icons to Android vector drawables |
 
 ## Two ways a ring reaches the phone
@@ -25,6 +25,8 @@ both with the house's key; the Family page offers the APK.
   app asks for the location permission once, to read the name).
   The same message carries the app's version; on the house's `update` command `AppUpdate` downloads the
   built APK, checks its sha256 and hands it to the system installer (`UpdateReceiver` gets the answer).
+  A `guest` command (from the link or a pull) shows an entry request; an `nfc_write` one asks to hold a card to write
+  (administrators' phones only, which also have "Write a card" in the menu); both need the notification permission.
 
 ## On the phone, once
 

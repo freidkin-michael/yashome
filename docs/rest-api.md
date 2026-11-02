@@ -137,10 +137,12 @@ POST   /api/signin/start                        -> {code, valid_s}: a 6-digit co
 POST   /api/signin                              {code} -> {token}: no token needed; once, within 5 min, 5 tries
 POST   /api/guest/request                       -> {id, secret, code}: a browser asks to come in (/guest); no token, 5 per IP in 10 min
 GET    /api/guest/request/{id}?secret=          {state: pending|allowed|denied|expired}; allowed: {token, hours} once
-GET    /api/guest                               {pending: [{id, code, ip, ua, age_s}], guests: [{gid, label, scope, expires, ip, ua}]}
-POST   /api/guest/{id}/allow                    {hours: 1|2|8|24, scope: no_locks|view} -> a yg_ key for that browser (not a guest key)
-POST   /api/guest/{id}/deny                     the request is refused (not a guest key)
-DELETE /api/guest/keys/{gid}                    the guest key stops working (not a guest key)
+GET    /api/guest                               {pending: [{id, code, ip, ua, age_s}], guests: [{gid, label, scope, expires, ip, ua}]} (an administrator)
+POST   /api/guest/{id}/allow                    {hours: 1|2|8|24, scope: no_locks|view} -> a yg_ key for that browser (an administrator)
+GET    /api/guest/settings                      {accept, paused_until}: does the house take entry requests (an administrator)
+PUT    /api/guest/settings                      {accept}: the switch; more than 10 requests an hour pause them for an hour by themselves
+POST   /api/guest/{id}/deny                     the request is refused (an administrator)
+DELETE /api/guest/keys/{gid}                    the guest key stops working (an administrator)
 GET    /api/backups                             {items, age_s, error, warnings, at, nightly, keep} (house token)
 POST   /api/backups                             a backup now: {ok, name, warnings} (house token)
 GET    /api/backups/{name}                      the archive (house token)

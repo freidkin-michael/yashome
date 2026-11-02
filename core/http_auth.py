@@ -59,6 +59,21 @@ def is_house_token(headers) -> bool:
     return bool(DASHBOARD_TOKEN) and hmac.compare_digest(tok.encode(), DASHBOARD_TOKEN.encode())
 
 
+def is_admin_request(request) -> bool:
+    """An administrator calls: the house token, or a key an ADMIN_CHECKS fn names one (a family phone so marked). Never a guest key."""
+    if request_token(request.headers).startswith(GUEST_PREFIX):
+        return False
+    if is_house_token(request.headers):
+        return True
+    for fn in list(ADMIN_CHECKS):
+        try:
+            if fn(request) is True:
+                return True
+        except Exception:                             # noqa: BLE001  a failing check admits nobody
+            log.exception("[auth] an ADMIN_CHECKS hook failed")
+    return False
+
+
 def restricted_role(headers, query=None, method: str = "", path: str = "") -> "str | None":
     """Demo mode: "view" or "control" for the demo session whose token this request carries, else None."""
     tok = request_token(headers, query or {})

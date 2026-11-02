@@ -36,7 +36,7 @@ class Guest(unittest.TestCase):
     def setUp(self):
         self.saved = (app.DASHBOARD_TOKEN, app.RESTRICTED, dict(app.DEVICES))
         app.DASHBOARD_TOKEN, app.RESTRICTED = HOUSE, False
-        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear()
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0; app._guest_cfg["accept"] = True
         app.DEVICES["lamp"] = device("lamp", [{"kind": "switch", "code": "state"}], category="switch")
         app.DEVICES["door"] = device("door", [{"kind": "switch", "code": "locked"}], category="switch")
         app.DEVICES["bolt"] = device("bolt", [{"kind": "switch", "code": "state"}], category="lock")
@@ -45,7 +45,7 @@ class Guest(unittest.TestCase):
     def tearDown(self):
         app.DASHBOARD_TOKEN, app.RESTRICTED = self.saved[0], self.saved[1]
         app.DEVICES.clear(); app.DEVICES.update(self.saved[2])
-        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear()
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0; app._guest_cfg["accept"] = True
 
     def ask(self, ip="203.0.113.7"):
         r = self.c.post("/api/guest/request", headers={"x-real-ip": ip, "user-agent":
@@ -172,15 +172,31 @@ class Guest(unittest.TestCase):
         self.assertEqual(self.c.delete(f"/api/guest/keys/{gid}", headers=bearer(tok)).status_code, 403)
         self.assertEqual(self.poll(req).json(), {"state": "pending"})
 
-    def test_a_full_access_key_may_approve(self):
-        keep = list(app.TOKEN_CHECKS)
-        app.TOKEN_CHECKS.append(lambda tok, m, p: tok == "yfd_phone" and app.is_use_route(m, p))
+    def test_only_an_administrator_key_may_approve(self):
+        keep, admins = list(app.TOKEN_CHECKS), list(app.ADMIN_CHECKS)
+        app.TOKEN_CHECKS.append(lambda tok, m, p: tok in ("yfd_phone", "yfd_admin") and app.is_use_route(m, p))
+        app.ADMIN_CHECKS[:] = [lambda r: 1 / 0, lambda r: app.request_token(r.headers) == "yfd_admin"]
         try:
             req = self.ask()
-            r = self.c.post(f"/api/guest/{req['id']}/allow", json={}, headers=bearer("yfd_phone"))
+            r = self.c.post(f"/api/guest/{req['id']}/allow", json={}, headers=bearer("yfd_phone"))      # full access is not enough
+            self.assertEqual(r.status_code, 403, r.text)
+            self.assertIn("administrator", r.json()["detail"])
+            self.assertEqual(self.c.get("/api/guest", headers=bearer("yfd_phone")).status_code, 403)
+            r = self.c.post(f"/api/guest/{req['id']}/allow", json={}, headers=bearer("yfd_admin"))
             self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(self.c.delete(f"/api/guest/keys/{r.json()['gid']}", headers=bearer("yfd_admin")).status_code, 200)
         finally:
-            app.TOKEN_CHECKS[:] = keep
+            app.TOKEN_CHECKS[:], app.ADMIN_CHECKS[:] = keep, admins
+
+    def test_is_admin_request_the_house_token_or_an_admin_check_never_a_guest_key(self):
+        saved = list(app.ADMIN_CHECKS)
+        app.ADMIN_CHECKS[:] = [lambda r: app.request_token(r.headers) in ("yfd_admin", "yg_never")]
+        req = lambda tok: type("R", (), {"headers": bearer(tok)})()            # noqa: E731
+        try:
+            self.assertTrue(app.is_admin_request(req(HOUSE)) and app.is_admin_request(req("yfd_admin")))
+            self.assertFalse(app.is_admin_request(req("yg_never")) or app.is_admin_request(req("nope")))
+        finally:
+            app.ADMIN_CHECKS[:] = saved
 
     def test_rate_limits(self):
         for _ in range(5):
@@ -213,6 +229,17 @@ class Guest(unittest.TestCase):
         with self.c.websocket_connect("/ws?token=" + tok) as ws:
             self.assertNotIn("_meta", json.loads(ws.receive_text()))
 
+    def test_the_notify_hooks_hear_a_request_without_its_secret_and_a_failing_one_stops_nothing(self):
+        heard = []
+        saved = list(app.GUEST_NOTIFY)
+        app.GUEST_NOTIFY[:] = [lambda r: 1 / 0, heard.append]
+        try:
+            req = self.ask()
+        finally:
+            app.GUEST_NOTIFY[:] = saved
+        self.assertEqual(heard, [{"id": req["id"], "code": req["code"], "ua": "Chrome on Windows", "waiting": 1}])
+        self.assertNotIn(req["secret"], json.dumps(heard))
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -233,3 +260,35 @@ def test_a_radar_s_gate_setting_is_no_lock(monkeypatch):
     monkeypatch.setitem(core_app.DEVICES, "radar_t", {"id": "radar_t", "category": "sensor", "controls": [{"code": "max_move_gate"}, {"code": "presence"}]})
     monkeypatch.setitem(core_app.DEVICES, "lock_t", {"id": "lock_t", "category": "switch", "controls": [{"code": "locked"}, {"code": "state"}]})
     assert not core_app._is_lockish("radar_t") and core_app._is_lockish("lock_t")
+
+
+class Flood(unittest.TestCase):
+    def setUp(self):
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0
+        app._guest_cfg["accept"] = True
+        self.told = []
+        self.saved = list(app.GUEST_NOTIFY)
+        app.GUEST_NOTIFY[:] = [self.told.append]
+        self.c = TestClient(app.app)
+
+    def tearDown(self):
+        app.GUEST_NOTIFY[:] = self.saved
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0
+        app._guest_cfg["accept"] = True
+
+    def ask(self, ip):
+        return self.c.post("/api/guest/request", headers={"X-Real-IP": ip})
+
+    def test_a_flood_from_many_addresses_pauses_the_requests_and_tells_the_administrators_once(self):
+        codes = []
+        for i in range(app.GUEST_HOUR_MAX + 5):
+            app._guest_reqs.clear()                     # each one answered: only the hourly cap counts
+            codes.append(self.ask(f"198.51.100.{i}").status_code)
+        assert codes[:app.GUEST_HOUR_MAX] == [200] * app.GUEST_HOUR_MAX and set(codes[app.GUEST_HOUR_MAX:]) == {429}
+        paused = [t for t in self.told if t.get("paused_until")]
+        assert len(paused) == 1 and len(self.told) == app.GUEST_HOUR_MAX + 1
+        assert self.told[1]["waiting"] >= 1
+
+    def test_a_closed_door_takes_no_request_and_tells_nobody(self):
+        app._guest_cfg["accept"] = False
+        assert self.ask("198.51.100.7").status_code == 403 and self.told == []

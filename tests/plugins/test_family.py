@@ -1273,3 +1273,115 @@ def test_the_qr_landing_page_is_served_without_a_token():
     r = TestClient(core.app).get("/plugins/family/static/pair.html")
     assert r.status_code == 200 and "<html" in r.text.lower()
     assert TestClient(core.app).get("/plugins/family/__init__.py").status_code in (401, 404)   # the package's code stays closed
+
+
+def _make_admin(uid="adult", on=True):
+    data = json.loads(me.DB.read_text())
+    data[uid] = {**{k: v for k, v in data[uid].items() if k != "admin"}, **({"admin": True} if on else {})}
+    me.DB.write_text(json.dumps(data))
+    me._cache["mtime"] = None
+
+
+def test_an_entry_request_goes_to_administrators_only_live_first_else_queued_and_tickled(phones, monkeypatch):
+    live, tickles = [], []
+    me._guest_send({"id": "r0", "code": "111111", "ua": "x"})                                        # no administrator: nobody
+    assert me._pending_cmds == {}
+    _make_admin()
+    monkeypatch.setattr(me, "_send_live", lambda uid, msg: live.append((uid, msg)) or True)
+    monkeypatch.setattr(me, "_tickle", lambda uid, high=False: tickles.append((uid, high)) or True)
+    req = {"id": "r1", "code": "123456", "ua": "Chrome on Windows", "waiting": 1, "paused_until": 0}
+    me._guest_send(req)
+    assert live == [("adult", {"cmd": "guest", **req})] and tickles == [] and me._pending_cmds == {}   # the restricted kid never
+    monkeypatch.setattr(me, "_send_live", lambda uid, msg: False)                                       # no live link: queued for the pull
+    me._pending_cmds["adult"] = [{"cmd": "update", "code": 99}]
+    me._guest_send(req)
+    me._guest_send({**req, "code": "654321"})                                                         # the same request again: replaced
+    for i in range(6):
+        me._guest_send({**req, "id": f"x{i}"})
+    q = me._pending_cmds["adult"]
+    assert q[0] == {"cmd": "update", "code": 99} and len(q) == 2                                       # an update is never pushed out
+    assert [c["id"] for c in q[1:]] == ["x5"] and "kid" not in me._pending_cmds                         # one notice: the newest
+    assert tickles == [("adult", True)] * 8
+    c = TestClient(core.app)
+    assert [x["cmd"] for x in c.get("/api/family/me/pull", headers=_phone(FULL)).json()["cmds"]] == ["update", "guest"]
+
+
+def test_an_entry_request_reaches_the_family_plug_in_through_the_core_hook(phones, monkeypatch):
+    sent = []
+    monkeypatch.setattr(me, "_guest_send", sent.append)
+    monkeypatch.setattr(me.threading, "Thread", lambda target, args, **kw: type("T", (), {"start": lambda self: target(*args)})())
+    assert me._guest_notify in core.GUEST_NOTIFY
+    me._guest_notify({"id": "r2", "code": "000001", "ua": "Firefox"})
+    assert sent == [{"id": "r2", "code": "000001", "ua": "Firefox"}]
+
+
+def test_only_an_administrator_phone_answers_entry_requests(phones, monkeypatch):
+    monkeypatch.setattr(me, "_guest_send", lambda req: None)
+    core._guest_reqs.clear(), core._guest_hits.clear()
+    c = TestClient(core.app)
+    try:
+        ask = lambda: c.post("/api/guest/request", headers={"x-real-ip": "203.0.113.9"}).json()["id"]   # noqa: E731
+        rid = ask()
+        for tok in (FULL, PHONE):                                                                  # full access is not enough
+            r = c.post(f"/api/guest/{rid}/allow", headers=_phone(tok), json={"hours": 1, "scope": "view"})
+            assert r.status_code in (401, 403) and c.post(f"/api/guest/{rid}/deny", headers=_phone(tok)).status_code in (401, 403)
+        assert "administrator" in c.post(f"/api/guest/{rid}/allow", headers=_phone(FULL), json={"hours": 1}).json()["detail"]
+        assert c.get("/api/guest", headers=_phone(FULL)).status_code == 403
+        assert c.get("/api/family/me", headers=_phone(FULL)).json()["admin"] is False
+        _make_admin()
+        assert c.get("/api/family/me", headers=_phone(FULL)).json()["admin"] is True
+        assert c.get("/api/guest", headers=_phone(FULL)).json()["pending"][0]["id"] == rid
+        r = c.post(f"/api/guest/{rid}/allow", headers=_phone(FULL), json={"hours": 1, "scope": "view"})
+        assert r.status_code == 200, r.text
+        assert c.delete(f"/api/guest/keys/{r.json()['gid']}", headers=_phone(FULL)).status_code == 200
+        assert c.post(f"/api/guest/{ask()}/deny", headers=_phone(FULL)).status_code == 200
+        data = json.loads(me.DB.read_text())                                                       # the mark without full access counts for nothing
+        data["adult"]["rights"] = {}
+        me.DB.write_text(json.dumps(data)); me._cache["mtime"] = None
+        assert c.post(f"/api/guest/{ask()}/deny", headers=_phone(FULL)).status_code in (401, 403)
+    finally:
+        core._guest_reqs.clear(), core._guest_hits.clear(), core._guest_keys.clear()
+
+
+def test_rights_administrator_forces_full_access_and_the_list_names_the_level(phones):
+    c = TestClient(core.app)
+    r = c.put("/api/family/kid/rights", headers=HOUSE, json={"admin": True, "full": False, "devices": {phones["seen"]: "view"}}).json()
+    assert r["full"] is True and r["admin"] is True and r["devices"] == {}
+    assert c.get("/api/family/kid/rights", headers=HOUSE).json() == {"uid": "kid", "name": "Kid", "full": True, "admin": True, "devices": {}}
+    assert me._is_admin("kid") and me._admin_check(type("R", (), {"headers": {"authorization": "Bearer " + PHONE}, "query_params": {}})())
+    rows = {p["uid"]: p for p in c.get("/api/family", headers=HOUSE).json()}
+    assert (rows["kid"]["admin"], rows["kid"]["full"]) == (True, True) and (rows["adult"]["admin"], rows["adult"]["full"]) == (False, True)
+    r = c.put("/api/family/kid/rights", headers=HOUSE, json={"full": False, "devices": {phones["seen"]: "view"}}).json()
+    assert r["admin"] is False and not me._is_admin("kid") and "admin" not in json.loads(me.DB.read_text())["kid"]
+    assert {p["uid"]: p["devices_n"] for p in c.get("/api/family", headers=HOUSE).json()}["kid"] == 1
+
+
+def test_the_member_row_says_the_level_in_words():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("no node")
+    src = (pathlib.Path(me.__file__).parent / "ui.js").read_text(encoding="utf-8")
+    fn = src[src.index("function memberLevel("):src.index("\n}\n", src.index("function memberLevel(")) + 3]
+    js = ("const i18n = (s, ...a) => s.replace(/\\{(\\d)\\}/g, (_, i) => a[i]);\n" + fn +
+          "console.log(JSON.stringify([memberLevel({server: true, admin: true, full: true}), memberLevel({server: true, full: true}),"
+          " memberLevel({server: true, devices_n: 3}), memberLevel({server: false})]))")
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=20)
+    assert json.loads(out.stdout) == ["administrator", "full access", "limited: 3 devices", ""], out.stderr
+
+
+def test_a_card_write_goes_to_administrators_only_live_first_else_queued_and_tickled(phones, monkeypatch):
+    live, tickles = [], []
+    monkeypatch.setattr(me, "_tickle", lambda uid, high=False: tickles.append((uid, high)) or True)
+    monkeypatch.setattr(me, "_send_live", lambda uid, msg: live.append((uid, msg)) or True)
+    me._nfc_write_send("s0")
+    assert live == [] and me._pending_cmds == {}                                                  # no administrator: nobody
+    _make_admin()
+    me._nfc_write_send("s1")
+    assert live == [("adult", {"cmd": "nfc_write", "sid": "s1"})] and tickles == []
+    monkeypatch.setattr(me, "_send_live", lambda uid, msg: False)
+    me._pending_cmds["adult"] = [{"cmd": "guest", "id": "g"}]
+    me._nfc_write_send("s2")
+    me._nfc_write_send("s3")                                                                      # one session at a time: the newer one
+    assert me._pending_cmds["adult"] == [{"cmd": "guest", "id": "g"}, {"cmd": "nfc_write", "sid": "s3"}] and "kid" not in me._pending_cmds
+    assert tickles == [("adult", True)] * 2
+    assert me._nfc_write_notify in core.NFC_WRITE

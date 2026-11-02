@@ -266,7 +266,10 @@ function stRenderCore(cur, box, tab, quiet){
         <div class="row" id="st-code-row"><span class="rlabel">${i18n('Another browser')}<br><span class="bindcaption">${i18n('A one-time code for the dashboard in another browser of this network (5 minutes). A phone app joins on Family, a tablet panel on Panels.')}</span></span>
           <button class="dlg-btn" id="st-signin">${i18n('Show code')}</button></div><div id="st-signin-out"></div>
       </section>
-      <section id="st-guests"><h3>${i18n('Waiting to come in')}</h3>
+      <section id="st-guests">
+        <div class="row"><span class="rlabel">${i18n('Take entry requests')}<br><span class="bindcaption" id="st-guest-acc-note">${i18n('Off: the guest page says the house takes none, and nobody is notified.')}</span></span>
+          <label class="sw"><input type="checkbox" id="st-guest-acc"> <span>${i18n('On')}</span></label></div>
+        <h3>${i18n('Waiting to come in')}</h3>
         <div class="bindcaption" style="margin-bottom:8px">${i18n('A browser without the front door\'s login asks to come in (/guest). Allow it only when its code is the one you were told.')}</div>
         <div id="st-guest-wait"></div>
         <h3>${i18n('Guests')}</h3><div id="st-guest-keys"></div>
@@ -342,6 +345,15 @@ function stRenderCore(cur, box, tab, quiet){
 const GUEST_RIGHTS = {no_locks: 'Everything except locks and the gate', view: 'Look only'};
 function stGuests(sec){
   const wait = sec.querySelector('#st-guest-wait'), keys = sec.querySelector('#st-guest-keys');
+  const acc = sec.querySelector('#st-guest-acc'), accNote = sec.querySelector('#st-guest-acc-note');
+  api('/api/guest/settings').then(c => {                     // the switch; a flood's pause says until when
+    acc.checked = !!c.accept;
+    if(c.accept && c.paused_until * 1000 > Date.now()) accNote.textContent = i18n('Too many requests came: paused until {0}. Switch off and on to take them again.', hhmm(c.paused_until));
+  }).catch(() => {});
+  acc.onchange = async () => {
+    try { await api('/api/guest/settings', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({accept: acc.checked})}); }
+    catch(e){ acc.checked = !acc.checked; stToast(e.message || String(e)); }
+  };
   let shown = '';
   const draw = async () => {
     if(!sec.isConnected){ clearInterval(timer); return; }

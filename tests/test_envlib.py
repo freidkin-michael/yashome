@@ -239,7 +239,7 @@ class MoveHouse(unittest.TestCase):
 class EnvKeysDocumented(unittest.TestCase):
     """Scans *.py, *.sh, *.yml, *.service, helper/ and yashctl; Makefile, Dockerfiles and *.kts are not read."""
     # read through a variable or a built name, which the patterns cannot see
-    INDIRECT = {"PANELS_OTA_PASSWORD", "PANELS_AP_PASSWORD", "NFC_SDM_META_KEY", "NFC_SDM_FILE_KEY",
+    INDIRECT = {"PANELS_OTA_PASSWORD", "PANELS_AP_PASSWORD", "NFC_SDM_META_KEY", "NFC_SDM_FILE_KEY", "NFC_MASTER_KEY",
                 "HOUSE_WIFI_SSID", "HOUSE_WIFI_PASSWORD", "MQTT_DEVICE_USERS"}
     # GIT_TERMINAL_PROMPT: set for git (helper.py), never read; the env[...] pattern sees assignments too
     SYSTEM = {"APP_ID", "GIT_TERMINAL_PROMPT", "HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "RUNTIME_DIRECTORY", "STATE_DIRECTORY",

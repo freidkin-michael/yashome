@@ -77,6 +77,23 @@ asks for one. Once per phone: Settings -> Apps -> Yash! -> Install unknown apps 
 notifies when that is missing). The house also sends the command by itself, at most once an hour per phone, when a
 phone reports an older version; the app's settings have "Check for an update" (`GET /api/family/me/app`).
 
+## Entry requests on the phone
+
+When a browser asks to come in through the house's guest access (`/guest`), every administrator's phone gets a notification
+"A browser asks to come in" with the code the browser shows and its kind. The house sends `{cmd: guest, id, code, ua}` down the
+phone's live link; without one the command waits for the phone's next pull (at most 5 entry requests are kept per phone) and the
+phone is woken by a high-priority, data-less Firebase message. Any other phone never gets one, and the house refuses its answer
+(403). Tapping the
+notification opens a screen with the code, for how long (1, 2, 8 or 24 hours) and the rights (everything except locks and the
+gate, or look only), and Allow / Deny; the phone answers with its own token (`POST /api/guest/{id}/allow` or `/deny`).
+
+## Writing door cards from a phone
+
+An administrator's phone is the antenna for writing an NTAG 424 DNA door card (plugins/sources/nfc/README.md): when a
+write starts (Settings -> NFC tags, or "Write a card" in the app's menu, shown to administrators only), the house sends
+`{cmd: nfc_write, sid}` the same way as an entry request, to administrators' phones only. The phone relays the card's
+commands; the keys never leave the house.
+
 ## Widgets on the phone
 
 The Yash! app has one home-screen widget, Channel (1x1): a switch, a lock, a dimmer (top third
@@ -202,7 +219,14 @@ new id.
 Full access is "use the house, do not set it up": such a phone reads everything and changes devices,
 rules, favourites, the player and voice, nothing else; the list is in docs/security.md ("A family phone with full access").
 
-Rights: Family phone -> Rights. Full access, or per device hidden / view / control; hidden devices
+Administrator (above Full access in Rights) is full access plus: writes NFC cards and lets guests in. Only an administrator's
+phone hears of a browser that asks to come in and may allow or deny it, list the guests and revoke a guest key; Administrator
+ticks Full access with it. The member row says the level: administrator, full access, or limited: N devices.
+
+Rights: Family phone -> Rights. Three levels: Administrator, Full access, or Limited. Limited lists the devices by room
+(a room's selector sets all its devices, opened it sets one), with locks and the gate apart at the top (hidden until chosen;
+Control asks first) and devices with no room or of the house's machinery (Zigbee repeaters, speakers and microphones) under
+Other; a search field shows with more than 15 devices. Per device: hidden / view / control; hidden devices
 never reach the phone from the house server. A new phone without Full access sees nothing there until
 you give it devices. The away state (the topics of state.json, through Firebase) is the same for
 every paired phone: rights do not cover it.
