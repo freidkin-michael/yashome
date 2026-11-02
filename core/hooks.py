@@ -30,6 +30,7 @@ WIRING_CHANGED: list = []    # fn(entries): the wiring list was stored, or read 
 WIRING_MIGRATORS: list = []  # {name, files, entries: fn() -> [entry]}: a plug-in's old copy, taken over once, then left as it was
 DISCOVERY_IGNORE: list = []  # fn(names: set) -> True: a node that describes itself is not onboarded through HA discovery
 STARTUP_TASKS: list = []     # callables (sync or async) run once the broker is up
+NFC_WRITE: list = []         # fn(sid): the nfc plug-in waits for a card to write: send {"cmd": "nfc_write", "sid"} to admin phones
 _DAYS = "Sun Mon Tue Wed Thu Fri Sat".split()
 _MONTHS = "January February March April May June July August September October November December".split()
 SETTINGS_SECTIONS: dict = {}  # settings.json key -> fn() returning what to persist for the plug-in
