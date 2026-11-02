@@ -1,0 +1,156 @@
+label: Waveshare ESP32-S3 Touch LCD 7in, 800x480
+kind: canvas
+chip: ESP32-S3
+native: { w: 800, h: 480 }
+rotation: 0
+console: USB_SERIAL_JTAG
+lvgl_buffer: 10%
+can: []
+
+yaml: |
+  esp32:
+    board: esp32-s3-devkitc-1
+    flash_size: 16MB
+    framework:
+      type: esp-idf
+      sdkconfig_options:
+        CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG: "y"
+        CONFIG_ESP_CONSOLE_UART_DEFAULT: "n"
+        CONFIG_ESP_CONSOLE_SECONDARY_NONE: "y"
+  psram: { mode: octal, speed: 80MHz }
+  # backlight and touch reset go through the CH422G: keep bus_a at defaults
+  # (a short i2c timeout made it NACK and the touch went dead)
+  ch422g: [{ id: io_ex, i2c_id: bus_a }]
+  output:
+    - platform: gpio
+      id: bl_out
+      pin: { ch422g: io_ex, number: 2, mode: OUTPUT }
+  light:
+    - platform: binary
+      output: bl_out
+      name: Backlight
+      id: backlight
+      restore_mode: ALWAYS_ON
+  display:
+    - platform: rpi_dpi_rgb
+      id: lcd
+      color_order: RGB
+      auto_clear_enabled: false
+      update_interval: never
+      pclk_frequency: 12MHz
+      pclk_inverted: true
+      dimensions: { width: 800, height: 480 }
+      de_pin: 5
+      hsync_pin: 46
+      vsync_pin: 3
+      pclk_pin: 7
+      hsync_front_porch: 8
+      hsync_pulse_width: 4
+      hsync_back_porch: 8
+      vsync_front_porch: 16
+      vsync_pulse_width: 4
+      vsync_back_porch: 16
+      data_pins:
+        red: [1, 2, 42, 41, 40]
+        green: [39, 0, 45, 48, 47, 21]
+        blue: [14, 38, 18, 17, 10]
+
+lists:
+  i2c: |
+    - { id: bus_a, sda: 8, scl: 9, scan: true }
+  interval: |
+    - interval: 60s
+      then:
+        - lambda: |-
+            static uint8_t bad = 0;
+            uint8_t probe = 0;
+            auto err = id(bus_a)->read(0x5D, &probe, 1);
+            if (err != esphome::i2c::ERROR_OK) {
+              bad++;
+              ESP_LOGW("touch_watchdog", "GT911 silent (%d in a row)", bad);
+              if (bad >= 2) {
+                ESP_LOGE("touch_watchdog", "rebooting: touch is dead");
+                id(mqtt_client).publish("panel/${name}/touch_reset", to_string((int) (millis() / 1000)), 0, true);
+                delay(300);
+                App.safe_reboot();
+              }
+            } else if (bad) {
+              ESP_LOGI("touch_watchdog", "GT911 answers again");
+              bad = 0;
+            }
+
+touch: |
+  platform: gt911
+  id: touch
+  i2c_id: bus_a
+  reset_pin: { ch422g: io_ex, number: 1 }
+  update_interval: 16ms
+
+options:
+  # sensors on the UART2 connector as their own bus: a NACK on bus_a starts bus
+  # recovery under the GT911 touch. Probe only likely addresses on a hung bus.
+  i2c_sensors:
+    i2c: |
+      - { id: bus_b, sda: 44, scl: 43, scan: true }
+    sensor: |
+      - platform: veml7700
+        i2c_id: bus_b
+        address: 0x10
+        update_interval: 60s
+        ambient_light:
+          name: "${name} ${t_illuminance}"
+          id: s_lux
+          state_topic: panel/${name}/sensor/lux/state
+          accuracy_decimals: 0
+      - platform: sht4x
+        i2c_id: bus_b
+        address: 0x44
+        update_interval: 60s
+        temperature:
+          name: "${name} ${t_temperature}"
+          id: s_temp
+          state_topic: panel/${name}/sensor/temperature/state
+          accuracy_decimals: 1
+        humidity:
+          name: "${name} ${t_humidity}"
+          id: s_hum
+          state_topic: panel/${name}/sensor/humidity/state
+          accuracy_decimals: 0
+    interval: |
+      - interval: 60s
+        then:
+          - lambda: |-
+              uint8_t b = 0;
+              auto e_veml = id(bus_b)->read(0x10, &b, 1);
+              auto e_sht  = id(bus_b)->read(0x44, &b, 1);
+              std::string found;
+              if (e_veml != esphome::i2c::ERROR_OK && e_sht != esphome::i2c::ERROR_OK) {
+                static const uint8_t CAND[] = {0x10, 0x23, 0x29, 0x38, 0x39,
+                                               0x40, 0x44, 0x45, 0x48, 0x76, 0x77};
+                for (uint8_t a : CAND) {
+                  esphome::App.feed_wdt();
+                  if (id(bus_b)->read(a, &b, 1) == esphome::i2c::ERROR_OK) {
+                    char one[8];
+                    snprintf(one, sizeof(one), "%s0x%02X", found.empty() ? "" : ",", a);
+                    found += one;
+                  }
+                }
+                if (found.empty()) found = "none";
+              } else {
+                found = "-";
+              }
+              char msg[160];
+              snprintf(msg, sizeof(msg), "veml=%d sht=%d scan=%s",
+                       (int) e_veml, (int) e_sht, found.c_str());
+              id(mqtt_client).publish(std::string("panel/${name}/i2c_probe"),
+                                      std::string(msg), 0, true);
+  pir:
+    binary_sensor: |
+      - platform: gpio
+        pin: { number: GPIO6, mode: INPUT_PULLDOWN }
+        name: "${name} ${t_motion}"
+        id: s_motion
+        device_class: motion
+        state_topic: panel/${name}/motion/state
+        publish_initial_state: true
+        filters: [{ delayed_off: 8s }]

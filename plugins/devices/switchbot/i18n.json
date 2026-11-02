@@ -1,0 +1,31 @@
+{
+  "ru": {
+    "SwitchBot": "SwitchBot",
+    "SwitchBot lock": "Замок SwitchBot",
+    "The lock talks Bluetooth only: a bridge on a host near it (see the plug-in README) links it to the house. Add the lock here with the same id as the bridge.": "Замок работает только по Bluetooth: его связывает с домом мост на хосте рядом (см. README плагина). Добавь замок здесь с тем же id, что у моста.",
+    "Add a lock": "Добавить замок",
+    "id, latin letters: front_lock": "id латиницей: front_lock",
+    "name": "имя",
+    "silent: the bridge or the lock": "молчит: мост или замок",
+    "No locks yet.": "Замков пока нет.",
+    "Delete the lock {0} from the house? The bridge keeps running until you stop it.": "Удалить замок {0} из дома? Мост продолжит работать, пока его не остановишь.",
+    "A Bluetooth lock through a bridge on a host near it": "Bluetooth-замок через мост на хосте рядом",
+    "{0}: the bridge or the lock is silent": "{0}: мост или замок молчит",
+    "{0}: battery {1}%": "{0}: батарея {1}%",
+    "Change the lock's batteries": "Замени батарейки замка",
+    "Lock": "Замок",
+    "Locked": "Закрыт",
+    "Unlocked": "Открыт",
+    "State": "Состояние",
+    "Battery": "Батарея",
+    "Door": "Дверь",
+    "Latin letters, the same id the bridge was started with: that is how the house finds the lock.": "Латинские буквы, тот же id, с которым запущен мост: по нему дом находит замок.",
+    "What the dashboard calls the lock.": "Как замок называется на дашборде.",
+    "As written on the lock: Lock Ultra, Lock Pro or Lock.": "Как написано на замке: Lock Ultra, Lock Pro или Lock.",
+    "Adds the lock; it shows as silent until its bridge reports.": "Добавляет замок; он молчит, пока не отзовётся его мост.",
+    "Takes the lock out of the house after a question; the bridge keeps running until you stop it.": "После вопроса убирает замок из дома; мост работает, пока его не остановить.",
+    "Model": "Модель",
+    "Add": "Добавить",
+    "Is the bridge running on its host?": "Работает ли мост на своём хосте?"
+  }
+}

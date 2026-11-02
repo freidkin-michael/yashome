@@ -1,0 +1,28 @@
+{
+  "ru": {
+    "Power": "Питание",
+    "Climate": "Климат",
+    "the room's thermometer is this AC: pick another one for the room first": "термометр комнаты - этот кондиционер: сначала выберите для комнаты другой",
+    "in the room": "в комнате",
+    "Turn on": "Включить",
+    "Turn off": "Выключить",
+    "Switched off": "Выключено",
+    "Temperature": "Температура",
+    "— none —": "— нет —",
+    "Room temperature from": "Температура в комнате от",
+    "there are unsaved changes — press OK": "есть несохранённые изменения — нажми OK",
+    "Appliances": "Техника",
+    "Fan": "Вентилятор",
+    "Mode": "Режим",
+    "More": "Ещё",
+    "Less": "Свернуть",
+    "Switches the AC on or off; filled means it is on.": "Включает и выключает кондиционер; закрашено - включён.",
+    "The temperature the AC keeps: it is sent when the slider is let go.": "Температура, которую держит кондиционер: отправляется, когда отпускаешь ползунок.",
+    "How hard the AC blows; the lit button is its speed now.": "Сила обдува; подсвечена текущая скорость.",
+    "Cool, heat, dry, fan only and what else the AC has; the lit button is its mode now.": "Охлаждение, обогрев, осушение, только вентилятор и что ещё есть у кондиционера; подсвечен текущий режим.",
+    "On a phone the fan and mode rows are folded: this opens them.": "На телефоне ряды обдува и режима свёрнуты: эта кнопка их раскрывает.",
+    "A thermometer of the house: its reading is shown as \"in the room\" on the card. Saved with OK; none: no reading.": "Термометр дома: его показание выводится на карточке как «в комнате». Сохраняется по OK; «нет» - без показания.",
+    "AC window": "Окно кондиционера",
+    "The room's thermometer": "Термометр комнаты"
+  }
+}

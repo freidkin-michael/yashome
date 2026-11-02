@@ -1,0 +1,21 @@
+{
+  "ru": {
+    "Presence": "Кто дома",
+    "At home": "Дома",
+    "Phones unseen for days": "Телефоны не видны несколько дней",
+    "Days unseen": "Дней не видны",
+    "Event": "Событие",
+    "presence: no link": "присутствие: нет связи",
+    "presence: no phone seen for {0} days": "присутствие: телефоны не видны уже {0} дн.",
+    "gesture:arrival": "приход",
+    "gesture:departure": "уход",
+    "no report from the host piece yet": "от службы на хосте ещё нет отчёта",
+    "the host piece is silent for {0} min": "служба на хосте молчит {0} мин",
+    "Who is home": "Кто дома",
+    "At home: someone is in": "Дома: кто-то есть",
+    "At home: nobody": "Дома: никого",
+    "No phone seen for a while": "Давно не видно телефонов",
+    "Install and start the host piece (the plug-in's README)": "Установите и запустите часть на хосте (README плагина)",
+    "Is the host piece running on its host?": "Работает ли часть на своём хосте?"
+  }
+}

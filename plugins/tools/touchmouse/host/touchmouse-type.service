@@ -1,0 +1,17 @@
+[Unit]
+Description=Yashome touchmouse typing helper (127.0.0.1 -> the screen keyboard's D-Bus Type)
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/lib/yashome/touchmouse-type.py
+Restart=always
+RestartSec=3
+# the session's own D-Bus only: loopback in, no files, no new privileges
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=default.target

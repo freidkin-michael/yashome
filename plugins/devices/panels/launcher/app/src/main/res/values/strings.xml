@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Home Panel</string>
+    <string name="settings_title">Panel settings</string>
+    <string name="default_name">Panel %1$s</string>
+
+    <string name="pair_waiting">waiting for an invitation\nturn pairing on in the dashboard</string>
+    <string name="pair_again">pairing\nturn it on in the dashboard</string>
+    <string name="pair_server">server %1$s\nconfirm the code in the dashboard</string>
+    <string name="pair_port_busy">port %1$d is busy: %2$s</string>
+    <string name="pair_bound">panel \"%1$s\" is bound</string>
+
+    <string name="wait_server">server %1$s does not answer</string>
+    <string name="wait_net">waiting for the network: %1$s</string>
+
+    <string name="link_airplane">airplane mode is on</string>
+    <string name="link_wifi_off">Wi-Fi is off</string>
+    <string name="link_wifi_refused">Wi-Fi refuses to connect: password or security type</string>
+    <string name="link_wifi_connecting">Wi-Fi is connecting...</string>
+    <string name="link_no_network">Wi-Fi does not see the network</string>
+    <string name="link_no_dhcp">Wi-Fi is up, no address (DHCP)</string>
+
+    <string name="set_device_name">Device name</string>
+    <string name="set_server">Server address</string>
+    <string name="set_token">Token</string>
+    <string name="set_panel">Panel name</string>
+    <string name="set_save">Save and open the panel</string>
+    <string name="set_reload">Reload the panel</string>
+    <string name="set_reset">Reset pairing</string>
+    <string name="set_passport">Show the passport</string>
+    <string name="set_android">Android system settings</string>
+    <string name="set_reset_done">Pairing reset, the code is new</string>
+    <string name="set_info">id: %1$s\ncode: %2$s\nip: %3$s\nlauncher version: %4$s</string>
+
+    <string name="cam_none">no camera</string>
+    <string name="cam_error">camera: %1$s</string>
+    <string name="cam_no_frame">no frame came (cam=%1$d want=%2$d)</string>
+</resources>

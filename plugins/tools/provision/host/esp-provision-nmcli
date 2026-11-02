@@ -1,0 +1,159 @@
+#!/usr/bin/python3 -I
+"""Root-owned nmcli gate of the provision host relay: its sudoers line allows only this file, which runs
+only: dev wifi rescan|list ifname IF; dev wifi connect SSID [bssid MAC] [secured] ifname IF name
+yashome-provision (autoconnect no; "secured": the key is the first line of stdin, handed to nmcli in a
+0600 passwd-file, never in argv); con up|down|delete id yashome-provision; con up id NAME (a saved Wi-Fi
+profile of IF or of no interface, to restore the card). IF must be a Wi-Fi device, and PROVISION_WIFI_IF
+of /etc/yashome/provision.env when set there. Anything else: exit 2."""
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+NMCLI = "/usr/bin/nmcli"
+CON = "yashome-provision"
+ENV_FILE = "/etc/yashome/provision.env"
+IF_RE = re.compile(r"[A-Za-z0-9_.-]{1,15}")
+MAC_RE = re.compile(r"[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}")
+
+
+def refuse(why):
+    print(f"esp-provision-nmcli: refused: {why}", file=sys.stderr)
+    sys.exit(2)
+
+
+def nm(*args, check_out=False):
+    p = subprocess.run([NMCLI, *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if check_out:
+        return p.stdout
+    sys.stdout.write(p.stdout)
+    sys.stderr.write(p.stderr)
+    return p.returncode
+
+
+def terse_split(line):
+    """One `nmcli -t` line into its fields (\\: is a colon inside a field, \\\\ a backslash)."""
+    out, cur, esc = [], "", False
+    for ch in line:
+        if esc:
+            cur, esc = cur + ch, False
+        elif ch == "\\":
+            esc = True
+        elif ch == ":":
+            out, cur = out + [cur], ""
+        else:
+            cur += ch
+    return out + [cur]
+
+
+def pinned_if():
+    try:
+        with open(ENV_FILE) as f:
+            for line in f:
+                k, _, v = line.strip().partition("=")
+                if k == "PROVISION_WIFI_IF":
+                    return v.strip().strip("\"'")
+    except OSError:
+        pass
+    return ""
+
+
+def wifi_devs():
+    rows = [terse_split(x) for x in nm("-t", "-f", "DEVICE,TYPE", "dev", check_out=True).splitlines()]
+    return [r[0] for r in rows if len(r) == 2 and r[1] == "wifi"]
+
+
+def wifi_if(dev):
+    if not IF_RE.fullmatch(dev) or dev.startswith("-"):
+        refuse("interface name")
+    pin = pinned_if()
+    if pin and dev != pin:
+        refuse(f"interface {dev} is not PROVISION_WIFI_IF")
+    if dev not in wifi_devs():
+        refuse(f"{dev} is not a Wi-Fi device")
+    return dev
+
+
+def restorable(name):
+    """A saved profile of type 802-11-wireless bound to the pinned card (any Wi-Fi card when none is
+    pinned) or to no interface: the only kind `con up id NAME` may bring up."""
+    if not name or name.startswith("-"):
+        return False
+    out = nm("-t", "-f", "connection.type,connection.interface-name", "con", "show", "id", name, check_out=True)
+    f = dict(line.split(":", 1) for line in out.splitlines() if ":" in line)
+    if f.get("connection.type") != "802-11-wireless":
+        return False
+    iface, pin = f.get("connection.interface-name", "").strip(), pinned_if()
+    if iface in ("", "--"):
+        return True
+    return iface == pin if pin else iface in wifi_devs()
+
+
+def saved_names():
+    return {terse_split(x)[0] for x in nm("-t", "-f", "NAME", "con", "show", check_out=True).splitlines() if x}
+
+
+def read_psk(stream):
+    psk = stream.readline().rstrip("\n")
+    if not (8 <= len(psk) <= 63 and psk.isascii() and psk.isprintable()):
+        refuse("the key on stdin: 8-63 printable ASCII characters")
+    return psk
+
+
+def connect(rest, stdin=sys.stdin):
+    """SSID [bssid MAC] [secured] ifname IF name yashome-provision; secured: the key on stdin"""
+    if len(rest) < 5 or rest[-4:-2] != ["ifname", rest[-3]] or rest[-2:] != ["name", CON]:
+        refuse("connect: SSID [bssid MAC] [secured] ifname IF name " + CON)
+    ssid, opts, dev = rest[0], list(rest[1:-4]), wifi_if(rest[-3])
+    if not (0 < len(ssid.encode()) <= 32 and ssid.isprintable()):
+        refuse("ssid")
+    bssid, psk = "", None
+    while opts:
+        k = opts.pop(0)
+        if k == "bssid" and not bssid and opts and MAC_RE.fullmatch(opts[0]):
+            bssid = opts.pop(0).upper()
+        elif k == "secured" and psk is None:
+            psk = read_psk(stdin)
+        else:
+            refuse(f"connect option {k[:16]!r}")
+    if CON in saved_names():
+        nm("con", "delete", "id", CON)
+    args = ["con", "add", "type", "wifi", "ifname", dev, "con-name", CON, "autoconnect", "no", "ssid", ssid,
+            "ipv6.method", "ignore", "ipv4.never-default", "yes"]      # the setup AP is no way out: no default route through it
+    if bssid:
+        args += ["802-11-wireless.bssid", bssid]
+    if psk is not None:   # psk-flags 2: not saved, asked for at activation (from the passwd-file)
+        args += ["wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk-flags", "2"]
+    rc = nm(*args)
+    if rc or psk is None:
+        return rc if rc else nm("--wait", "45", "con", "up", "id", CON)
+    if "\\" in psk or psk != psk.strip():               # NM unescapes "\\" and trims the ends in a passwd-file
+        refuse("a password with a backslash or edge spaces")
+    fd, path = tempfile.mkstemp(prefix="esp-provision-")      # mode 0600, root's
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(f"802-11-wireless-security.psk:{psk}\n")
+        return nm("--wait", "45", "con", "up", "id", CON, "passwd-file", path)
+    finally:
+        os.unlink(path)
+
+
+def main(a):
+    if a[:3] == ["dev", "wifi", "rescan"] and len(a) == 5 and a[3] == "ifname":
+        return nm("dev", "wifi", "rescan", "ifname", wifi_if(a[4]))
+    if a[:3] == ["dev", "wifi", "list"] and len(a) == 5 and a[3] == "ifname":
+        return nm("-t", "-f", "SSID,BSSID,SIGNAL,SECURITY", "dev", "wifi", "list", "ifname", wifi_if(a[4]))
+    if a[:3] == ["dev", "wifi", "connect"]:
+        return connect(a[3:])
+    if len(a) == 4 and a[0] == "con" and a[2] == "id":
+        verb, name = a[1], a[3]
+        if verb in ("up", "down", "delete") and name == CON:
+            return nm("--wait", "45", "con", verb, "id", CON)
+        if verb == "up" and restorable(name):
+            return nm("--wait", "60", "con", "up", "id", name)
+    refuse(" ".join(x[:24] for x in a[:4]))
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]) or 0)

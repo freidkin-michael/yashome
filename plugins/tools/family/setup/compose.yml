@@ -1,0 +1,28 @@
+# family-bridge, merged into the core's compose through COMPOSE_FILE (paths relative to the checkout).
+# Runs only with COMPOSE_PROFILES containing family: a Firebase key in place.
+services:
+  family-bridge:
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here or pinned: an updater must not pull or replace it
+    build:
+      context: plugins/tools/family
+      dockerfile: bridge/Dockerfile
+    restart: unless-stopped
+    init: true                  # tini as PID 1 hands SIGTERM to python: no 10 s wait, no exit 137 at an update
+    stop_grace_period: 3s
+    profiles: ["family"]
+    user: "${PUID:-1000}:${PGID:-1000}"
+    mem_limit: 256m
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_USER=${MQTT_FAMILY_USER:-family}
+      - MQTT_PASS=${MQTT_FAMILY_PASSWORD:-}
+      - BRIDGE_KEY=${FAMILY_BRIDGE_KEY:-}
+      - YASH_FB_KEY=/secrets/firebase-key.json
+      - YASH_FB_DB=${FAMILY_FIREBASE_DB:-}
+      - YASH_STATE_CFG=/house/state.json
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ${FAMILY_FIREBASE_KEY:-/dev/null}:/secrets/firebase-key.json:ro
+      - ${HOUSE_DIR:-.}/plugin-data/family:/house:ro

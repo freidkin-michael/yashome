@@ -1,0 +1,20 @@
+# The house's player on this computer (plug-in player, installed by the computer's role "player"): mpv waiting with no
+# window, driven by ctl.py through its IPC socket. A user unit of the graphical session: mpv draws on this user's screen.
+# The socket's folder is the unit's own runtime directory (made by systemd, owned by this user).
+[Unit]
+Description=Yashome player: mpv on this computer's screen, driven by the house
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+RuntimeDirectory=yashome-player
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/mpv --idle=yes --force-window=no --fullscreen --keep-open=no --no-terminal \
+  --input-ipc-server=%t/yashome-player/mpv.sock --hwdec=auto-safe --ytdl=no \
+  --cache=yes --demuxer-max-bytes=300MiB --demuxer-readahead-secs=60 \
+  --osd-level=1 --osd-font-size=40 --sub-auto=fuzzy
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,4 @@
+app/
+static/
+setup/
+**/__pycache__/

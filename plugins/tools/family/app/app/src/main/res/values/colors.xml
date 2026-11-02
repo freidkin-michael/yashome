@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Yashome palette, light (branding/README.md) -->
+    <color name="brand_fill">#177A75</color>
+    <color name="brand_primary">#177A75</color>
+    <color name="brand_sun">#F5B642</color>
+    <color name="brand_text">#1E2B30</color>
+    <color name="brand_muted">#5F6F74</color>
+    <color name="brand_surface">#F3F7F7</color>
+    <color name="brand_background">#FFFFFF</color>
+    <color name="brand_bar">#177A75</color>
+    <color name="launcher_bg">#177A75</color>
+    <color name="rm_key">#E2EBEB</color>
+    <color name="ac_off_fill">#B5453F</color>
+</resources>

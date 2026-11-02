@@ -1,0 +1,33 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "state": {
+      ".read": "auth != null && root.child('revoked').child(auth.uid).val() !== true",
+      ".write": false
+    },
+    "devices": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && root.child('revoked').child($uid).val() !== true",
+        ".write": "auth != null && auth.uid === $uid && root.child('revoked').child($uid).val() !== true",
+        "token": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 400"
+        },
+        "ack": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "revoked": {
+      ".read": false,
+      ".write": false
+    },
+    "i18n": {
+      ".read": "auth != null",
+      ".write": false
+    }
+  }
+}

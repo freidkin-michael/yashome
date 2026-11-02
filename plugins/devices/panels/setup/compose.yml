@@ -1,0 +1,19 @@
+# panels-discover, merged into the core's compose through COMPOSE_FILE (paths relative to the checkout).
+# It needs the host's network: a broadcast from the dashboard's bridge network reaches no tablet.
+services:
+  panels-discover:
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here or pinned: an updater must not pull or replace it
+    image: python:3.12-alpine
+    restart: unless-stopped
+    network_mode: host
+    user: "${PUID:-1000}:${PGID:-1000}"
+    mem_limit: 64m
+    command: ["python3", "-u", "/discover/discoverd.py"]
+    environment:
+      - STATE_DIR=/state
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-8765}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./plugins/devices/panels/discover:/discover:ro
+      - ${HOUSE_DIR:-.}/plugin-state/panels:/state

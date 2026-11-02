@@ -1,0 +1,27 @@
+# kind: list = no touch, no canvas: the layout is an ordered list of 1..4 rows
+# (toggle / dimmer / climate) driven by a rotary encoder; see firmware/gen_knob.py
+label: VIEWE UEDX24240013-MD50E knob, ESP32-C3, round 240x240
+kind: list
+chip: ESP32-C3
+native: { w: 240, h: 240 }
+rotation: 0
+console: USB_SERIAL_JTAG
+lvgl_buffer: 25%
+can: [toggle, dimmer, climate]
+
+board: esp32-c3-devkitm-1
+# body of the one display item (ESPHome text, verbatim); must have id lcd
+display: |
+  platform: ili9xxx
+  id: lcd
+  model: GC9A01A
+  cs_pin: GPIO10
+  dc_pin: GPIO4
+  reset_pin: GPIO2
+  invert_colors: true
+  auto_clear_enabled: false
+  update_interval: never
+spi: { clk: GPIO1, mosi: GPIO0 }
+backlight: { pin: GPIO8, inverted: true }
+encoder: { a: GPIO6, b: GPIO7, resolution: 1 }
+button: { pin: GPIO9, inverted: true }

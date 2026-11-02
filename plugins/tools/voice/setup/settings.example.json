@@ -1,0 +1,7 @@
+{
+  "voice": {
+    "satellites": [
+      {"id": "kitchen", "name": "Kitchen", "node": "kitchen-sat", "mic": true, "player": true, "room": "kitchen", "peer": "192.0.2.50", "voice": "ru-xenia"}
+    ]
+  }
+}

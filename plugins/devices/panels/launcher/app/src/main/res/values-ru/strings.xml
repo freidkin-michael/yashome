@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Панель</string>
+    <string name="settings_title">Настройки панели</string>
+    <string name="default_name">Панель %1$s</string>
+
+    <string name="pair_waiting">жду приглашения\nвключи сопряжение на дашборде</string>
+    <string name="pair_again">сопряжение\nвключи его на дашборде</string>
+    <string name="pair_server">сервер %1$s\nподтверди код на дашборде</string>
+    <string name="pair_port_busy">порт %1$d занят: %2$s</string>
+    <string name="pair_bound">панель «%1$s» привязана</string>
+
+    <string name="wait_server">сервер %1$s не отвечает</string>
+    <string name="wait_net">жду сеть: %1$s</string>
+
+    <string name="link_airplane">включён авиарежим</string>
+    <string name="link_wifi_off">Wi-Fi выключен</string>
+    <string name="link_wifi_refused">Wi-Fi не пускает: пароль или тип защиты</string>
+    <string name="link_wifi_connecting">Wi-Fi подключается…</string>
+    <string name="link_no_network">Wi-Fi не видит сеть</string>
+    <string name="link_no_dhcp">Wi-Fi есть, нет адреса (DHCP)</string>
+
+    <string name="set_device_name">Имя устройства</string>
+    <string name="set_server">Адрес сервера</string>
+    <string name="set_token">Токен</string>
+    <string name="set_panel">Имя панели</string>
+    <string name="set_save">Сохранить и открыть панель</string>
+    <string name="set_reload">Перезагрузить панель</string>
+    <string name="set_reset">Сбросить сопряжение</string>
+    <string name="set_passport">Показать паспорт</string>
+    <string name="set_android">Системные настройки Android</string>
+    <string name="set_reset_done">Сопряжение сброшено, код новый</string>
+    <string name="set_info">id: %1$s\nкод: %2$s\nip: %3$s\nверсия лаунчера: %4$s</string>
+
+    <string name="cam_none">нет камеры</string>
+    <string name="cam_error">камера: %1$s</string>
+    <string name="cam_no_frame">кадр не пришёл (cam=%1$d want=%2$d)</string>
+</resources>

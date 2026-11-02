@@ -1,0 +1,5 @@
+{
+  "touchmouse": [
+    {"id": "media-pc", "name": "Media PC", "host": "192.0.2.30", "port": 7709, "os": "linux"}
+  ]
+}

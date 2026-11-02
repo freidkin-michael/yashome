@@ -1,0 +1,15 @@
+{
+  "ru": {
+    "Cameras": "Камеры",
+    "Loading cameras…": "Загружаю камеры…",
+    "— no cameras —": "— нет камер —",
+    "rear camera": "задняя камера",
+    "front camera": "фронтальная камера",
+    "No picture: the phone is off, its screen is locked, or the camera is in use.": "Нет картинки: телефон выключен, экран заблокирован или камера занята.",
+    "frame at": "кадр в",
+    "The camera gives a black frame: the phone's screen is off or the lens is covered.": "Камера даёт чёрный кадр: экран телефона выключен или объектив закрыт.",
+    "Every camera gives a black frame now: the phones' screens are off.": "Все камеры сейчас дают чёрный кадр: экраны телефонов выключены.",
+    "Checking the camera…": "Проверяю камеру…",
+    "last frame": "последний кадр"
+  }
+}

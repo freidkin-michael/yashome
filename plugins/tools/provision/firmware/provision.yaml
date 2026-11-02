@@ -1,0 +1,234 @@
+# Relay package of the Yashome provision plug-in: this node can hand a lost neighbour (in its own
+# "<name>-setup" AP) the Wi-Fi this node runs on. Needs base.yaml (or your own wifi/mqtt blocks) and
+# provision_scan.h in <config dir>/provision/. Bus (absolute topics, outside topic_prefix):
+#   provision/scan -> scan; provision/seen/${name} <- report (retained; also once per MQTT connect)
+#   provision/${name}/do "ap|host|METHOD|path|ssid_field|psk_field|bssid|id|ap_password" -> relay
+#   provision/${name}/result <- {"node","ap","id","ok","busy","detail"}: busy at once, else once back
+# An empty ap_password for a "*-setup" AP = this node's own ap_password (secrets.yaml, the house key).
+substitutions:
+  prov_own_ap_key: !secret ap_password
+
+esphome:
+  includes:
+    - provision/provision_scan.h
+
+http_request:
+  id: prov_http
+  timeout: 8s
+
+globals:
+  - id: prov_ap
+    type: std::string
+    restore_value: no
+  - id: prov_ap_psk
+    type: std::string
+    restore_value: no
+  # a raw string literal: the key may hold quotes or backslashes
+  - id: prov_own_key
+    type: std::string
+    restore_value: no
+    initial_value: 'std::string(R"PROVKEY(${prov_own_ap_key})PROVKEY")'
+  - id: prov_bssid
+    type: std::string
+    restore_value: no
+  - id: prov_id
+    type: std::string
+    restore_value: no
+  - id: prov_err
+    type: std::string
+    restore_value: no
+  - id: prov_host
+    type: std::string
+    restore_value: no
+    initial_value: '"192.168.4.1"'
+  - id: prov_path
+    type: std::string
+    restore_value: no
+    initial_value: '"/wifisave"'
+  - id: prov_sf
+    type: std::string
+    restore_value: no
+    initial_value: '"ssid"'
+  - id: prov_pf
+    type: std::string
+    restore_value: no
+    initial_value: '"psk"'
+  - id: prov_get
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: prov_ssid_live
+    type: std::string
+    restore_value: no
+  - id: prov_psk_live
+    type: std::string
+    restore_value: no
+  - id: prov_detail
+    type: std::string
+    restore_value: no
+  - id: prov_ok
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: prov_pending
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+script:
+  - id: prov_scan
+    mode: restart
+    then:
+      - lambda: 'home_provision::scan_start();'
+      - delay: 3500ms          # an all-channel active scan takes about 2.5 s
+      - mqtt.publish:
+          topic: provision/seen/${name}
+          retain: true
+          payload: !lambda 'return home_provision::scan_report("${name}", "-setup");'
+
+  - id: prov_relay
+    mode: single     # a second `do` meanwhile is answered "busy" by the on_message below
+    then:
+      - globals.set:
+          id: prov_ok
+          value: "false"
+      - globals.set:
+          id: prov_detail
+          value: '"this node does not know the Wi-Fi it runs on"'
+      # the credentials this node runs on NOW, before wifi.configure replaces them
+      - if:
+          condition:
+            lambda: 'return home_provision::capture_creds(id(prov_ssid_live), id(prov_psk_live));'
+          then:
+            # wifi.configure does not block; the association is awaited by the connected SSID below
+            - wifi.configure:
+                ssid: !lambda 'return id(prov_ap);'
+                password: !lambda 'return id(prov_ap_psk);'
+                save: false
+                timeout: 40s
+            - wait_until:
+                condition:
+                  lambda: 'return home_provision::on_ssid(id(prov_ap));'
+                timeout: 40s
+            - if:
+                condition:
+                  lambda: 'return home_provision::on_ssid(id(prov_ap)) && !home_provision::on_bssid(id(prov_bssid));'
+                then:
+                  - lambda: |-
+                      id(prov_detail) = "joined " + id(prov_ap) + " at " + home_provision::current_bssid() +
+                                        ", not " + id(prov_bssid) + ": refusing (another AP with this name)";
+            - if:
+                condition:
+                  lambda: 'return home_provision::on_ssid(id(prov_ap)) && home_provision::on_bssid(id(prov_bssid));'
+                then:
+                  - delay: 2s        # the portal needs a moment after DHCP
+                  - globals.set:
+                      id: prov_detail
+                      value: !lambda 'return "the portal " + id(prov_host) + " did not answer";'
+                  - if:
+                      condition:
+                        lambda: 'return id(prov_get);'
+                      then:
+                        - http_request.get:
+                            url: !lambda |-
+                              std::string sep = id(prov_path).find('?') == std::string::npos ? "?" : "&";
+                              return "http://" + id(prov_host) + id(prov_path) + sep +
+                                     id(prov_sf) + "=" + home_provision::urlenc(id(prov_ssid_live)) + "&" +
+                                     id(prov_pf) + "=" + home_provision::urlenc(id(prov_psk_live));
+                            on_response:
+                              - lambda: 'home_provision::judge(response->status_code, id(prov_ok), id(prov_detail));'
+                      else:
+                        - http_request.post:
+                            url: !lambda 'return "http://" + id(prov_host) + id(prov_path);'
+                            request_headers:
+                              Content-Type: application/x-www-form-urlencoded
+                            body: !lambda |-
+                              return id(prov_sf) + "=" + home_provision::urlenc(id(prov_ssid_live)) + "&" +
+                                     id(prov_pf) + "=" + home_provision::urlenc(id(prov_psk_live));
+                            on_response:
+                              - lambda: 'home_provision::judge(response->status_code, id(prov_ok), id(prov_detail));'
+            - if:
+                condition:
+                  lambda: 'return !home_provision::on_ssid(id(prov_ap));'
+                then:
+                  - lambda: |-
+                      std::string cur = home_provision::current_ssid();
+                      id(prov_detail) = "could not join " + id(prov_ap) + " in 40 s" +
+                                        (cur.empty() ? std::string(", no network") : ", still on " + cur);
+            # back to the network it came from (not the compiled one: after a password change they differ);
+            # not by wifi.configure: its timeout would save the setup AP as this node's Wi-Fi
+            - lambda: |-
+                id(prov_ap_psk).clear();
+                home_provision::go_home();
+      - globals.set:
+          id: prov_pending
+          value: "true"
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 30s
+      - if:
+          condition:
+            lambda: 'return !esphome::wifi::global_wifi_component->is_connected() || home_provision::on_ssid(id(prov_ap));'
+          then:
+            # nothing was saved: after the reboot the node runs on what is in its flash, as before
+            - lambda: |-
+                ESP_LOGW("provision", "not back on the network, rebooting");
+                App.safe_reboot();
+
+mqtt:
+  on_connect:
+    - script.execute: prov_scan
+  on_message:
+    - topic: provision/scan
+      then:
+        - script.execute: prov_scan
+    - topic: provision/${name}/do
+      then:
+        - if:
+            condition:
+              script.is_running: prov_relay
+            then:
+              # mode single would drop it silently: say so, with this command's id
+              - mqtt.publish:
+                  topic: provision/${name}/result
+                  payload: !lambda |-
+                    auto s = home_provision::parse_do(x);
+                    return home_provision::result_json("${name}", s.ap, s.id, false, true, "busy with another relay");
+            else:
+              - lambda: |-
+                  auto s = home_provision::parse_do(x);
+                  id(prov_ap) = s.ap; id(prov_ap_psk) = s.ap_psk; id(prov_host) = s.host; id(prov_err) = s.error;
+                  id(prov_path) = s.path; id(prov_sf) = s.ssid_field; id(prov_pf) = s.psk_field; id(prov_get) = s.get;
+                  id(prov_bssid) = s.bssid; id(prov_id) = s.id;
+                  if (id(prov_err).empty())
+                    id(prov_err) = home_provision::pick_key(s.ap, id(prov_own_key), "-setup", id(prov_ap_psk));
+              - if:
+                  condition:
+                    lambda: 'return id(prov_err).empty();'
+                  then:
+                    - script.execute: prov_relay
+                  else:
+                    - mqtt.publish:
+                        topic: provision/${name}/result
+                        payload: !lambda |-
+                          return home_provision::result_json("${name}", id(prov_ap), id(prov_id), false, false, id(prov_err));
+
+interval:
+  # the result is made while the broker is out of reach: published on the first tick after it is back
+  - interval: 2s
+    then:
+      - if:
+          condition:
+            and:
+              - lambda: 'return id(prov_pending);'
+              - mqtt.connected:
+          then:
+            - mqtt.publish:
+                topic: provision/${name}/result
+                payload: !lambda |-
+                  return home_provision::result_json("${name}", id(prov_ap), id(prov_id), id(prov_ok), false,
+                                                     id(prov_detail));
+            - globals.set:
+                id: prov_pending
+                value: "false"

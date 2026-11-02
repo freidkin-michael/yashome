@@ -1,0 +1,74 @@
+label: Open Nextion ONX3248G035 3.5in, 320x480
+kind: canvas
+chip: ESP32-S3
+native: { w: 320, h: 480 }
+rotation: 90
+console: UART0
+lvgl_buffer: 25%
+can: []
+
+yaml: |
+  esp32:
+    board: esp32-s3-devkitc-1
+    flash_size: 16MB
+    framework:
+      type: esp-idf
+  psram: { mode: octal, speed: 80MHz }
+  pcf8574: [{ id: io_ex, i2c_id: bus_a, address: 0x38, pcf8575: false }]
+  spi:
+    clk_pin: 5
+    mosi_pin: 1
+  output:
+    - platform: ledc
+      id: bl_pwm
+      pin: 6
+      frequency: 2000Hz
+  light:
+    - platform: monochromatic
+      output: bl_pwm
+      name: Backlight
+      id: backlight
+      restore_mode: ALWAYS_ON
+      default_transition_length: 0s
+  display:
+    - platform: mipi_spi
+      id: lcd
+      model: ST7796
+      cs_pin: 2
+      dc_pin: 3
+      reset_pin: { pcf8574: io_ex, number: 5 }
+      data_rate: 40MHz
+      auto_clear_enabled: false
+      update_interval: never
+
+lists:
+  i2c: |
+    - { id: bus_a, sda: 8, scl: 7, frequency: 100kHz, scan: true }
+
+# CST8xx is silent on i2c until touched: skip_probe, polled, no touch watchdog
+touch: |
+  platform: cst816
+  id: touch
+  i2c_id: bus_a
+  address: 0x15
+  display: lcd
+  skip_probe: true
+  update_interval: 20ms
+
+options:
+  i2c_sensors:
+    sensor: |
+      - platform: sht4x
+        i2c_id: bus_a
+        address: 0x44
+        update_interval: 60s
+        temperature:
+          name: "${name} ${t_temperature}"
+          id: s_temp
+          state_topic: panel/${name}/sensor/temperature/state
+          accuracy_decimals: 1
+        humidity:
+          name: "${name} ${t_humidity}"
+          id: s_hum
+          state_topic: panel/${name}/sensor/humidity/state
+          accuracy_decimals: 0

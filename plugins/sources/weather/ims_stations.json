@@ -1,0 +1,1605 @@
+{
+ "source": "https://ims.gov.il/en/envista_station_info",
+ "fetched": "2026-10-27",
+ "note": "the active IMS stations; rebuilt by setup/ims_stations.py",
+ "stations": [
+  {
+   "num": 2,
+   "name": "Avne Etan",
+   "lat": 32.817,
+   "lon": 35.763,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 6,
+   "name": "Bet Zayda",
+   "lat": 32.881,
+   "lon": 35.653,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 8,
+   "name": "Zemah",
+   "lat": 32.704,
+   "lon": 35.584,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 10,
+   "name": "Merom Golan Picman",
+   "lat": 33.133,
+   "lon": 35.783,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 11,
+   "name": "Yavneel",
+   "lat": 32.683,
+   "lon": 35.516,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 13,
+   "name": "Tavor Kadoorie",
+   "lat": 32.7,
+   "lon": 35.4,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 16,
+   "name": "Afula Nir Haemeq",
+   "lat": 32.597,
+   "lon": 35.278,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 20,
+   "name": "Qarne Shomeron",
+   "lat": 32.166,
+   "lon": 35.099,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 21,
+   "name": "Ariel",
+   "lat": 32.106,
+   "lon": 35.212,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 22,
+   "name": "Jerusalem Givat Ram",
+   "lat": 31.771,
+   "lon": 35.197,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 23,
+   "name": "Jerusalem Centre",
+   "lat": 31.781,
+   "lon": 35.222,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 24,
+   "name": "Har Harasha",
+   "lat": 31.933,
+   "lon": 35.15,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 25,
+   "name": "Netiv Halamed He",
+   "lat": 31.683,
+   "lon": 34.983,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 28,
+   "name": "Shani",
+   "lat": 31.35,
+   "lon": 35.049,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 29,
+   "name": "Arad",
+   "lat": 31.251,
+   "lon": 35.186,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 30,
+   "name": "Gilgal",
+   "lat": 31.983,
+   "lon": 35.45,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 33,
+   "name": "Hazeva",
+   "lat": 30.51,
+   "lon": 35.14,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 36,
+   "name": "Yotvata",
+   "lat": 29.886,
+   "lon": 35.078,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 41,
+   "name": "Haifa Refineries",
+   "lat": 32.799,
+   "lon": 35.049,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 42,
+   "name": "Haifa University",
+   "lat": 32.762,
+   "lon": 35.021,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 43,
+   "name": "Haifa Technion",
+   "lat": 32.766,
+   "lon": 35.016,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 44,
+   "name": "En Karmel",
+   "lat": 32.682,
+   "lon": 34.96,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 45,
+   "name": "Zikhron Yaaqov",
+   "lat": 32.566,
+   "lon": 34.95,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 46,
+   "name": "Hadera Port",
+   "lat": 32.474,
+   "lon": 34.883,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 54,
+   "name": "Bet Dagan",
+   "lat": 32.009,
+   "lon": 34.814,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 58,
+   "name": "Besor Farm",
+   "lat": 31.273,
+   "lon": 34.389,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 62,
+   "name": "Zefat Har Kenaan",
+   "lat": 32.982,
+   "lon": 35.507,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 64,
+   "name": "Elat",
+   "lat": 29.553,
+   "lon": 34.954,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 65,
+   "name": "Sedom",
+   "lat": 31.032,
+   "lon": 35.391,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 67,
+   "name": "En Hashofet",
+   "lat": 32.633,
+   "lon": 35.099,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 73,
+   "name": "Elon",
+   "lat": 33.066,
+   "lon": 35.217,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 74,
+   "name": "Qevuzat Yavne",
+   "lat": 31.816,
+   "lon": 34.7,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 75,
+   "name": "Beit Jimal",
+   "lat": 31.716,
+   "lon": 34.966,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 77,
+   "name": "Rosh Zurim",
+   "lat": 31.665,
+   "lon": 35.124,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 78,
+   "name": "Afeq",
+   "lat": 32.848,
+   "lon": 35.112,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 79,
+   "name": "Dorot",
+   "lat": 31.5,
+   "lon": 34.633,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 82,
+   "name": "Negba",
+   "lat": 31.658,
+   "lon": 34.681,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 85,
+   "name": "Bet Dagan Rad",
+   "lat": 32.009,
+   "lon": 34.814,
+   "temp": false,
+   "rad": true,
+   "rain": false,
+   "at_of": 54
+  },
+  {
+   "num": 90,
+   "name": "Itamar",
+   "lat": 32.166,
+   "lon": 35.349,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 98,
+   "name": "Sede Boqer",
+   "lat": 30.871,
+   "lon": 34.796,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 99,
+   "name": "Deir Hanna",
+   "lat": 32.863,
+   "lon": 35.374,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 106,
+   "name": "Rosh Haniqra",
+   "lat": 33.081,
+   "lon": 35.107,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 107,
+   "name": "En Hahoresh",
+   "lat": 32.388,
+   "lon": 34.938,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 112,
+   "name": "Zomet Hanegev",
+   "lat": 31.066,
+   "lon": 34.849,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 115,
+   "name": "Lev Kineret",
+   "lat": 32.816,
+   "lon": 35.599,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 121,
+   "name": "Hafez Hayyim",
+   "lat": 31.793,
+   "lon": 34.804,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 123,
+   "name": "Ammiad",
+   "lat": 32.916,
+   "lon": 35.533,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 124,
+   "name": "Ashdod Port",
+   "lat": 31.835,
+   "lon": 34.638,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 178,
+   "name": "Tel Aviv Coast",
+   "lat": 32.059,
+   "lon": 34.759,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 186,
+   "name": "Newe Yaar",
+   "lat": 32.709,
+   "lon": 35.179,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 188,
+   "name": "Zova",
+   "lat": 31.47,
+   "lon": 35.07,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 202,
+   "name": "Kefar Blum",
+   "lat": 33.173,
+   "lon": 35.613,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 205,
+   "name": "Eshhar",
+   "lat": 32.883,
+   "lon": 35.299,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 206,
+   "name": "Eden Farm",
+   "lat": 32.47,
+   "lon": 35.489,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 207,
+   "name": "Paran",
+   "lat": 30.367,
+   "lon": 35.148,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 208,
+   "name": "Ashqelon Port",
+   "lat": 31.633,
+   "lon": 34.516,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 210,
+   "name": "Metzoke Dragot",
+   "lat": 31.583,
+   "lon": 35.383,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 212,
+   "name": "Bet Dagan_1m",
+   "lat": 32.009,
+   "lon": 34.814,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 54
+  },
+  {
+   "num": 218,
+   "name": "Maale Adummim",
+   "lat": 31.773,
+   "lon": 35.296,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 224,
+   "name": "Maale Gilboa",
+   "lat": 32.481,
+   "lon": 35.415,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 227,
+   "name": "Gamla",
+   "lat": 32.907,
+   "lon": 35.748,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 228,
+   "name": "Bet Haarava",
+   "lat": 31.805,
+   "lon": 35.501,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 232,
+   "name": "Neot Smadar",
+   "lat": 30.048,
+   "lon": 35.023,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 233,
+   "name": "Kefar Nahum",
+   "lat": 32.883,
+   "lon": 35.579,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 236,
+   "name": "Gat",
+   "lat": 31.616,
+   "lon": 34.783,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 238,
+   "name": "Zefat Har Kenaan_1m",
+   "lat": 32.982,
+   "lon": 35.507,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 62
+  },
+  {
+   "num": 239,
+   "name": "Elon_1m",
+   "lat": 33.066,
+   "lon": 35.217,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 73
+  },
+  {
+   "num": 240,
+   "name": "Arad_1m",
+   "lat": 31.251,
+   "lon": 35.186,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 29
+  },
+  {
+   "num": 241,
+   "name": "Kefar Giladi",
+   "lat": 33.241,
+   "lon": 35.57,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 242,
+   "name": "Ariel_1m",
+   "lat": 32.106,
+   "lon": 35.212,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 21
+  },
+  {
+   "num": 243,
+   "name": "Ashdod Port_1m",
+   "lat": 31.835,
+   "lon": 34.638,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 124
+  },
+  {
+   "num": 244,
+   "name": "Besor Farm_1m",
+   "lat": 31.273,
+   "lon": 34.389,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 58
+  },
+  {
+   "num": 245,
+   "name": "Dorot_1m",
+   "lat": 31.5,
+   "lon": 34.633,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 79
+  },
+  {
+   "num": 246,
+   "name": "En Hahoresh_1m",
+   "lat": 32.388,
+   "lon": 34.938,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 107
+  },
+  {
+   "num": 247,
+   "name": "Qarne Shomeron_1m",
+   "lat": 32.166,
+   "lon": 35.099,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 20
+  },
+  {
+   "num": 248,
+   "name": "Jerusalem Centre_1m",
+   "lat": 31.781,
+   "lon": 35.222,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 23
+  },
+  {
+   "num": 249,
+   "name": "Jerusalem Givat Ram_1m",
+   "lat": 31.771,
+   "lon": 35.197,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 22
+  },
+  {
+   "num": 250,
+   "name": "Sedom_1m",
+   "lat": 31.032,
+   "lon": 35.391,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 65
+  },
+  {
+   "num": 251,
+   "name": "Sede Boqer_1m",
+   "lat": 30.871,
+   "lon": 34.796,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 98
+  },
+  {
+   "num": 252,
+   "name": "Negba_1m",
+   "lat": 31.658,
+   "lon": 34.681,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 82
+  },
+  {
+   "num": 259,
+   "name": "Nahshon",
+   "lat": 31.834,
+   "lon": 34.961,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 263,
+   "name": "Galed",
+   "lat": 32.556,
+   "lon": 35.0717,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 269,
+   "name": "Harashim",
+   "lat": 32.956,
+   "lon": 35.328,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 271,
+   "name": "Avdat",
+   "lat": 30.8,
+   "lon": 34.77,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 274,
+   "name": "Nizzan",
+   "lat": 31.733,
+   "lon": 34.635,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 275,
+   "name": "Hakfar Hayarok",
+   "lat": 32.1296,
+   "lon": 34.8317,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 276,
+   "name": "Gilgal_1m",
+   "lat": 31.983,
+   "lon": 35.45,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 30
+  },
+  {
+   "num": 277,
+   "name": "Itamar_1m",
+   "lat": 32.166,
+   "lon": 35.349,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 90
+  },
+  {
+   "num": 278,
+   "name": "Har Harasha_1m",
+   "lat": 31.933,
+   "lon": 35.15,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 24
+  },
+  {
+   "num": 279,
+   "name": "Bet Haarava_1m",
+   "lat": 31.805,
+   "lon": 35.501,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 228
+  },
+  {
+   "num": 280,
+   "name": "Maale Adummim_1m",
+   "lat": 31.773,
+   "lon": 35.296,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 218
+  },
+  {
+   "num": 281,
+   "name": "Zova_1m",
+   "lat": 31.47,
+   "lon": 35.07,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 188
+  },
+  {
+   "num": 282,
+   "name": "Nahshon_1m",
+   "lat": 31.834,
+   "lon": 34.961,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 259
+  },
+  {
+   "num": 283,
+   "name": "Hafez Hayyim_1m",
+   "lat": 31.793,
+   "lon": 34.804,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 121
+  },
+  {
+   "num": 284,
+   "name": "Qevuzat Yavne_1m",
+   "lat": 31.816,
+   "lon": 34.7,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 74
+  },
+  {
+   "num": 285,
+   "name": "Gat_1m",
+   "lat": 31.616,
+   "lon": 34.783,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 236
+  },
+  {
+   "num": 286,
+   "name": "Rosh Zurim_1m",
+   "lat": 31.665,
+   "lon": 35.124,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 77
+  },
+  {
+   "num": 287,
+   "name": "Netiv Halamed He_1m",
+   "lat": 31.683,
+   "lon": 34.983,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 25
+  },
+  {
+   "num": 288,
+   "name": "Beit Jimal_1m",
+   "lat": 31.716,
+   "lon": 34.966,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 75
+  },
+  {
+   "num": 289,
+   "name": "Metzoke Dragot_1m",
+   "lat": 31.583,
+   "lon": 35.383,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 210
+  },
+  {
+   "num": 291,
+   "name": "Ashqelon Port_1m",
+   "lat": 31.633,
+   "lon": 34.516,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 208
+  },
+  {
+   "num": 292,
+   "name": "Shani_1m",
+   "lat": 31.35,
+   "lon": 35.049,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 28
+  },
+  {
+   "num": 294,
+   "name": "Zomet Hanegev_1m",
+   "lat": 31.066,
+   "lon": 34.849,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 112
+  },
+  {
+   "num": 295,
+   "name": "Hazeva_1m",
+   "lat": 30.51,
+   "lon": 35.14,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 33
+  },
+  {
+   "num": 296,
+   "name": "Mizpe Ramon_1m",
+   "lat": 30.6125,
+   "lon": 34.7967,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 379
+  },
+  {
+   "num": 297,
+   "name": "Paran_1m",
+   "lat": 30.367,
+   "lon": 35.148,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 207
+  },
+  {
+   "num": 298,
+   "name": "Harashim_1m",
+   "lat": 32.956,
+   "lon": 35.328,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 269
+  },
+  {
+   "num": 299,
+   "name": "Tel Aviv Coast_1m",
+   "lat": 32.059,
+   "lon": 34.759,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 178
+  },
+  {
+   "num": 300,
+   "name": "Avne Etan_1m",
+   "lat": 32.817,
+   "lon": 35.763,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 2
+  },
+  {
+   "num": 301,
+   "name": "Bet Zayda_1m",
+   "lat": 32.881,
+   "lon": 35.653,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 6
+  },
+  {
+   "num": 302,
+   "name": "Zemah_1m",
+   "lat": 32.704,
+   "lon": 35.584,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 8
+  },
+  {
+   "num": 303,
+   "name": "Merom Golan Picman_1m",
+   "lat": 33.133,
+   "lon": 35.783,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 10
+  },
+  {
+   "num": 304,
+   "name": "Yavneel_1m",
+   "lat": 32.683,
+   "lon": 35.516,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 11
+  },
+  {
+   "num": 305,
+   "name": "Tavor Kadoorie_1m",
+   "lat": 32.7,
+   "lon": 35.4,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 13
+  },
+  {
+   "num": 306,
+   "name": "Afula Nir Haemeq_1m",
+   "lat": 32.597,
+   "lon": 35.278,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 16
+  },
+  {
+   "num": 307,
+   "name": "Eden Farm_1m",
+   "lat": 32.47,
+   "lon": 35.489,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 206
+  },
+  {
+   "num": 309,
+   "name": "Yotvata_1m",
+   "lat": 29.886,
+   "lon": 35.078,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 36
+  },
+  {
+   "num": 310,
+   "name": "Haifa Refineries_1m",
+   "lat": 32.799,
+   "lon": 35.049,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 41
+  },
+  {
+   "num": 311,
+   "name": "Haifa University_1m",
+   "lat": 32.762,
+   "lon": 35.021,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 42
+  },
+  {
+   "num": 312,
+   "name": "Haifa Technion_1m",
+   "lat": 32.766,
+   "lon": 35.016,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 43
+  },
+  {
+   "num": 313,
+   "name": "En Karmel_1m",
+   "lat": 32.682,
+   "lon": 34.96,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 44
+  },
+  {
+   "num": 314,
+   "name": "Zikhron Yaaqov_1m",
+   "lat": 32.566,
+   "lon": 34.95,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 45
+  },
+  {
+   "num": 315,
+   "name": "Hadera Port_1m",
+   "lat": 32.474,
+   "lon": 34.883,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 46
+  },
+  {
+   "num": 316,
+   "name": "Elat_1m",
+   "lat": 29.553,
+   "lon": 34.954,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 64
+  },
+  {
+   "num": 317,
+   "name": "En Hashofet_1m",
+   "lat": 32.633,
+   "lon": 35.099,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 67
+  },
+  {
+   "num": 318,
+   "name": "Afeq_1m",
+   "lat": 32.848,
+   "lon": 35.112,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 78
+  },
+  {
+   "num": 319,
+   "name": "Deir Hanna_1m",
+   "lat": 32.863,
+   "lon": 35.374,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 99
+  },
+  {
+   "num": 320,
+   "name": "Rosh Haniqra_1m",
+   "lat": 33.081,
+   "lon": 35.107,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 106
+  },
+  {
+   "num": 321,
+   "name": "Lev Kineret Iolr_1m",
+   "lat": 32.816,
+   "lon": 35.599,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 115
+  },
+  {
+   "num": 322,
+   "name": "Ammiad_1m",
+   "lat": 32.916,
+   "lon": 35.533,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 123
+  },
+  {
+   "num": 323,
+   "name": "Newe Yaar_1m",
+   "lat": 32.709,
+   "lon": 35.179,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 186
+  },
+  {
+   "num": 324,
+   "name": "Kefar Blum_1m",
+   "lat": 33.173,
+   "lon": 35.613,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 202
+  },
+  {
+   "num": 325,
+   "name": "Eshhar_1m",
+   "lat": 32.883,
+   "lon": 35.299,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 205
+  },
+  {
+   "num": 327,
+   "name": "Gamla_1m",
+   "lat": 32.907,
+   "lon": 35.748,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 227
+  },
+  {
+   "num": 328,
+   "name": "Maale Gilboa_1m",
+   "lat": 32.481,
+   "lon": 35.415,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 224
+  },
+  {
+   "num": 329,
+   "name": "Neot Smadar_1m",
+   "lat": 30.048,
+   "lon": 35.023,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 232
+  },
+  {
+   "num": 330,
+   "name": "Kefar Nahum_1m",
+   "lat": 32.883,
+   "lon": 35.579,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 233
+  },
+  {
+   "num": 332,
+   "name": "Galed_1m",
+   "lat": 32.556,
+   "lon": 35.0717,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 263
+  },
+  {
+   "num": 335,
+   "name": "Avdat_1m",
+   "lat": 30.8,
+   "lon": 34.77,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 271
+  },
+  {
+   "num": 336,
+   "name": "Nizzan_1m",
+   "lat": 31.733,
+   "lon": 34.635,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 274
+  },
+  {
+   "num": 338,
+   "name": "Ezuz",
+   "lat": 30.791,
+   "lon": 34.472,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 343,
+   "name": "Shave Ziyyon",
+   "lat": 32.98,
+   "lon": 35.09,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 344,
+   "name": "Ezuz_1m",
+   "lat": 30.791,
+   "lon": 34.472,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 338
+  },
+  {
+   "num": 345,
+   "name": "Shave Ziyyon_1m",
+   "lat": 32.98,
+   "lon": 35.09,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 343
+  },
+  {
+   "num": 346,
+   "name": "Kefar Giladi_1m",
+   "lat": 33.241,
+   "lon": 35.57,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 241
+  },
+  {
+   "num": 349,
+   "name": "Nevatim",
+   "lat": 31.205,
+   "lon": 34.922,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 350,
+   "name": "Lahav",
+   "lat": 31.3,
+   "lon": 34.87,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 351,
+   "name": "Lahav_1m",
+   "lat": 31.3,
+   "lon": 34.87,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 350
+  },
+  {
+   "num": 353,
+   "name": "Ayyelet Hashahar",
+   "lat": 33.02,
+   "lon": 35.57,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 355,
+   "name": "Massada",
+   "lat": 32.67,
+   "lon": 35.6,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 366,
+   "name": "Sede Eliyyahu",
+   "lat": 32.44,
+   "lon": 35.51,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 367,
+   "name": "Sede Eliyyahu_1m",
+   "lat": 32.44,
+   "lon": 35.51,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 366
+  },
+  {
+   "num": 370,
+   "name": "Nevatim_1m",
+   "lat": 31.205,
+   "lon": 34.922,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 349
+  },
+  {
+   "num": 373,
+   "name": "Massada_1m",
+   "lat": 32.67,
+   "lon": 35.6,
+   "temp": false,
+   "rad": false,
+   "rain": false,
+   "at_of": 355
+  },
+  {
+   "num": 379,
+   "name": "Mizpe Ramon",
+   "lat": 30.6125,
+   "lon": 34.7967,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 380,
+   "name": "Tel Yosef",
+   "lat": 32.5462,
+   "lon": 35.3945,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 381,
+   "name": "Ashalim",
+   "lat": 30.98,
+   "lon": 34.7,
+   "temp": true,
+   "rad": true,
+   "rain": true
+  },
+  {
+   "num": 411,
+   "name": "Beer Sheva Bgu",
+   "lat": 31.2642,
+   "lon": 34.8045,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 412,
+   "name": "Beer Sheva Bgu_1m",
+   "lat": 31.2642,
+   "lon": 34.8045,
+   "temp": false,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 443,
+   "name": "Tel Yosef_1m",
+   "lat": 32.5462,
+   "lon": 35.3945,
+   "temp": false,
+   "rad": false,
+   "rain": false
+  },
+  {
+   "num": 480,
+   "name": "Ashalim_1m",
+   "lat": 30.9831,
+   "lon": 34.7078,
+   "temp": false,
+   "rad": false,
+   "rain": false
+  },
+  {
+   "num": 498,
+   "name": "Dafna_1m",
+   "lat": 33.2277,
+   "lon": 35.635,
+   "temp": false,
+   "rad": false,
+   "rain": false
+  },
+  {
+   "num": 499,
+   "name": "Dafna",
+   "lat": 33.23,
+   "lon": 35.6,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 500,
+   "name": "Nazareth",
+   "lat": 32.7104,
+   "lon": 35.3034,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 501,
+   "name": "Nazaret_1m",
+   "lat": 32.7104,
+   "lon": 35.3034,
+   "temp": false,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 502,
+   "name": "Tiberias",
+   "lat": 32.7724,
+   "lon": 35.5458,
+   "temp": true,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 503,
+   "name": "Tiberias_1m",
+   "lat": 32.7724,
+   "lon": 35.5458,
+   "temp": false,
+   "rad": false,
+   "rain": false
+  },
+  {
+   "num": 504,
+   "name": "Mizpe Midrag",
+   "lat": 31.4429,
+   "lon": 35.2481,
+   "temp": false,
+   "rad": false,
+   "rain": true
+  },
+  {
+   "num": 506,
+   "name": "Nabi Musa",
+   "lat": 31.7621,
+   "lon": 35.4109,
+   "temp": false,
+   "rad": false,
+   "rain": true
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+  "accounts": [
+    {
+      "user_key": "MQTT_PRESENCE_USER",
+      "user_default": "presence",
+      "password_key": "MQTT_PRESENCE_PASSWORD",
+      "role": "presence",
+      "topics": [
+        "presence/#"
+      ]
+    }
+  ]
+}

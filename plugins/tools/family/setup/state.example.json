@@ -1,0 +1,31 @@
+{
+  "_doc": "What goes to Firebase /state (Google sees it). topic may use +; {1},{2} in key and label = the + parts. Labels are English; i18n translates them for the phones. The house adds its own words per language in \"i18n\", e.g. {\"de\": {\"Front door\": \"Haustuer\"}}. The bridge account reads only family/# and home/state/#: other topics never arrive.",
+  "items": [
+    {
+      "topic": "family/+/presence",
+      "key": "presence_{1}",
+      "label": "{1}",
+      "kind": "enum",
+      "map": {
+        "home": "home",
+        "away": "away"
+      }
+    },
+    {
+      "topic": "home/state/door_1/contact",
+      "key": "door_1",
+      "label": "Front door",
+      "kind": "bool",
+      "on": "closed",
+      "off": "open"
+    },
+    {
+      "topic": "home/state/sensor_1/temperature",
+      "key": "room_1_temp",
+      "label": "Room 1",
+      "kind": "num",
+      "unit": "\u00b0C"
+    }
+  ],
+  "i18n": {}
+}

@@ -1,0 +1,66 @@
+[
+  {
+    "id": "tv_1",
+    "name": "TV 1",
+    "transport": "webos",
+    "category": "tv",
+    "model": "webOS TV",
+    "host": "192.0.2.40",
+    "mac": "00:11:22:33:44:55",
+    "_webos_inputs": {
+      "HDMI 1": "HDMI_1",
+      "HDMI 2": "HDMI_2"
+    },
+    "_webos_apps": {
+      "YouTube": "youtube.leanback.v4",
+      "Netflix": "netflix"
+    },
+    "controls": [
+      {
+        "kind": "switch",
+        "code": "power",
+        "label": "Power"
+      },
+      {
+        "kind": "bright",
+        "code": "volume",
+        "label": "Volume",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "kind": "switch",
+        "code": "mute",
+        "label": "Mute"
+      },
+      {
+        "kind": "setting_enum",
+        "code": "input",
+        "label": "Input",
+        "range": [
+          "HDMI 1",
+          "HDMI 2"
+        ]
+      },
+      {
+        "kind": "setting_enum",
+        "code": "app",
+        "label": "App",
+        "range": [
+          "YouTube",
+          "Netflix"
+        ]
+      },
+      {
+        "kind": "setting_enum",
+        "code": "media",
+        "label": "Media",
+        "range": [
+          "play",
+          "pause",
+          "stop"
+        ]
+      }
+    ]
+  }
+]

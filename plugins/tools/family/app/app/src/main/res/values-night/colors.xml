@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Yashome palette, dark (= the dashboard) -->
+    <color name="brand_primary">#3CC2B8</color>
+    <color name="brand_sun">#FFC34D</color>
+    <color name="brand_text">#E6EAF0</color>
+    <color name="brand_muted">#8A93A3</color>
+    <color name="brand_surface">#1A1F29</color>
+    <color name="brand_background">#0E1116</color>
+    <color name="brand_bar">#1A1F29</color>
+    <color name="rm_key">#262D3A</color>
+</resources>

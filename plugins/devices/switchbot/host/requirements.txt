@@ -1,0 +1,3 @@
+PySwitchbot==2.7.0
+bleak==3.0.2
+paho-mqtt==2.1.0

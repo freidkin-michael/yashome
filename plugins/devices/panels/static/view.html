@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Panel</title>
+<style>
+  :root { --bg:#0e1116; --tile:#232a36; --fg:#e6eaf0; --acc:#177A75; --acc2:#3CC2B8; --sun:#FFC34D; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { margin:0; height:100%; overflow:hidden; background:#000; color:var(--fg);
+              font-family:Roboto,system-ui,sans-serif; }
+  #wrap { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; }
+  #stage { position:relative; flex:none; background:var(--bg); overflow:hidden; transform-origin:center; }
+  .w { position:absolute; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  /* line-height above 1: a box of exactly the font size clips descenders (g, y) */
+  .w .lbl { white-space:nowrap; overflow:hidden; padding:0; width:100%; line-height:1.25; position:relative; z-index:1; }
+  .w.withicon { flex-direction:column; gap:3%; }
+  .w .ticon { position:relative; z-index:1; flex:none; } .w .ticon svg { display:block; width:100%; height:100%; }
+  .w .tcap { position:relative; z-index:1; color:#AAB4C3; white-space:nowrap; line-height:1.2; }
+  .w .fill { position:absolute; left:0; bottom:0; height:100%; opacity:.9; pointer-events:none; border-radius:12px; }
+  .w.tap { cursor:pointer; }
+  .w.tap:active { filter:brightness(1.35); }
+  /* docs/device-state.md: a widget of a device that is offline is greyed and takes no tap; waiting
+     for its report, dimmed; a command waiting for the device pulses */
+  .w.dev-off { opacity:.4; pointer-events:none; }
+  .w.dev-wait { opacity:.7; }
+  .w.cmdwait { animation:cmdwait .8s ease-in-out infinite alternate; }
+  @keyframes cmdwait { from { opacity:1 } to { opacity:.45 } }
+  @media (prefers-reduced-motion: reduce) { .w.cmdwait { animation:none; outline:2px dashed var(--acc2); } }
+  /* Status line at the top right, like on the ESP: Wi-Fi %, server dot, battery and bolt. */
+  #st { position:absolute; z-index:20; display:flex; align-items:center; pointer-events:none;
+        color:#8A93A3; font-weight:500; line-height:1; }
+  /* margins, not gap: the Android 9 WebView does not know flex gap */
+  #st > span { display:flex; align-items:center; white-space:nowrap; margin-left:.6em; }
+  #st svg { height:1.3em; width:auto; display:block; margin-right:.25em; }
+  #st b { font-weight:500; }
+  /* brand icon at the top left; a long press there is caught by the launcher (pairing) */
+  #brand { position:absolute; z-index:20; left:4px; top:2px; width:auto; pointer-events:none; border-radius:22%; }
+  #stDot { display:block; width:.7em; height:.7em; border-radius:50%; background:#FF6B6B; margin-right:.22em; }
+  #stBolt { display:block; }
+  #stBolt { color:var(--sun); }
+  /* the touchmouse button is the only part of the status line that takes a tap */
+  #st > #stMouse { pointer-events:auto; padding:.2em .3em; margin:-.2em 0 -.2em .3em; cursor:pointer; }
+  #stMouse svg { margin-right:0; }
+  #tm { position:fixed; z-index:50; left:0; top:0; right:0; bottom:0; display:flex; flex-direction:column;
+        background:var(--bg); color:var(--fg); font-size:18px; }
+  #tm .top, #tm .keys { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; }
+  #tm .keys { justify-content:center; }
+  #tm .keys button { min-width:0; flex:1; max-width:110px; padding:10px 0; }
+  #tm .gap, .tmw .row .gap { flex:0 0 1em; }
+  #tm button { background:var(--tile); color:var(--fg); border:0; border-radius:12px; font:inherit;
+               padding:10px 18px; margin:0 6px; min-width:72px; }
+  #tm button svg { height:1.4em; width:auto; display:block; margin:0 auto; }
+  #tm .pad { flex:1; margin:0 12px; border-radius:16px; background:var(--tile); display:flex; align-items:center;
+             justify-content:center; text-align:center; color:#8A93A3; padding:0 10%; line-height:1.5; }
+  #tm .pad.on { background:#2b3442; }
+  /* the touchmouse widget: a touchpad, the keys and a text field inside the layout */
+  .tmw { display:flex; flex-direction:column; align-items:stretch; justify-content:flex-start; gap:.5em; padding:.6em; box-sizing:border-box;
+         border-radius:12px; color:var(--fg); overflow:hidden; font-size:18px; }
+  .tmw .top { flex:none; display:flex; align-items:center; justify-content:center; gap:.4em; color:#8A93A3; }
+  .tmw .pad { flex:1; min-height:3em; border-radius:12px; background:#2E3746; display:flex; align-items:center; justify-content:center;
+              text-align:center; color:#8A93A3; padding:0 8%; line-height:1.5; }
+  .tmw .pad.on { background:#3a4558; }
+  .tmw button { font:inherit; color:var(--fg); background:#2E3746; border:0; border-radius:10px; padding:.5em .8em; }
+  .tmw button:active { filter:brightness(1.35); }
+  .tmw .row { flex:none; display:flex; gap:.4em; align-items:stretch; }
+  .tmw .row > * { flex:1; min-width:0; }
+  .tmw .row > .gap { flex:0 0 .6em; }
+  .tmw .row svg { height:1.5em; width:auto; display:block; margin:0 auto; }
+  .lite .wx svg * { animation:none !important; }
+  #err { position:absolute; left:0; right:0; bottom:0; padding:6px 10px; background:#3a1113;
+         color:#ffb4b4; font:12px system-ui; display:none; }
+  #empty { position:absolute; left:0; right:0; top:0; bottom:0; display:none; align-items:center;
+           justify-content:center; padding:0 10%; text-align:center; color:#8A93A3; font-size:20px; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage"></div></div>
+<div id="empty"></div>
+<div id="err"></div>
+
+<script src="/display.js"></script>
+<script src="/plugins/panels/static/widgets.js"></script>
+<script>
+// Panel view: the same layout the builder edits, drawn by the browser. The single
+// source of truth is the layout on the server, so a new widget type added in the
+// builder shows up here by itself.
+const Q = new URLSearchParams(location.search);
+const PANEL = Q.get('panel') || 'panel_1';
+// The panel key has its own slot: hs_token is the dashboard's house token in the
+// same origin and must not be overwritten. The key leaves the address bar once stored.
+if (Q.get('token')) {
+  localStorage.setItem('hs_panel_token', Q.get('token'));
+  localStorage.setItem('hs_panel_token_for', PANEL);
+  Q.delete('token');
+  history.replaceState(null, '', location.pathname + (String(Q) ? '?' + Q : '') + location.hash);
+}
+// The panel key opens only its own panel (a key stored without the panel name
+// predates the marker and is kept); any other panel uses the house token.
+const HOUSE_TOKEN = localStorage.getItem('hs_token') || '';
+const PANEL_KEY = localStorage.getItem('hs_panel_token') || '';
+const KEY_FOR = localStorage.getItem('hs_panel_token_for');
+let TOKEN = PANEL_KEY && (KEY_FOR == null || KEY_FOR === PANEL) ? PANEL_KEY : HOUSE_TOKEN;
+const POLL_MS = +(Q.get('poll') || 3000);
+
+// ---- i18n: English keys, other languages from i18n.json ----
+let I18N = {}, LANG = 'en';
+function T(s, ...a) {
+  let r = (I18N[LANG] || {})[s];
+  if (r === undefined) r = s;
+  return a.length ? r.replace(/\{(\d+)\}/g, (_, i) => (a[i] != null ? a[i] : '')) : r;
+}
+window.T = T;
+// Language: ?lang=xx once (remembered), else localStorage, else the browser's.
+async function loadI18n() {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 5000);
+  try { const r = await fetch('/plugins/panels/i18n.json', {signal: ac.signal}); if (r.ok) I18N = await r.json(); }
+  catch (e) { I18N = {}; }
+  finally { clearTimeout(t); }
+  const q = Q.get('lang');
+  if (q) localStorage.setItem('lang', q);
+  const l = (localStorage.getItem('lang') || navigator.language || 'en').toLowerCase().slice(0, 2);
+  LANG = I18N[l] ? l : 'en';
+  document.documentElement.lang = LANG;
+  document.title = T('Panel');
+}
+
+const stage = document.getElementById('stage');
+let layout = [], devices = [], LIVE = {}, W = 800, H = 480, PANEL_DEV = '';
+let lastOk = 0, lastTry = 0;
+
+// The timeout is required: a hung request holds its connection forever, and a
+// WebView has only ~6 connections per server.
+async function fetchT(u, opt) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 8000);
+  try { return await fetch(u, Object.assign({headers: {'x-token': TOKEN, 'Content-Type': 'application/json'}, signal: ac.signal}, opt || {})); }
+  finally { clearTimeout(t); }
+}
+// A rejected panel key falls back to the house token once, for good.
+const api = async (u, opt) => {
+  let r = await fetchT(u, opt);
+  if (r.status === 401 && TOKEN === PANEL_KEY && HOUSE_TOKEN && HOUSE_TOKEN !== PANEL_KEY) {
+    TOKEN = HOUSE_TOKEN;
+    r = await fetchT(u, opt);
+  }
+  if (!r.ok) throw Object.assign(new Error(r.status + ' ' + u), {status: r.status});
+  return r.status === 204 ? null : r.json();
+};
+const err = m => { const e = document.getElementById('err'); e.textContent = m; e.style.display = m ? 'block' : 'none'; };
+
+// ---- values ----------------------------------------------------------------
+// A topic is either mirrored by the dashboard as home/state/<id>/<code>, or owned
+// by the device itself (transport=mqtt); then the owner is found by its channels.
+function ownerOfTopic(t) {
+  if (!t) return null;
+  for (const d of devices)
+    for (const c of (d.controls || []))
+      if (c.state_topic === t || c.command_topic === t) return {dev: d, code: c.code};
+  return null;
+}
+function refOf(w) {
+  if (w.type === 'ac' && w.device) return {id: w.device, code: 'power'};
+  if (w.type === 'ac') { const o = ownerOfTopic(w.power_state || w.state_topic || ''); if (o) return {id: o.dev.id, code: 'power'}; }
+  const t = w.state_topic || w.cmd_topic || '';
+  const m = t.match(/^home\/(?:state|cmd)\/([^/]+)\/(.+)$/);
+  if (m) return {id: m[1], code: m[2].replace(/_pct$/, '')};
+  const own = ownerOfTopic(t);
+  return own ? {id: own.dev.id, code: own.code} : null;
+}
+function refOfTopic(t) {
+  const m = (t || '').match(/^home\/(?:state|cmd)\/([^/]+)\/(.+)$/);
+  if (m) return {id: m[1], code: m[2]};
+  const own = ownerOfTopic(t || '');
+  return own ? {id: own.dev.id, code: own.code} : null;
+}
+// the device's life (docs/device-state.md) and a command of this widget still waiting for it
+function lifeClass(w) {
+  const r = refOf(w), st = LIVE[r ? r.id : w.device];
+  if (!st) return '';
+  return st.offline_since ? 'dev-off' : st.waiting ? 'dev-wait' : '';
+}
+function lifeOn(box, w) {               // the AC and remote boxes live across redraws
+  const life = lifeClass(w);
+  box.classList.toggle('dev-off', life === 'dev-off');
+  box.classList.toggle('dev-wait', life === 'dev-wait');
+}
+function waitsFor(w) {
+  const r = refOf(w), st = r && LIVE[r.id];
+  if (!st || !st.cmd_wait) return false;
+  const pw = w.onoff_topic && refOfTopic(w.onoff_topic);
+  return r.code in st.cmd_wait || !!(pw && LIVE[pw.id] && LIVE[pw.id].cmd_wait && pw.code in LIVE[pw.id].cmd_wait);
+}
+const SENT = {};     // id/code -> {v, t, name}: what this panel sent, to say "No answer" when it got none
+function checkAnswers() {
+  for (const k of Object.keys(SENT)) {
+    const s = SENT[k], [id, code] = [k.slice(0, k.indexOf('/')), k.slice(k.indexOf('/') + 1)];
+    const st = LIVE[id] || {};
+    if (st.cmd_wait && code in st.cmd_wait && Date.now() - s.t < 30000) continue;
+    if (Date.now() - s.t < 1500) continue;
+    delete SENT[k];
+    const got = (st.values || {})[code];
+    const same = typeof got === 'number' && typeof s.v === 'number'
+      ? Math.abs(got - s.v) <= Math.max(1, Math.abs(s.v) * 0.03) : got === s.v;
+    if (Date.now() - s.t >= 4500 && !same)
+      { err(T('No answer from {0}', s.name)); setTimeout(() => err(''), 4000); }
+  }
+}
+function liveVal(w) {
+  const r = refOf(w);
+  if (!r) return null;
+  const v = LIVE[r.id] && LIVE[r.id].values ? LIVE[r.id].values[r.code] : null;
+  return v === undefined ? null : v;
+}
+// Server values are typed: a boolean is the state itself; a number > 0 is on
+// when the on payload is "1".
+function isOn(w, v) {
+  if (v == null) return false;
+  if (typeof v === 'boolean') return v;
+  if (!w.state_on) return ['ON','on','1','true','True'].includes(String(v));
+  if (typeof v === 'number' && +w.state_on === 1 && v > 0) return true;
+  return String(v) === String(w.state_on);
+}
+// Dimmer level in percent; state_max is the device's own scale (e.g. 255).
+// an Android tile's icon (panels/__init__.py _TILE_ICONS): 24-unit paths, drawn in the tile's state colour
+const TILE_ICONS = {
+  "bulb": "<path fill=\"currentColor\" d=\"M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zm-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z\"/>",
+  "plug": "<path fill=\"currentColor\" d=\"M9 2v5H7v4a5 5 0 0 0 4 4.9V22h2v-6.1A5 5 0 0 0 17 11V7h-2V2h-2v5h-2V2H9z\"/>",
+  "thermo": "<path fill=\"currentColor\" d=\"M12 2a3 3 0 0 0-3 3v9.3a5 5 0 1 0 6 0V5a3 3 0 0 0-3-3zm0 2a1 1 0 0 1 1 1v10.4l.4.3a3 3 0 1 1-2.8 0l.4-.3V5a1 1 0 0 1 1-1z\"/>",
+  "drop": "<path fill=\"currentColor\" d=\"M12 2s-6 7-6 11a6 6 0 0 0 12 0c0-4-6-11-6-11z\"/>",
+  "fan": "<path fill=\"currentColor\" d=\"M12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm1-9c3 0 4 2.5 3 5l-2.4 3.2A2 2 0 0 0 13 10V2zm9 11c0 3-2.5 4-5 3l-3.2-2.4c.1-.2.2-.4.2-.6h8zm-11 9c-3 0-4-2.5-3-5l2.4-3.2c.2.1.4.2.6.2v8zM2 11c0-3 2.5-4 5-3l3.2 2.4c-.1.2-.2.4-.2.6H2z\"/>",
+  "tv": "<path fill=\"currentColor\" d=\"M3 5h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-7v2h3v2H7v-2h3v-2H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v9h16V7H4z\"/>",
+  "ac": "<path fill=\"currentColor\" d=\"M3 5h18a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm2 4v1h14V9H5zm1 7h2v4H6v-4zm5 0h2v5h-2v-5zm5 0h2v4h-2v-4z\"/>"
+ };
+// a dimmer is lit when its level is above 0 and its own switch (onoff_topic), when it has one, is on: an off lamp keeps its level;
+// null while that switch has not said yet (just after the page loads)
+function dimLit(w) {
+  if (!((dimPct(w) || 0) > 0)) return false;
+  const pw = w.onoff_topic && refOfTopic(w.onoff_topic);
+  if (!pw) return true;
+  const v = LIVE[pw.id] && LIVE[pw.id].values ? LIVE[pw.id].values[pw.code] : null;
+  return v == null ? null : isOn({}, v);
+}
+function dimPct(w) {
+  const v = liveVal(w);
+  if (v == null) return null;
+  const n = parseFloat(v);
+  return isFinite(n) ? PW.dimPercent(w, v, devices) : null;
+}
+
+// ---- font size: the same math as in the builder and the firmware generator ----
+// Size cap like the builder: 240 px (the largest baked LVGL step) for ESP
+// layouts, no cap for android -- it draws with the system font.
+const FONT_CAP_ESP = 240, WFACTOR = 0.56;
+let HW = '';
+const fontMax = () => HW === 'android' ? 4096 : FONT_CAP_ESP;
+const widgetFit = w => w.fit !== undefined ? w.fit : (w.type === 'clock');
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const dateText = d => T(DOW[d.getDay()]) + ' ' + d.getDate() + ' ' + T(MON[d.getMonth()]);
+function sampleText(w) {
+  switch (w.type) {
+    case 'clock': return '00:00';
+    case 'date':  return T('Sun') + ' 30 ' + T('September');
+    case 'temp':
+    case 'sensor': {
+      if (w.text_on || w.text_off) {
+        const a = String(w.text_on || ''), b = String(w.text_off || '');
+        return ((w.text || '') + (a.length >= b.length ? a : b)).trim();
+      }
+      return ((w.text || '') + '-99.9' + (w.suffix || '')).trim();
+    }
+    case 'dimmer': return ((w.text || '') + ' 100%').trim();
+    default: return w.text || 'Ag';
+  }
+}
+function fontPx(w) {
+  const pad = w.pad != null ? w.pad : 8;
+  const ih = Math.max(6, w.h - 2 * pad), iw = Math.max(6, w.w - 2 * pad);
+  if (!widgetFit(w)) return Math.max(8, Math.min(fontMax(), w.size || 40));
+  const t = sampleText(w);
+  let px = Math.max(8, Math.min(fontMax(), Math.floor(Math.min(ih, iw / Math.max(1, t.length * WFACTOR)))));
+  // 0.56 is an average glyph width; wide scripts overflow. The browser can measure,
+  // so shrink to the real width. Differs from the builder only towards smaller.
+  const m = measureText(t, px, w);
+  if (m > iw) px = Math.max(8, Math.floor(px * iw / m));
+  return px;
+}
+const _mc = document.createElement('canvas').getContext('2d');
+function measureText(t, px, w) {
+  _mc.font = (w.font === 'clock' ? '700 ' : '500 ') + px + 'px Roboto,system-ui,sans-serif';
+  return _mc.measureText(t).width;
+}
+function liveRaw(w) {     // the text the device sent (a number loses its ".0" in JSON): the panel prints this one
+  const r = refOf(w), st = r && LIVE[r.id];
+  return st && st.raw && st.raw[r.code] != null ? String(st.raw[r.code]) : null;
+}
+function fmtVal(w, v, raw) {             // a temperature or a humidity as every screen shows it (display.js), else as sent
+  const r = refOf(w);
+  const c = YDisp.reading(r ? r.code : w.type === 'temp' ? 'temperature' : '', v, r ? r.id + '/' + r.code : 'w:' + w.id);
+  return c || (raw != null ? String(raw) : String(v));
+}
+function textOf(w) {
+  const now = new Date(), two = n => String(n).padStart(2, '0');
+  switch (w.type) {
+    case 'clock': return two(now.getHours()) + ':' + two(now.getMinutes());
+    case 'date':  return dateText(now);
+    case 'toggle': return w.text || T('Button');
+    case 'button': return w.text || T('Scene');
+    case 'dimmer': { const p = dimPct(w); return (w.text ? w.text + ' ' : '') + (p == null || dimLit(w) === null ? '\u2014' : dimLit(w) ? p + '%' : T('off')); }
+    case 'temp':
+    case 'sensor': {
+      const v = liveVal(w), pre = w.text ? w.text + ' ' : '';
+      if (w.text_on || w.text_off) return pre + (v == null ? '\u2014' : (isOn(w, v) ? (w.text_on || T('yes')) : (w.text_off || T('no'))));
+      return pre + (v == null ? '\u2014' : fmtVal(w, v, liveRaw(w))) + (w.suffix || '');
+    }
+    default: return w.text || '';
+  }
+}
+
+// ---- drawing ---------------------------------------------------------------
+function fit() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  stage.style.transform = 'scale(' + s + ')';
+}
+// Status line: Wi-Fi and battery come from the launcher bridge (window.Panel.status);
+// a plain browser shows only the dot. Green dot: the server answers and its broker
+// link is up (/api/health); yellow: HTTP works, MQTT does not.
+const GREEN = '#3CC2B8', YELLOW = '#FFC34D', RED = '#FF6B6B', GREY = '#8A93A3';
+const WIFI_SVG = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm-4.2-5.2a6 6 0 0 1 8.4 0l-1.4 1.4a4 4 0 0 0-5.6 0zm-2.8-2.8a10 10 0 0 1 14 0l-1.4 1.4a8 8 0 0 0-11.2 0zM2.2 10.2a14 14 0 0 1 19.6 0l-1.4 1.4a12 12 0 0 0-16.8 0z"/></svg>';
+const BOLT_SVG = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>';
+const batSvg = p => '<svg viewBox="0 0 28 14"><rect x="1" y="1" width="23" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/>'
+  + '<rect x="25.2" y="4.5" width="2.3" height="5" rx="1" fill="currentColor"/>'
+  + '<rect x="3.2" y="3.2" width="' + (18.6 * Math.max(0, Math.min(100, p)) / 100).toFixed(1) + '" height="7.6" rx="1" fill="currentColor"/></svg>';
+let HEALTH = null, DEV = null, devAt = 0;
+const PAGE_T0 = Date.now();
+function devStatus() {
+  if (Date.now() - devAt < 5000) return DEV;
+  devAt = Date.now();
+  try { DEV = (window.Panel && Panel.status) ? JSON.parse(Panel.status()) : null; } catch (e) { DEV = null; }
+  return DEV;
+}
+function drawStatus() {
+  let el = document.getElementById('st');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'st';
+    el.innerHTML = '<span id="stMouse"></span><span id="stWifi"></span><span><i id="stDot"></i><b id="stTxt"></b></span><span id="stBat"></span>';
+    stage.appendChild(el);
+    const ms = document.getElementById('stMouse');
+    ms.innerHTML = MOUSE_SVG; ms.onclick = () => tmMode(true);
+    const br = document.createElement('img'); br.id = 'brand'; br.src = '/plugins/panels/static/brand-icon.svg'; br.alt = '';
+    stage.appendChild(br);
+  }
+  el.style.right = '12px'; el.style.top = '6px';
+  el.style.fontSize = Math.max(14, Math.round(H / 26)) + 'px';
+  const br = document.getElementById('brand');
+  if (br) br.style.height = Math.round(Math.max(14, H / 26) * 1.6) + 'px';   // twice the ESP size: phone screens are small
+  const age = lastOk ? (Date.now() - lastOk) / 1000 : 1e9;
+  const fresh = age < POLL_MS / 1000 * 2.5;
+  const noMqtt = fresh && HEALTH && HEALTH.mqtt === false;
+  const col = !fresh ? (age < 60 ? YELLOW : RED) : (noMqtt ? YELLOW : GREEN);
+  document.getElementById('stDot').style.background = col;
+  const txt = document.getElementById('stTxt');
+  txt.style.color = col;
+  const ms = document.getElementById('stMouse');
+  ms.style.display = TM ? '' : 'none'; ms.title = T('Touchmouse');
+  const d = devStatus();
+  // the launcher names the cause of a lost link; empty means the phone is online and the server is silent
+  const why = d && d.link ? d.link : (age > 30 ? T('server not responding') : T('{0} s', Math.round(age)));
+  txt.textContent = !fresh ? why : (noMqtt ? T('no MQTT') : '');
+  const wf = document.getElementById('stWifi'), bt = document.getElementById('stBat');
+  if (d && d.rssi != null) {
+    const q = Math.max(0, Math.min(100, Math.round((d.rssi + 100) * 2)));
+    wf.style.display = ''; wf.style.color = q >= 60 ? GREEN : (q >= 35 ? YELLOW : RED);
+    wf.innerHTML = WIFI_SVG + '<b>' + q + '%</b>';
+  } else wf.style.display = 'none';
+  if (d && d.battery != null) {
+    const p = d.battery;
+    bt.style.display = ''; bt.style.color = p <= 15 ? RED : (p <= 30 ? YELLOW : GREY);
+    // grey bolt: the cable is in, but charging is held at the upper limit
+    bt.innerHTML = ((d.charging || d.hold) ? '<i id="stBolt"' + (d.hold ? ' style="color:' + GREY + '"' : '') + '>' + BOLT_SVG + '</i>' : '')
+      + batSvg(p) + '<b>' + p + '%</b>';
+  } else bt.style.display = 'none';
+}
+
+// ---- touchmouse: the panel as a touchpad for a TV box or a computer ----------
+// The button shows when the layout's bar has a touchmouse item, its receiver is
+// known and the launcher has the bridge (Panel.tmMove). A finger moves the pointer
+// (with acceleration), a tap clicks, a two-finger tap right-clicks, two fingers dragged up and down
+// scroll, a three-finger tap clicks the wheel; the launcher sends UDP.
+const MOUSE_SVG = '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M12 3a6 6 0 0 1 6 6v6a6 6 0 0 1-12 0V9a6 6 0 0 1 6-6zm0 0v6"/></svg>';
+const tmIcon = d => '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="' + d + '"/></svg>';
+const SPK = 'M4 9h4l5-4v14l-5-4H4z';
+// under the pad one row: rewind, Play/Pause, fast forward (the arrow keys: a player seeks) | the computer's own volume
+// (the receiver presses its media keys)
+const TM_KEYS = [['left', tmIcon('M11 6 5 12l6 6M19 6l-6 6 6 6'), 'Rewind'], ['playpause', tmIcon('M7 5v14l9-7zM18 5v14'), 'Play/Pause'],
+                 ['right', tmIcon('M13 6l6 6-6 6M5 6l6 6-6 6'), 'Fast forward'], null,
+                 ['voldown', tmIcon(SPK + 'M17 12h4'), 'Volume down'], ['mute', tmIcon(SPK + 'M17 9l4 6M21 9l-4 6'), 'Mute'],
+                 ['volup', tmIcon(SPK + 'M17 12h4M19 10v4'), 'Volume up']];
+const tmKeysHtml = () => TM_KEYS.map(k => k ? '<button data-k="' + k[0] + '" title="' + escHtml(T(k[2])) + '">' + k[1] + '</button>'
+  : '<span class="gap"></span>').join('');
+const TM_IDLE_MS = 300000, TAP_MS = 250, TAP_PX = 12, PAD_GAIN = 2.5, PAD_ACCEL = 8, SCROLL_PX = 24;
+let TM = null, tmEl = null, tmIdle = 0, tmwOn = null;
+const escHtml = s => String(s).replace(/[&<>"]/g, c => '&#' + c.charCodeAt(0) + ';');
+async function refreshTm(o) {
+  const it = (o.bar || []).find(b => b.type === 'touchmouse');
+  let t = null;
+  if (it && window.Panel && Panel.tmMove) {
+    try { t = (await api('/api/touchmouse')).find(x => x.id === it.receiver) || null; } catch (e) { t = TM; }
+  }
+  TM = t;
+  if (!TM && tmEl) tmMode(false);
+}
+// the pad's fingers -> the launcher's UDP: move, tap, two fingers scroll, three click the wheel; poke() runs on each touch
+function padBind(pad, poke) {
+  let t0 = 0, lx = 0, ly = 0, ay = 0, path = 0, fingers = 0, fx = 0, fy = 0, sy = 0;
+  const avgY = e => { let s = 0; for (const t of e.touches) s += t.clientY; return s / e.touches.length; };
+  pad.addEventListener('touchstart', e => {
+    e.preventDefault(); poke();
+    if (!fingers) { t0 = Date.now(); path = 0; fx = fy = sy = 0; }
+    fingers = Math.max(fingers, e.touches.length);
+    lx = e.touches[0].clientX; ly = e.touches[0].clientY; ay = avgY(e);
+    pad.classList.add('on');
+  }, {passive: false});
+  pad.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length >= 2) {            // scroll: the content follows the fingers
+      const y2 = avgY(e), d2 = y2 - ay;
+      ay = y2; path += Math.abs(d2); sy += d2 / SCROLL_PX;
+      const n = Math.trunc(sy);
+      if (n && Panel.tmScroll) { sy -= n; Panel.tmScroll(n); }
+      return;
+    }
+    const x = e.touches[0].clientX, y = e.touches[0].clientY, dx = x - lx, dy = y - ly;
+    lx = x; ly = y;
+    const d = Math.hypot(dx, dy), g = PAD_GAIN * (1 + Math.min(2, d / PAD_ACCEL));
+    path += d; fx += dx * g; fy += dy * g;
+    const ix = Math.trunc(fx), iy = Math.trunc(fy);
+    if (ix || iy) { fx -= ix; fy -= iy; Panel.tmMove(ix, iy); }
+  }, {passive: false});
+  pad.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (e.touches.length) { lx = e.touches[0].clientX; ly = e.touches[0].clientY; ay = avgY(e); return; }
+    pad.classList.remove('on');
+    if (Date.now() - t0 < TAP_MS && path < TAP_PX) {
+      if (fingers >= 3) { if (Panel.tmMiddle) Panel.tmMiddle(); } else Panel.tmClick(fingers >= 2);
+    }
+    fingers = 0;
+  }, {passive: false});
+}
+function tmMode(on) {
+  tmwOn = null;
+  if (!on) {
+    if (tmEl) { tmEl.remove(); tmEl = null; }
+    try { Panel.touchmouseStop(); } catch (e) {}
+    clearTimeout(tmIdle);
+    return;
+  }
+  if (!TM || tmEl) return;
+  Panel.touchmouseStart(TM.host, TM.port);
+  tmEl = document.createElement('div'); tmEl.id = 'tm';
+  tmEl.innerHTML = '<div class="top"><span>' + MOUSE_SVG.replace('<svg ', '<svg style="height:1em;vertical-align:-.1em" ') + ' ' + escHtml(TM.name)
+    + '</span><button data-k="panel">' + escHtml(T('Panel')) + '</button></div>'
+    + '<div class="pad">' + escHtml(T('Slide a finger to move the cursor')) + '<br>' + escHtml(T('tap to click, two fingers: right click or scroll, three: wheel click')) + '</div>'
+    + '<div class="keys">' + tmKeysHtml() + '</div>';
+  document.body.appendChild(tmEl);
+  const pad = tmEl.querySelector('.pad');
+  const poke = () => { clearTimeout(tmIdle); tmIdle = setTimeout(() => tmMode(false), TM_IDLE_MS); };
+  padBind(pad, poke);
+  for (const b of tmEl.querySelectorAll('button[data-k]')) b.onclick = () => {
+    poke();
+    if (b.dataset.k === 'panel') tmMode(false); else Panel.tmKey(b.dataset.k);
+  };
+  poke();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && tmEl) tmMode(false); });
+
+// ---- the touchmouse widget: the pad and the same row of keys, in the layout. Needs the launcher's bridge (Panel.tmMove).
+const tmwNodes = {};
+async function tmwFill(n, w) {
+  let t = null;
+  try { t = (await api('/api/touchmouse')).find(x => x.id === w.receiver) || null; } catch (e) { /* the next layout tick tries again */ }
+  const box = n.box;
+  if (!t) { box.textContent = T('Receiver not found: {0}', w.receiver); n.sig = ''; return; }
+  box.innerHTML = '<div class="top">' + MOUSE_SVG.replace('<svg ', '<svg style="height:1em" ') + ' <span>' + escHtml(t.name) + '</span></div>'
+    + '<div class="pad">' + escHtml(T('Slide a finger to move the cursor')) + '<br>' + escHtml(T('tap to click, two fingers: right click or scroll, three: wheel click')) + '</div>'
+    + '<div class="row">' + tmKeysHtml() + '</div>';
+  const poke = () => { if (tmwOn !== w.id) { Panel.touchmouseStart(t.host, t.port); tmwOn = w.id; } };
+  padBind(box.querySelector('.pad'), poke);
+  for (const b of box.querySelectorAll('button[data-k]')) b.onclick = () => { poke(); Panel.tmKey(b.dataset.k); };
+}
+function tmwNode(w) {
+  let n = tmwNodes[w.id];
+  const sig = JSON.stringify([w.x, w.y, w.w, w.h, w.bg, w.receiver]);
+  if (!n) { n = tmwNodes[w.id] = {box: document.createElement('div'), sig: ''}; n.box.className = 'w tmw keep'; }
+  if (sig !== n.sig) {
+    n.sig = sig;
+    n.box.style.cssText = 'left:' + w.x + 'px;top:' + w.y + 'px;width:' + w.w + 'px;height:' + w.h + 'px;background:' + (w.bg || 'var(--tile)')
+      + ';font-size:' + Math.max(16, Math.min(w.w / 22, w.h / 17)).toFixed(1) + 'px';      // the keys and the text grow with the tile
+    if (window.Panel && Panel.tmMove) tmwFill(n, w); else n.box.textContent = T('This panel app has no touch mouse: update it');
+  }
+  return n.box;
+}
+
+// ---- camera and microphone -------------------------------------------------
+// The panel's own camera on an Android panel: the launcher serves MJPEG on
+// 127.0.0.1. Any other camera, or a plain browser: server snapshots
+// (/api/camera/<id>/snapshot) polled about once a second.
+const camNodes = {};
+function camSource(w) {
+  let f = w.facing === 'back' ? 'back' : 'front';
+  let own = !w.cam_id;
+  if (w.cam_id && PANEL_DEV && w.cam_id.indexOf(PANEL_DEV + '-') === 0) { own = true; f = w.cam_id.slice(PANEL_DEV.length + 1); }
+  if (own && window.Panel && Panel.camPort) return {stream: 'http://127.0.0.1:' + Panel.camPort() + '/stream?cam=' + f};
+  const id = w.cam_id || (PANEL_DEV ? PANEL_DEV + '-' + f : '');
+  return id ? {id} : null;
+}
+// Two image layers: a new frame replaces the old one only after it has loaded, so
+// the tile never flashes empty. MJPEG freezes silently on a lost link, so the
+// stream is restarted by timer; snapshots are refreshed after CAM_SNAP_MS.
+// ?camslow=1 (the preview cards of the dashboard): a snapshot every 30 s, so a tablet's one camera is left to its own screen
+const CAM_RESTART_MS = 300000, CAM_RETRY_MS = 3000, CAM_FIRST_MS = 15000, CAM_SNAP_MS = Q.get('camslow') === '1' ? 30000 : 1000;
+function camNode(w) {
+  let c = camNodes[w.id];
+  if (!c) {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;border-radius:inherit;background:#000';
+    c = camNodes[w.id] = {box, img: null, pending: null, due: 0, busy: false, gone: false};
+    if (!document.hidden) camStart(w, c);
+  }
+  return c.box;
+}
+// a snapshot layer owns an object URL: free it together with the image
+function camDrop(n) {
+  if (!n) return;
+  if (n.dataset.blob) URL.revokeObjectURL(n.src);
+  n.remove();
+}
+function camShow(c, src, snap) {
+  camDrop(c.pending);
+  const n = document.createElement('img');
+  n.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;display:block';
+  if (snap) n.dataset.blob = '1';
+  n.onload = () => { if (c.pending !== n) return; c.pending = null; camDrop(c.img); c.img = n; c.due = Date.now() + (snap ? CAM_SNAP_MS : CAM_RESTART_MS); };
+  n.onerror = () => { if (c.pending !== n) return; c.pending = null; camDrop(n); c.due = Date.now() + CAM_RETRY_MS; };
+  c.pending = n;
+  c.due = Date.now() + CAM_FIRST_MS;          // watchdog: no frame in time -- try again
+  c.box.appendChild(n);
+  n.src = src;
+}
+async function camSnap(c, id) {
+  c.busy = true;
+  c.due = Date.now() + CAM_FIRST_MS;
+  try {
+    const r = await fetchT('/api/camera/' + encodeURIComponent(id) + '/snapshot');
+    if (r.status === 404) { c.due = Date.now() + 60000; return; }   // no such camera here: ask rarely
+    if (!r.ok) throw new Error(r.status);
+    const url = URL.createObjectURL(await r.blob());
+    if (c.gone) URL.revokeObjectURL(url); else camShow(c, url, true);
+  } catch (e) { c.due = Date.now() + CAM_RETRY_MS; }
+  finally { c.busy = false; }
+}
+function camStart(w, c) {
+  const s = camSource(w);
+  if (!s) return;
+  if (s.stream) camShow(c, s.stream + '&t=' + Date.now(), false);
+  else if (!c.busy) camSnap(c, s.id);
+}
+function camPump() {
+  if (document.hidden) return;
+  const live = {};
+  for (const w of layout) {
+    if (w.type !== 'camera') continue;
+    live[w.id] = true;
+    const c = camNodes[w.id];
+    if (!c || c.busy || Date.now() < c.due) continue;
+    camStart(w, c);
+  }
+  for (const id of Object.keys(camNodes)) {
+    if (live[id]) continue;
+    const c = camNodes[id];
+    c.gone = true; camDrop(c.pending); camDrop(c.img); c.box.remove();
+    delete camNodes[id];
+  }
+}
+setInterval(camPump, 500);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) camPump(); });
+
+let voiceUntil = 0;
+function voiceTap(w) {
+  if (!(window.Panel && Panel.voiceStart)) {
+    err(T('The microphone works only on the panel itself'));
+    setTimeout(() => err(''), 3000);
+    return;
+  }
+  // a second tap cancels: otherwise an accidental tap cannot be undone
+  if (Panel.voiceBusy && Panel.voiceBusy()) {
+    Panel.voiceStop();
+    voiceUntil = 0;
+  } else {
+    Panel.voiceStart();
+    voiceUntil = Date.now() + 9000;
+  }
+  render();
+}
+
+
+let WX = null, WX_ERR = '', wxAt = 0;
+const wxNodes = {};
+async function refreshWeather() {
+  try { WX = await api('/api/weather'); WX_ERR = ''; }
+  catch (e) { WX = WX || null; WX_ERR = String(e.message || e).replace(/^.*"detail":"?/, '').replace(/"?}$/, ''); }
+  wxAt = Date.now();
+}
+function wxNode(w) {
+  let n = wxNodes[w.id];
+  if (!n) {
+    const box = document.createElement('div');
+    box.className = 'w wx keep';
+    n = wxNodes[w.id] = {box, sig: ''};
+  }
+  const sig = JSON.stringify([w.x, w.y, w.w, w.h, w.mode, w.bg, WX && WX.fetched_at, WX_ERR, new Date().getHours()]);
+  if (sig !== n.sig) {
+    n.sig = sig;
+    n.box.style.cssText = 'left:' + w.x + 'px;top:' + w.y + 'px;width:' + w.w + 'px;height:' + w.h + 'px;background:'
+      + (w.bg || 'var(--tile)') + ';font-size:' + PW.wxFs(w).toFixed(1) + 'px';
+    n.box.innerHTML = PW.wxHtml(w, WX, WX_ERR);
+  }
+  return n.box;
+}
+setInterval(refreshWeather, 300000);
+
+// ---- air conditioner: power, temperature, modes and fan -----------------------
+// The DOM lives between redraws (keep), otherwise the temperature slider would be
+// torn from the finger every second. State: /api/devices/<id>/status, commands: /control.
+const acNodes = {};
+const acDev = w => (refOf(w) || {}).id || w.device;   // old tiles without a device field: by topic
+function acSend(w, code, value, wait) {
+  api('/api/devices/' + encodeURIComponent(acDev(w)) + '/control', {method: 'POST', body: JSON.stringify({code, value})})
+    .then(() => { const L = LIVE[acDev(w)]; if (!wait && L && L.values) L.values[code] = value; acUpdate(w); })
+    .catch(e => {
+      if (wait) { delete wait.dataset.want; wait.classList.remove('wait'); }
+      err(T('Air conditioner: {0}', e.message)); setTimeout(() => err(''), 3000);
+    });
+}
+// the power button flips the state the device reports; it waits, dimmed, for the device to say the new one
+function acPower(w, pw) {
+  if (pw.dataset.want) return;
+  const L = LIVE[acDev(w)], on = !!(L && L.values && L.values.power === true);
+  pw.dataset.want = String(!on); pw.dataset.until = Date.now() + 10000; pw.classList.add('wait');
+  acSend(w, 'power', !on, pw);
+}
+function acNode(w) {
+  let n = acNodes[w.id];
+  if (!n) {
+    const box = document.createElement('div');
+    box.className = 'w ac keep';
+    box.innerHTML = PW.acMarkup(w);
+    n = acNodes[w.id] = {box, sig: ''};
+    const pw = box.querySelector('.pw');
+    pw.onclick = () => acPower(w, pw);
+    const sl = box.querySelector('.sl'), tv = box.querySelector('.tv');
+    sl.oninput = () => { tv.textContent = sl.value + '\u00B0'; sl.dataset.drag = Date.now(); PW.acSlide(box); };
+    sl.onchange = () => { sl.dataset.drag = Date.now(); acSend(w, 'temp', parseInt(sl.value, 10)); };
+    for (const b of box.querySelectorAll('.chip')) b.onclick = () => acSend(w, b.dataset.k, b.dataset.v);
+  }
+  const sig = JSON.stringify([w.x, w.y, w.w, w.h, w.bg, w.text]);
+  if (sig !== n.sig) {
+    n.sig = sig;
+    n.box.style.cssText = 'left:' + w.x + 'px;top:' + w.y + 'px;width:' + w.w + 'px;height:' + w.h + 'px;background:'
+      + (w.bg || 'var(--tile)') + ';font-size:' + PW.acFs(w).toFixed(1) + 'px';
+    n.box.querySelector('.nm').textContent = w.text || T('Air conditioner');
+  }
+  acUpdate(w);
+  return n.box;
+}
+function acUpdate(w) {
+  const n = acNodes[w.id]; if (!n) return;
+  const L = LIVE[acDev(w)], v = (L && L.values) || {};
+  const sl = n.box.querySelector('.sl');
+  PW.acApply(n.box, w, v, Date.now() - (+sl.dataset.drag || 0) <= 3000);
+}
+
+// ---- remote (an IR tile of the home as a widget): press -> /api/devices/<tile>/control {ir_<button>}
+const rmNodes = {};
+function rmNode(w) {
+  let n = rmNodes[w.id];
+  const sig = JSON.stringify([w.x, w.y, w.w, w.h, w.bg, w.text, w.buttons, w.device]);
+  if (!n) { n = rmNodes[w.id] = {box: document.createElement('div'), sig: ''}; n.box.className = 'w rm keep'; }
+  if (sig !== n.sig) {
+    n.sig = sig;
+    n.box.style.cssText = 'left:' + w.x + 'px;top:' + w.y + 'px;width:' + w.w + 'px;height:' + w.h + 'px;background:' + (w.bg || 'var(--tile)');
+    n.box.innerHTML = PW.rmHtml(w);
+    for (const b of n.box.querySelectorAll('button[data-code]')) b.onclick = () => {
+      const was = b.innerHTML; b.style.opacity = '.45';
+      api('/api/devices/' + encodeURIComponent(w.device) + '/control', {method: 'POST', body: JSON.stringify({code: b.dataset.code, value: true})})
+        .catch(e => { err(T('Remote: {0}', e.message)); setTimeout(() => err(''), 3000); })
+        .finally(() => { b.innerHTML = was; b.style.opacity = ''; });
+    };
+  }
+  return n.box;
+}
+
+function render() {
+  for (const n of Array.from(stage.children)) if (!n.classList.contains('keep')) n.remove();
+  const liveWx = {};
+  for (const w of layout) {
+    if (w.type === 'weather') {
+      liveWx[w.id] = true;
+      const b = wxNode(w); if (b.parentNode !== stage) stage.appendChild(b);
+      continue;
+    }
+    if (w.type === 'ac') {
+      liveWx[w.id] = true;
+      const b = acNode(w); if (b.parentNode !== stage) stage.appendChild(b);
+      lifeOn(b, w);
+      continue;
+    }
+    if (w.type === 'touchmouse') {
+      liveWx[w.id] = true;
+      const b = tmwNode(w); if (b.parentNode !== stage) stage.appendChild(b);
+      continue;
+    }
+    if (w.type === 'remote') {
+      liveWx[w.id] = true;
+      const b = rmNode(w); if (b.parentNode !== stage) stage.appendChild(b);
+      lifeOn(b, w);
+      continue;
+    }
+    const el = document.createElement('div');
+    el.className = 'w';
+    el.style.cssText = `left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px`;
+    if (w.type === 'camera') {
+      el.style.background = '#000';
+      el.style.borderRadius = '12px';
+      el.style.overflow = 'hidden';
+      el.appendChild(camNode(w));
+      stage.appendChild(el);
+      continue;
+    }
+    const tile = ['toggle','dimmer','button','voice'].includes(w.type);
+    const on = (w.type === 'toggle' && isOn(w, liveVal(w)))
+            || (w.type === 'voice' && Date.now() < voiceUntil);
+    el.style.background = on ? (w.accent || 'var(--acc)') : (w.bg || (tile ? 'var(--tile)' : 'transparent'));
+    el.style.borderRadius = tile ? '12px' : '0';
+    if (w.type === 'dimmer') {
+      const f = document.createElement('div'); f.className = 'fill';
+      f.style.width = (dimLit(w) ? Math.max(0, Math.min(100, dimPct(w) || 0)) : 0) + '%';
+      f.style.background = w.accent || 'var(--acc)';
+      el.appendChild(f);
+    }
+    const ic = TILE_ICONS[w.icon], capd = ic && w.type === 'sensor' && w.text;   // a value tile with an icon: its text is the caption
+    if (ic) {                                     // the icon over the name: lit while the tile is on
+      el.classList.add('withicon'); el.style.borderRadius = '12px';   // a tile with an icon reads as a tile
+      const i = document.createElement('div'), s = Math.round(Math.min(w.h * 0.36, w.w * 0.36));
+      i.className = 'ticon'; i.style.width = i.style.height = s + 'px';
+      i.style.color = on || (w.type === 'dimmer' && dimLit(w)) ? '#FFD54A' : w.type === 'sensor' ? '#7FC4FF' : '#8A94A6';
+      i.innerHTML = '<svg viewBox="0 0 24 24">' + ic + '</svg>';
+      el.appendChild(i);
+      if (capd) { const c = document.createElement('div'); c.className = 'tcap'; c.textContent = w.text; c.style.fontSize = Math.max(10, Math.round(w.h * 0.12)) + 'px'; el.appendChild(c); }
+    }
+    const l = document.createElement('div');
+    l.className = 'lbl';
+    l.dataset.wid = w.id;
+    l.style.color = w.fg || '#FFFFFF';
+    l.style.textAlign = w.align || 'center';
+    l.style.fontSize = fontPx(ic ? {...w, h: w.h * (capd ? 0.38 : 0.5), text: capd ? '' : w.text} : w) + 'px';
+    l.style.fontWeight = w.font === 'clock' ? '700' : '500';
+    l.textContent = w.type === 'voice'
+      ? (Date.now() < voiceUntil ? '\u{1F3A4} ' + T('listening') + '\u2026' : (w.text || '\u{1F3A4} ' + T('Voice')))
+      : textOf(capd ? {...w, text: ''} : w);
+    el.appendChild(l);
+    if (w.type === 'voice') { el.classList.add('tap'); el.onclick = () => voiceTap(w); }
+    else if (tile) { el.classList.add('tap'); el.onclick = e => tap(w, e, el); }
+    const life = lifeClass(w);
+    if (life) el.classList.add(life);
+    if (waitsFor(w)) { el.classList.add('cmdwait'); el.style.animationDelay = -(Date.now() % 1600) + 'ms'; }
+    stage.appendChild(el);
+  }
+  for (const id of Object.keys(wxNodes)) if (!liveWx[id]) { wxNodes[id].box.remove(); delete wxNodes[id]; }
+  for (const id of Object.keys(acNodes)) if (!liveWx[id]) { acNodes[id].box.remove(); delete acNodes[id]; }
+  for (const id of Object.keys(rmNodes)) if (!liveWx[id]) { rmNodes[id].box.remove(); delete rmNodes[id]; }
+  fitLabels(stage);
+  drawStatus();
+  const em = document.getElementById('empty');
+  em.textContent = T('Empty panel: add widgets in the panel builder on the dashboard.');
+  em.style.display = loaded && !layout.length ? 'flex' : 'none';
+}
+// The 0.56 formula and the canvas measure are estimates; only layout knows the truth.
+// After insertion into the DOM, shrink the font to the real line width.
+function fitLabels(rootEl) {
+  for (const l of rootEl.querySelectorAll('.lbl')) {
+    if (l.scrollWidth <= l.clientWidth + 1) continue;
+    const px = parseFloat(l.style.fontSize) || 16;
+    const npx = Math.max(8, Math.floor(px * l.clientWidth / l.scrollWidth * 0.98));
+    l.style.fontSize = npx + 'px';
+  }
+}
+
+// ---- commands --------------------------------------------------------------
+// The dimmer works like the firmware: three zones -- left is dimmer, right is
+// brighter, the middle switches on and off.
+async function tap(w, ev, el) {
+  const r = refOf(w); if (!r) return;
+  if (lifeClass(w) === 'dev-off') return;       // offline: the server would refuse it (409)
+  let code = r.code, value;
+  if (w.type === 'toggle')      value = !isOn(w, liveVal(w));
+  else if (w.type === 'button') value = w.cmd_payload || '1';
+  else if (w.type === 'dimmer') {
+    const x = (ev.clientX - el.getBoundingClientRect().left) / el.getBoundingClientRect().width;
+    const cur = dimPct(w) || 0;               // /control takes percent and scales it itself
+    if (cur > 0) w._last = cur;
+    if (x < 0.33)      value = Math.max(0, cur - 10);
+    else if (x > 0.66) value = Math.min(100, cur + 10);
+    else {
+      const pw = w.onoff_topic && refOfTopic(w.onoff_topic);   // the lamp's own switch: off keeps its level
+      if (pw) { code = pw.code; r.id = pw.id; value = !(cur > 0 && isOn(w, (LIVE[pw.id] && LIVE[pw.id].values || {})[pw.code])); }
+      else value = cur > 0 ? 0 : (w._last || 100);
+    }
+  }
+  try {
+    const res = await api('/api/devices/' + encodeURIComponent(r.id) + '/control',
+                          {method: 'POST', body: JSON.stringify({code, value})});
+    if (res && res.waiting) SENT[r.id + '/' + code] = {v: res.value, t: Date.now(), name: w.text || r.id};
+    soon(400);                      // the confirmation comes from the server, not drawn here
+  } catch (e) { err(T('Command failed: {0}', e.message)); setTimeout(() => err(''), 4000); }
+}
+
+// ---- data ------------------------------------------------------------------
+let polling = false, soonT = 0, drawn = '';
+function soon(ms) { clearTimeout(soonT); soonT = setTimeout(poll, ms); }
+async function poll() {
+  if (polling) return;            // the previous poll still runs: do not stack requests
+  polling = true;
+  try { await pollOnce(); } finally { polling = false; }
+  // safety net: no link for 3 min while the phone is online (no cause from the launcher) -- reload
+  const d = devStatus();
+  if (lastOk && Date.now() - lastOk > 180000 && !(d && d.link) && Date.now() - PAGE_T0 > 180000) location.reload();
+}
+async function pollOnce() {
+  const ids = new Set();
+  for (const w of layout) { const r = refOf(w); if (r) ids.add(r.id); }
+  let ok = 0, bad = 0;
+  await Promise.all([...ids].map(async id => {
+    try { LIVE[id] = await api('/api/devices/' + encodeURIComponent(id) + '/status'); ok++; }
+    catch (e) {                   // no answer from the server is not the device's: the link dot says it
+      bad++;
+      if (LIVE[id]) delete LIVE[id].cmd_wait;
+      for (const k of Object.keys(SENT)) if (k.startsWith(id + '/')) delete SENT[k];
+    }
+  }));
+  lastTry = Date.now();
+  try { HEALTH = await api('/api/health'); } catch (e) { HEALTH = null; }
+  if (++ticks % 10 === 0) await refreshLayout();
+  // a layout without any bound widget (only a clock) is not a lost link
+  if (ok || !ids.size) lastOk = Date.now();
+  checkAnswers();
+  const sig = JSON.stringify(LIVE) + layoutSig + (Date.now() < voiceUntil);  // a redraw rebuilds every widget: only on a change
+  if (sig !== drawn) { drawn = sig; render(); } else drawStatus();
+  if (Object.keys(SENT).length) soon(500);       // a command waits: look again soon
+}
+let ticks = 0, layoutSig = '', loaded = false;
+// The page code changed on the server (plug-in update): reload once the stamp
+// differs from the first one seen.
+let uiStamp = null;
+async function checkUi() {
+  try {
+    const o = await api('/api/panels/ui');
+    if (!o || o.stamp == null) return;
+    if (uiStamp === null) uiStamp = o.stamp;
+    else if (o.stamp !== uiStamp) {             // reload only into a server that serves the page now (never into a restart)
+      const r = await fetch(location.pathname + '?probe=' + Date.now(), {cache: 'no-store'});
+      if (r.ok) location.reload();
+    }
+  } catch (e) { /* the next check tries again */ }
+}
+// The panel picks up builder edits by itself: nobody reloads a kiosk on the wall.
+// Redraw only on a real change.
+async function refreshLayout() {
+  try {
+    const o = await api('/api/panels/' + encodeURIComponent(PANEL) + '/layout');
+    const sig = JSON.stringify([o.w, o.h, o.widgets, o.bar]);
+    if (sig === layoutSig) { if (!TM) await refreshTm(o); return; }   // receivers may load later
+    layoutSig = sig;
+    await refreshTm(o);
+    layout = o.widgets || []; loaded = true;
+    W = o.w || 800; H = o.h || 480; HW = o.hw || ''; PANEL_DEV = o.device || PANEL_DEV; setLite(o);
+    if (!WX && layout.some(w => w.type === 'weather')) await refreshWeather();
+    fit(); render();
+  } catch (e) { /* the next tick tries again */ }
+}
+
+async function boot() {
+  try {
+    devices = await api('/api/devices');
+    if (!Array.isArray(devices)) devices = devices.devices || [];
+    const o = await api('/api/panels/' + encodeURIComponent(PANEL) + '/layout');
+    layout = o.widgets || []; loaded = true;
+    W = o.w || 800; H = o.h || 480; HW = o.hw || ''; PANEL_DEV = o.device || ''; setLite(o);
+    layoutSig = JSON.stringify([o.w, o.h, o.widgets, o.bar]);
+    await refreshTm(o);
+    if (layout.some(w => w.type === 'weather')) await refreshWeather();
+    fit(); lastOk = Date.now(); await poll();
+    err('');
+  } catch (e) {
+    const denied = e.status === 401 || e.status === 403;
+    err(denied && !TOKEN
+      ? T('Not signed in: sign this browser in on the dashboard (Settings -> Sign in from another screen) and open the panel from Panels -> Open, or bind this tablet (Panels -> Connect a tablet).')
+      : denied ? T('No access: bind this tablet again on the dashboard (Panels -> Connect a tablet).')
+      : T('Failed to load: {0}', e.message));
+  }
+}
+addEventListener('resize', fit);
+loadI18n().then(() => {
+  boot();
+  setInterval(poll, POLL_MS);
+  checkUi();
+  setInterval(checkUi, 60000);
+});
+// Only the clock and the date change every second. A full redraw every second
+// kept old phones repainting (RenderThread + GPU near 100 % CPU), so between
+// polls only the text changes.
+function tick() {
+  for (const w of layout) {
+    if (w.type !== 'clock' && w.type !== 'date') continue;
+    const l = stage.querySelector('.lbl[data-wid="' + w.id + '"]');
+    if (l) { const t = textOf(w); if (l.textContent !== t) l.textContent = t; }
+  }
+}
+setInterval(tick, 1000);
+// Low memory = weak chip: no weather animations. The 3 GB limit separates fast
+// phones from slow ones; ?lite=1/0 in the address overrides it.
+function setLite(o) {
+  const q = Q.get('lite');
+  const ram = o && o.caps && +o.caps.ram;
+  const lite = q != null ? q !== '0' : !!(ram && ram < 3000);
+  document.body.classList.toggle('lite', lite);
+}
+</script>
+</body>
+</html>

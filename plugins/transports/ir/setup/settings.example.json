@@ -1,0 +1,36 @@
+{
+  "ir_blasters": [
+    {
+      "node": "ir-node-1",
+      "name": "IR blaster 1",
+      "rx": true
+    }
+  ],
+  "ir_appliances": [
+    {
+      "id": "tv_1_ir",
+      "name": "TV 1 (IR)",
+      "remote": "remote_1",
+      "blaster": "ir-node-1",
+      "device": "tv_1"
+    }
+  ],
+  "ir_toggles": [
+    {
+      "id": "box_1",
+      "name": "Media box 1",
+      "category": "media",
+      "power": {
+        "remote": "remote_2",
+        "button": "power",
+        "via": "ir-node-1"
+      },
+      "probe": {
+        "host": "192.0.2.30",
+        "port": 5555,
+        "keep_on": false
+      },
+      "touchmouse": {"port": 7709, "os": "android"}
+    }
+  ]
+}

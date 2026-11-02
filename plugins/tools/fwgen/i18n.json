@@ -1,0 +1,9 @@
+{
+  "ru": {
+    "Firmware builder": "Генератор прошивок",
+    "Describe a device, get its ESPHome firmware, flash it over USB.": "Опиши устройство, получи прошивку ESPHome, прошей по USB.",
+    "Open the builder": "Открыть конструктор",
+    "Open the yashGen firmware builder in a new tab": "Открыть конструктор прошивок yashGen в новой вкладке",
+    "The computer it runs on: Settings -> Devices -> Computers and servers.": "Компьютер, на котором он работает: Настройки → Устройства → Компьютеры и серверы."
+  }
+}

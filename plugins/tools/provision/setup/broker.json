@@ -1,0 +1,7 @@
+{
+  "accounts": [],
+  "device_readonly": [
+    "provision/scan",
+    "provision/+/do"
+  ]
+}

@@ -1,0 +1,1497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel builder</title>
+<style>
+  :root { --bg:#0e1116; --panel:#18181c; --tile:#232a36; --fg:#e6eaf0; --mut:#8a93a3; --acc:#177A75; --acc2:#3CC2B8; --line:#2a2f3a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif; background:#0a0c10; color:var(--fg); }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line); }
+  header .hrow { display:contents; }            /* one flow: the controls of both rows wrap together, only when they must */
+  header > .hrow > * { flex:none; }
+  header .hrow > *, header .hf > * { height:34px; box-sizing:border-box; }
+  header h1, header .hf > span, header .hf > label, header .sep, header .grow, header #status, header #hwchip { height:auto; }
+  header .hf { display:inline-flex; align-items:center; gap:6px; }
+  header .hf[hidden], header #hwchip[hidden] { display:none; }
+  header .props2 .hf + .hf { padding-left:10px; border-left:1px solid var(--line); }
+  header .sep { width:1px; align-self:stretch; background:var(--line); margin:4px 2px; }
+  header .grow { flex:1 1 0; min-width:0; }
+  header .hrow > button, header .hrow > input, header .hrow > select, header .hrow > .hf, header h1 { flex:none; white-space:nowrap; }
+  header h1 { white-space:nowrap; }
+  header button.icon { width:34px; padding:0; }
+  header button.danger { color:#ff6b6b; }
+  header #hwchip { flex:1; min-width:120px; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right; }
+  header h1 { font-size:15px; margin:0 8px 0 0; font-weight:600; }
+  select, input, button { font:inherit; color:var(--fg); background:var(--tile); border:1px solid var(--line); border-radius:8px; padding:6px 9px; }
+  select { color-scheme:dark; } select option, select optgroup { background:var(--tile); color:var(--fg); }   /* the list opens dark */
+  button { cursor:pointer; }
+  button.primary { background:var(--acc); color:#FFFFFF; border-color:var(--acc2); font-weight:600; }
+  button.ghost { background:transparent; }
+  button:active { transform:translateY(1px); }
+  .row { display:flex; gap:18px; padding:14px; align-items:flex-start; flex-wrap:wrap; }
+  @media (min-width: 980px) { .row { flex-wrap:nowrap; } }
+  .palette { display:flex; flex-direction:column; gap:8px; width:140px; flex:none; }
+  .palette .ttl, .props .ttl { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:4px 0; }
+  .palette button { text-align:left; }
+  .stagewrap { flex:none; }
+  #limitNote { padding:8px 16px; background:var(--panel, #1b2130); color:var(--mut); font-size:13px; }
+  #narrow { position:fixed; left:0; top:0; z-index:50; background:var(--bg); display:flex; flex-direction:column; align-items:center;
+            justify-content:center; gap:12px; padding:24px; text-align:center; }
+  #narrow[hidden], #limitNote[hidden] { display:none; }
+  #stage { position:relative; background:var(--bg); border:2px solid var(--line); overflow:hidden; touch-action:none; }
+  .w { position:absolute; overflow:hidden; cursor:move; border:1px solid transparent; display:flex; align-items:center; justify-content:center; user-select:none; }
+  .w.sel { outline:2px solid var(--acc2); outline-offset:-1px; z-index:5; }
+  /* on a switched-on tile the fill has the accent colour, so the selection outline turns dark */
+  .w.sel.sel-on { outline-color:#0e1116; }
+  /* above the dimmer fill (it is absolute, .9 opacity); line-height above 1 keeps descenders */
+  .w .lbl { white-space:nowrap; overflow:hidden; padding:0; pointer-events:none; font-family:Roboto,system-ui,sans-serif;
+            line-height:1.25; position:relative; z-index:1; }
+  .w .fill { position:absolute; left:0; bottom:0; height:100%; opacity:.9; pointer-events:none; }
+  .w .handle { position:absolute; right:0; bottom:0; width:14px; height:14px; background:var(--acc2); cursor:nwse-resize; border-top-left-radius:4px; z-index:2; }
+  .props { width:330px; flex:none; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .props.hidden { display:none; }
+  .fld { display:flex; align-items:center; gap:8px; margin:5px 0; }
+  .fld label { width:124px; color:var(--mut); flex:none; font-size:14px; line-height:1.15; }
+  .fld input[type=text], .fld select { flex:1; min-width:0; padding:5px 8px; font-size:13.5px; }
+  .fld input[type=number] { flex:none; width:68px; padding:5px 8px; font-size:13.5px; }
+  .fld input[type=color] { width:44px; height:28px; padding:2px; flex:none; }
+  .fld .muted { font-size:13px; }
+  /* one frame around all properties, so the rows do not read as separate pieces */
+  .props .sect { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:0 0 10px; }
+  .props .sect .ttl { margin:0 0 6px; font-size:12.5px; }
+  /* a subtitle inside the frame instead of <hr>: splits groups but keeps one block */
+  .props .sect .ttl.sub { margin:11px 0 6px; padding-top:10px; border-top:1px solid var(--line); }
+  /* paired fields (X/Y, width/height) need no wide label. minmax(0,1fr) is required:
+     a grid column is never narrower than its content by default, and the input
+     pushed past the right edge of the panel */
+  .grid4 { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:0 10px; }
+  .grid4 .fld { min-width:0; }
+  .grid4 .fld label { width:auto; min-width:30px; }
+  /* three colours in one row */
+  .fld.colors { gap:8px; flex-wrap:wrap; row-gap:6px; }
+  .cpair { display:flex; align-items:center; gap:5px; margin-right:6px; }
+  .fld.colors input[type=color] { width:40px; height:26px; }
+  .cpair .ghost { padding:2px 7px; line-height:1; }
+  .muted { color:var(--mut); font-size:12px; }
+  .bar { display:flex; gap:8px; align-items:center; }
+  #status { color:var(--acc2); font-size:13px; white-space:nowrap; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  hr { border:none; border-top:1px solid var(--line); margin:12px 0; }
+  /* compact icon buttons for actions on the selected widget */
+  .iconrow { display:flex; gap:5px; flex-wrap:wrap; margin:6px 0 2px; }
+  .iconrow button { padding:5px 8px; line-height:1; font-size:14px; background:var(--tile); }
+  .iconrow button:disabled { opacity:.35; cursor:default; }
+  .iconrow .sep { width:1px; background:var(--line); margin:2px 3px; }
+  header button:disabled { opacity:.35; cursor:default; }
+  /* list mode (knob): rows instead of a canvas */
+  .rowlist { width:360px; display:flex; flex-direction:column; gap:6px; }
+  .rowlist[hidden] { display:none; }   /* display:flex above beats the hidden attribute */
+  .knobprev { align-self:center; width:240px; height:240px; margin-bottom:6px; }
+  .knobprev path { cursor:pointer; }
+  .rowitem { display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--tile); border:2px solid transparent; border-radius:10px; cursor:pointer; user-select:none; }
+  .rowitem.sel { border-color:var(--acc2); }
+  .rowitem .ord { display:flex; flex-direction:column; gap:2px; }
+  .rowitem .ord button { padding:0 6px; line-height:16px; font-size:11px; }
+  .rowitem .rtext { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rowitem .rbind { color:var(--mut); font-size:12px; }
+  .rowitem .rlive { font-variant-numeric:tabular-nums; color:var(--mut); }
+  /* "unsaved changes" dot on the save button */
+  #save.dirty::after { content:"\2022"; margin-left:6px; }
+  #authMsg { padding:8px 14px; background:#3a1113; color:#ffb4b4; }
+  #authMsg a { color:#ffffff; }
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <button id="backAll" class="ghost" hidden><span data-t>&#x2190; All panels</span></button>
+    <h1>&#x1F39B; <span data-t>Panel builder</span></h1>
+    <span class="hf"><label class="muted" data-t>Panel</label><select id="panelSel"></select><input id="renTo" type="text" hidden style="width:130px" title="New code: latin letters, digits, - and _. Enter to apply, Esc to cancel"><button id="renPanel" class="ghost icon" hidden title="Change the panel code (Android only: an ESP panel has its code in the firmware)">&#x270E;</button></span>
+    <input id="panelTitle" type="text" placeholder="name" title="Panel name for people; the node and the topics keep the code" style="width:130px">
+    <span class="hf"><label class="muted" data-t>Room</label><select id="panelRoom" title="Where the panel hangs; the Panels tab groups panels by room"></select></span>
+    <span class="sep"></span>
+    <button id="delPanel" class="ghost danger" title="Delete the whole panel: widgets, device bindings, retained messages on the broker">&#x1F5D1;</button>
+    <span class="grow"></span>
+    <div id="status"></div>
+    <button id="undo" class="ghost" title="Undo (Ctrl+Z)" disabled><span data-t>Undo</span></button>
+    <button id="redo" class="ghost" title="Redo (Ctrl+Shift+Z)" disabled><span data-t>Redo</span></button>
+    <button id="reload" class="ghost"><span data-t>Reload</span></button>
+    <button id="flash" class="ghost" hidden title="Saves the layout, compiles the firmware and flashes the panel over the air">&#x26A1; <span data-t>Build and flash</span></button>
+    <button id="save" class="primary">&#x1F4BE; <span data-t>Save</span></button>
+  </div>
+  <div class="hrow props2">
+    <span class="hf"><label class="muted" data-t>Size</label>
+      <input id="panelW" type="number" title="Display width, px" style="width:78px"><span class="muted">&times;</span>
+      <input id="panelH" type="number" title="Display height, px" style="width:78px"></span>
+    <span class="hf"><label class="muted" title="Screen rotation; the size above is the size AFTER rotation" data-t>rotation</label><select id="panelRot" style="width:215px"><option value="" data-t>auto</option><option value="0">0&deg;</option><option value="90">90&deg;</option><option value="180">180&deg;</option><option value="270">270&deg;</option></select></span>
+    <span id="barBox" class="hf" hidden title="A mouse button in the panel status bar: the tablet becomes a touchpad for the chosen receiver"><label class="muted" data-t>Touchmouse</label><select id="barTm" style="width:200px"></select></span>
+    <span class="hf"><label class="muted" title="Snap widgets to the grid while dragging"><input id="gridOn" type="checkbox" checked> <span data-t>grid</span></label><input id="gridStep" type="number" value="10" min="2" max="100" style="width:58px" title="Grid step, px"></span>
+    <span id="hwchip" class="muted" hidden></span>
+  </div>
+</header>
+<div id="authMsg" hidden></div>
+<div id="limitNote" hidden></div>
+<div id="narrow" hidden><p data-t>The builder is best on a wider screen</p><button id="narrowGo" class="primary"><span data-t>Try anyway</span></button></div>
+
+<div class="row">
+  <div class="palette">
+    <button id="addWidget">&#x2795; <span data-t>Add widget</span></button>
+    <hr>
+    <div class="muted"><span id="canvasHint"></span><br><span id="paletteTips"></span></div>
+  </div>
+
+  <div class="stagewrap"><div id="stage"></div><div id="rowList" class="rowlist" hidden></div></div>
+
+  <div class="props hidden" id="props">
+    <div class="ttl" data-t>Properties</div>
+    <div class="sect">
+    <div class="fld"><label title="Changing the type keeps position, size and binding" data-t>Type</label><select id="ptype"></select></div>
+    <div class="fld" id="prcvRow"><label title="The computer or player this touchpad controls" data-t>Touchmouse</label><select id="prcv"></select></div>
+    <div class="fld" id="pwmodeRow"><label title="What to show: auto by the tile size" data-t>Weather</label>
+      <select id="pwmode"><option value="auto" data-t>auto by size</option><option value="now" data-t>now only</option><option value="hours" data-t>now + hours</option><option value="days" data-t>now + days</option><option value="both" data-t>now + hours + days</option></select></div>
+    <div class="fld" id="pfacingRow"><label data-t>Camera</label>
+      <select id="pcam"></select></div>
+    <div class="iconrow">
+      <button id="alL" title="To the left edge">&#x2B70;</button>
+      <button id="alC" title="Center horizontally">&#x2B64;</button>
+      <button id="alR" title="To the right edge">&#x2B72;</button>
+      <span class="sep"></span>
+      <button id="alT" title="To the top edge">&#x2B71;</button>
+      <button id="alM" title="Center vertically">&#x2B65;</button>
+      <button id="alB" title="To the bottom edge">&#x2B73;</button>
+      <span class="sep"></span>
+      <button id="zTop" title="Bring to front">&#x2B06;</button>
+      <button id="zBot" title="Send to back">&#x2B07;</button>
+      <span class="sep"></span>
+      <button id="dup" title="Duplicate (Ctrl+D)">&#x29C9;</button>
+    </div>
+    <div class="grid4">
+      <div class="fld"><label>X</label><input id="px" type="number"></div>
+      <div class="fld"><label>Y</label><input id="py" type="number"></div>
+      <div class="fld"><label data-t>Width</label><input id="pw" type="number"></div>
+      <div class="fld"><label data-t>Height</label><input id="ph" type="number"></div>
+    </div>
+    <div class="fld"><label id="ptextLbl" data-t>Text</label><input id="ptext" type="text"></div>
+    <div class="fld"><label data-t>After the value</label><input id="psuffix" type="text" placeholder="e.g. &deg;C room"></div>
+    <div class="fld"><label data-t>Icon</label><select id="picon"><option value="" data-t>no icon</option><option value="bulb" data-t>bulb</option><option value="plug" data-t>socket</option><option value="thermo" data-t>thermometer</option><option value="drop" data-t>drop</option><option value="fan" data-t>fan</option><option value="tv" data-t>TV</option><option value="ac" data-t>AC</option></select></div>
+    <div class="fld"><label data-t>Word for "on"</label><input id="pton" type="text" placeholder="yes"></div>
+    <div class="fld"><label data-t>Word for "off"</label><input id="ptoff" type="text" placeholder="no"></div>
+    <div class="fld"><label data-t>Auto size</label><input id="pfit" type="checkbox" title="Pick the font size so the text fits the widget"><span class="muted" data-t>fit</span></div>
+    <div class="grid4">
+      <div class="fld"><label data-t>Size</label><input id="psize" type="number" placeholder="px"></div>
+      <div class="fld"><label data-t>Padding</label><input id="ppad" type="number"></div>
+    </div>
+    <div class="fld"><label data-t>Align</label>
+      <select id="palign"><option value="center" data-t>center</option><option value="left" data-t>left</option><option value="right" data-t>right</option></select></div>
+    <div class="fld colors">
+      <span class="cpair"><span class="muted" data-t>background</span><input id="pbg" type="color"><button id="pbgClr" class="ghost" title="Remove the background">&times;</button></span>
+      <span class="cpair"><span class="muted" data-t>text</span><input id="pfg" type="color"></span>
+      <span class="cpair"><span class="muted" data-t>on</span><input id="paccent" type="color" title="Colour of the on state and of the dimmer fill"></span>
+    </div>
+    <div class="ttl sub" data-t>Device binding</div>
+    <div class="muted" id="bindHint" style="margin:2px 0 5px"></div>
+    <div class="fld"><label data-t>Device</label><select id="pdev"></select></div>
+    <div class="fld"><label data-t>Channel</label><select id="pcode"></select></div>
+    <div class="muted" id="topicPreview" style="margin:3px 0"></div>
+    <details id="advTopics" style="margin:5px 0 0">
+      <summary class="muted" data-t>Advanced: MQTT topics</summary>
+      <div class="fld"><label>state_topic</label><input id="pstate" type="text"></div>
+      <div class="fld"><label>cmd_topic</label><input id="pcmd" type="text"></div>
+      <div class="fld"><label>cmd_payload</label><input id="pcmdp" type="text"></div>
+      <div class="fld"><label>dim_topic</label><input id="pdim" type="text"></div>
+    </details>
+    </div>
+    <button id="del" class="ghost" style="color:#ff6b6b">&#x1F5D1; <span data-t>Delete widget</span></button>
+  </div>
+</div>
+
+<script src="/display.js"></script>
+<script src="/plugins/panels/static/widgets.js"></script>
+<script>
+// ?token= once: stored as the house token (the dashboard's slot) and dropped from the address bar
+{
+  const q = new URLSearchParams(location.search), t = q.get('token');
+  if(t){
+    localStorage.setItem('hs_token', t); q.delete('token');
+    history.replaceState(null, '', location.pathname + (String(q) ? '?' + q : '') + location.hash);
+  }
+}
+// ---- i18n: English keys, other languages from i18n.json ----
+let I18N = {}, LANG = 'en';
+function T(s, ...a){
+  let r = (I18N[LANG] || {})[s];
+  if(r === undefined) r = s;
+  return a.length ? r.replace(/\{(\d+)\}/g, (_, i) => (a[i] != null ? a[i] : '')) : r;
+}
+window.T = T;
+// Language: ?lang=xx once (remembered), else localStorage, else the browser's.
+async function loadI18n(){
+  try { const r = await fetch('/plugins/panels/i18n.json'); if(r.ok) I18N = await r.json(); } catch(e){ I18N = {}; }
+  const q = new URLSearchParams(location.search).get('lang');
+  if(q) localStorage.setItem('lang', q);
+  const l = (localStorage.getItem('lang') || navigator.language || 'en').toLowerCase().slice(0, 2);
+  LANG = I18N[l] ? l : 'en';
+  document.documentElement.lang = LANG;
+}
+// static markup: [data-t] text, every title and placeholder
+function translateDom(root){
+  for(const el of root.querySelectorAll('[data-t]')) el.textContent = T(el.textContent.trim());
+  for(const el of root.querySelectorAll('[title]')) el.title = T(el.title);
+  for(const el of root.querySelectorAll('[placeholder]')) el.placeholder = T(el.placeholder);
+  document.title = T(document.title);
+}
+
+const stage = document.getElementById('stage');
+let layout = [], sel = null, devices = [], curPanel = null;
+let curW = 800, curH = 480, SCALE = 1;
+// the canvas takes the room beside the palette and the properties (a wide window: one row), or the window's width
+// (a narrow one: the panes wrap); the layout itself stays in panel pixels, SCALE only draws it
+function fitStage(){
+  const pal = document.querySelector('.palette'), props = document.querySelector('.props'), head = document.querySelector('header');
+  const side = (pal ? pal.offsetWidth : 140) + (props && props.offsetWidth ? props.offsetWidth : 330) + 2 * 18;
+  let availW = innerWidth - 28 - 4 - side - 24;                       // 24: a scrollbar and rounding: never a sideways scroll
+  if(availW < 320) availW = innerWidth - 28 - 4;                       // the panes wrap: the canvas gets a row of its own
+  const availH = Math.max(240, innerHeight - (head ? head.offsetHeight : 120) - 28 - 4);
+  SCALE = Math.max(0.25, Math.min(availW / curW, availH / curH, 1.5));
+  stage.style.width = (curW*SCALE)+'px'; stage.style.height = (curH*SCALE)+'px';
+  document.getElementById('panelW').value = curW;
+  document.getElementById('panelH').value = curH;
+  const hint=document.getElementById('canvasHint'); if(hint) hint.textContent = isKnob() ? T('Knob: a list of rows.') : T('Canvas {0}.', curW+'\u00D7'+curH);
+  paintGrid();
+}
+function gridStep(){ return Math.max(2, Math.min(100, +document.getElementById('gridStep').value||10)); }
+function paintGrid(){
+  const on = document.getElementById('gridOn').checked;
+  const st = gridStep()*SCALE, mj = st*5;   // every 5th line is a brighter "major"
+  stage.style.backgroundImage = on
+    ? 'linear-gradient(to right, rgba(255,255,255,.28) 1px, transparent 1px),' +
+      'linear-gradient(to bottom, rgba(255,255,255,.28) 1px, transparent 1px),' +
+      'linear-gradient(to right, rgba(255,255,255,.13) 1px, transparent 1px),' +
+      'linear-gradient(to bottom, rgba(255,255,255,.13) 1px, transparent 1px)'
+    : 'none';
+  stage.style.backgroundSize = on ? mj+'px '+mj+'px, '+mj+'px '+mj+'px, '+st+'px '+st+'px, '+st+'px '+st+'px' : '';
+}
+document.getElementById('gridOn').onchange = paintGrid;
+document.getElementById('gridStep').oninput = paintGrid;
+function applySize(){
+  curW = Math.max(16, Math.min(4096, +document.getElementById('panelW').value||800));
+  curH = Math.max(16, Math.min(4096, +document.getElementById('panelH').value||480));
+  fitStage(); render();
+}
+document.getElementById('panelW').onchange = applySize;
+document.getElementById('panelH').onchange = applySize;
+
+// widget types for the Type select: [value, icon, English label]
+const TYPES = [
+  ['clock', '\u{1F551}', 'Clock'], ['date', '\u{1F4C5}', 'Date'], ['sensor', '\u{1F321}', 'Value'],
+  ['label', '\u{1F524}', 'Text'], ['toggle', '\u{1F4A1}', 'Switch'], ['dimmer', '\u{1F39A}', 'Dimmer'],
+  ['climate', '\u2744', 'Air conditioner (row)'], ['ac', '\u2744', 'Air conditioner'], ['remote', '\u{1F39B}', 'Remote'], ['touchmouse', '\u{1F5B1}', 'Touchmouse'],
+  ['button', '\u{1F3AC}', 'Scene'], ['camera', '\u{1F4F7}', 'Camera'], ['voice', '\u{1F3A4}', 'Voice'],
+  ['weather', '\u{1F324}', 'Weather'],
+];
+// a function, so default texts are taken in the current language
+const DEFAULTS = () => ({
+  clock:  {w:800,h:200,font:'clock',align:'center',fit:true,pad:10},
+  date:   {w:300,h:54,font:'text',align:'center',text:'',fit:true,pad:6},
+  label:  {w:200,h:54,font:'text',align:'center',text:T('Text'),fit:true,pad:6},
+  toggle: {w:175,h:90,font:'text',align:'center',text:T('Button'),bg:'#232a36',cmd_payload:'toggle',fit:false,size:26,pad:8},
+  dimmer: {w:175,h:90,font:'text',align:'center',text:T('Dimmer'),bg:'#232a36',fit:false,size:26,pad:8},
+  button: {w:175,h:90,font:'text',align:'center',text:T('Scene'),bg:'#232a36',cmd_payload:'1',fit:false,size:26,pad:8},
+  sensor: {w:220,h:54,font:'text',align:'center',text:'',suffix:'',fit:true,pad:6},
+  camera: {w:320,h:240,facing:'front',pad:0},
+  voice:  {w:175,h:90,font:'text',align:'center',text:'\u{1F3A4} '+T('Voice'),bg:'#232a36',fit:false,size:26,pad:8},
+  weather:{w:440,h:330,bg:'#232a36',mode:'auto',pad:0},
+  ac:     {w:380,h:270,bg:'#232a36',text:'',pad:0},
+  remote: {w:380,h:600,bg:'#232a36',text:'',pad:0},
+  touchmouse: {w:380,h:600,bg:'#232a36',receiver:'',pad:0},
+});
+const uid = t => t+'_'+Math.random().toString(36).slice(2,7);
+
+// ---- Edit history ----------------------------------------------------------
+// One central commit() instead of a mark in every handler: the snapshot is taken
+// AFTER a change and compared with the previous one, so empty actions do not enter
+// the history. Property fields are caught by delegation on #props: input -> delayed
+// (typing and colour dragging become one step), change -> at once.
+let undoStack=[], redoStack=[], histBase='[]', histTimer=null, dirty=false;
+const serialize = () => JSON.stringify(layout);
+function setDirty(v){
+  dirty=v;
+  const b=document.getElementById('save'); if(b) b.classList.toggle('dirty',v);
+}
+function updateHistButtons(){
+  const u=document.getElementById('undo'), r=document.getElementById('redo');
+  if(u) u.disabled=!undoStack.length;
+  if(r) r.disabled=!redoStack.length;
+}
+function resetHistory(){ undoStack=[]; redoStack=[]; histBase=serialize(); clearTimeout(histTimer); histTimer=null; setDirty(false); updateHistButtons(); }
+function commit(){
+  clearTimeout(histTimer); histTimer=null;
+  const now=serialize();
+  if(now===histBase) return;                 // nothing changed
+  undoStack.push(histBase);
+  if(undoStack.length>80) undoStack.shift();
+  redoStack.length=0;
+  histBase=now; setDirty(true); updateHistButtons();
+}
+const commitSoon = ()=>{ clearTimeout(histTimer); histTimer=setTimeout(commit,400); };
+function stepHistory(from,to){
+  if(!from.length) return;
+  clearTimeout(histTimer); histTimer=null;
+  to.push(histBase);
+  histBase=from.pop();
+  layout=JSON.parse(histBase);
+  if(!layout.some(w=>w.id===sel)) sel=null;  // the selected widget's creation was undone
+  setDirty(true); render(); selectWidget(sel); updateHistButtons();
+}
+const undo = ()=> stepHistory(undoStack, redoStack);
+const redo = ()=> stepHistory(redoStack, undoStack);
+window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+
+// ---- Actions on the selected widget ----------------------------------------
+function duplicateWidget(){
+  const w=cur(); if(!w) return;
+  if(isKnob() && layout.length >= KNOB_MAX_ROWS){ setStatus(T('A knob has at most {0} rows', KNOB_MAX_ROWS), true); return; }
+  const c=JSON.parse(JSON.stringify(w));
+  c.id=uid(c.type);
+  c.x=Math.max(0,Math.min(curW-c.w, c.x+10));
+  c.y=Math.max(0,Math.min(curH-c.h, c.y+10));
+  layout.push(c); render(); selectWidget(c.id); commit();
+}
+// The array order is the drawing order, so z-order is a reorder
+function moveZ(toFront){
+  const i=layout.findIndex(w=>w.id===sel); if(i<0) return;
+  const [w]=layout.splice(i,1);
+  toFront ? layout.push(w) : layout.unshift(w);
+  render(); selectWidget(w.id); commit();
+}
+function alignWidget(mode){
+  const w=cur(); if(!w) return;
+  if(mode==='l') w.x=0;
+  else if(mode==='c') w.x=Math.round((curW-w.w)/2);
+  else if(mode==='r') w.x=curW-w.w;
+  else if(mode==='t') w.y=0;
+  else if(mode==='m') w.y=Math.round((curH-w.h)/2);
+  else if(mode==='b') w.y=curH-w.h;
+  render(); syncProps(); commit();
+}
+
+// Font size: EXACT clone of the firmware generator's fit_px() so the preview px ==
+// device px. The device sizes against WORST-CASE sample strings (longest date,
+// "-99 deg"), so the builder must too. ESP cap = the largest baked LVGL step;
+// an Android panel draws with the system font and has no cap.
+const FONT_CAP_ESP = 240;
+const WFACTOR = 0.56;                 // avg glyph width / font px -- must match the generator
+function widgetFit(w){ return (w.fit!==undefined) ? w.fit : (w.type==='clock'); }
+const FONT_MAX = w => (panelHw[curPanel]==='android') ? 4096 : FONT_CAP_ESP;
+function sampleText(w){               // mirror of the generator's sample_text()
+  switch(w.type){
+    case 'clock': return '00:00';
+    case 'date':  return T('Sun')+' 30 '+T('September');
+    case 'temp':
+    case 'sensor':{
+      // Size by the WORST real string, not by what is shown now. A binary channel
+      // is measured by the longer of its two words.
+      if(w.text_on || w.text_off){
+        const a=String(w.text_on||''), b=String(w.text_off||'');
+        return ((w.text||'')+(a.length>=b.length?a:b)).trim();
+      }
+      return ((w.text||'')+'-99.9'+(w.suffix||'')).trim();
+    }
+    case 'dimmer':return ((w.text||'')+' 100%').trim();
+    case 'camera':return '\u{1F4F7} '+T('front');
+    case 'weather':return '\u{1F324} '+T('Weather');
+    case 'ac':return (w.text||T('Air conditioner'))+' 22\u00B0';
+    case 'remote':return '\u{1F39B} '+(w.text||T('Remote'));
+    case 'touchmouse':return '\u{1F5B1} '+T('Touchmouse')+(w.receiver ? ' \u00B7 '+w.receiver : '');
+    default:      return w.text||'Ag';
+  }
+}
+function fontPx(w){
+  const pad = (w.pad!=null?w.pad:8);
+  const ih = Math.max(6, w.h - 2*pad), iw = Math.max(6, w.w - 2*pad);
+  if(!widgetFit(w)) return Math.max(8, Math.min(FONT_MAX(w), w.size||40));
+  const txt = sampleText(w);
+  const byW = iw / Math.max(1, txt.length*WFACTOR);
+  return Math.max(8, Math.min(FONT_MAX(w), Math.floor(Math.min(ih, byW))));
+}
+
+// Authorization ONLY when there is a token: an empty "Bearer " fails the auth proxy
+// and the request ends as "Failed to fetch".
+function authHeaders(h){ const t=localStorage.getItem('hs_token')||''; return Object.assign({}, h||{}, t?{'Authorization':'Bearer '+t}:{}); }
+// An error carries the HTTP status and the server's "detail" text, not the raw JSON body
+async function api(m,u,b){
+  const r=await fetch(u,{method:m,headers:authHeaders({'content-type':'application/json'}),body:b?JSON.stringify(b):undefined});
+  if(r.ok) return r.status===204?null:r.json();
+  const txt=await r.text().catch(()=>'');
+  let msg=txt||String(r.status);
+  try{ const j=JSON.parse(txt); if(j && typeof j.detail==='string') msg=j.detail; }catch(e){}
+  if(r.status===401){ showSignIn(); msg=T('not signed in'); }
+  throw Object.assign(new Error(msg), {status:r.status});
+}
+// The house token lives in the dashboard (same origin): signing in there fixes every call here
+function showSignIn(){
+  const el=document.getElementById('authMsg');
+  el.innerHTML=escapeHtml(T('Not signed in: open the {0} and sign in, then reload this page.'))
+    .replace('{0}', '<a href="/">'+escapeHtml(T('dashboard'))+'</a>');
+  el.hidden=false;
+}
+function setStatus(t,err){ const s=document.getElementById('status'); s.textContent=t; s.style.color=err?'#ff6b6b':'var(--mut)'; }
+
+let ROOMS = [], LIMITS = {};
+// a deployment's limits (the public demo's playground): the controls it does not offer are not shown, one panel, a banner
+function applyLimits(){
+  const css = (LIMITS.hide || []).map(id => '#' + CSS.escape(id) + '{display:none!important}').join('');
+  if(css) document.head.append(Object.assign(document.createElement('style'), {textContent: css}));   // the builder may show them later
+  if(LIMITS.notice){ const b=document.getElementById('limitNote'); b.textContent=T(LIMITS.notice); b.hidden=false; }
+}
+// a phone: the canvas editor is cramped there; say so instead of a broken layout (the choice holds for this tab)
+function narrowCheck(){
+  const sw = Math.min(innerWidth, screen.width || innerWidth), el = document.getElementById('narrow');   // a phone's page grows to the canvas
+  el.hidden = !(sw < 700 && sessionStorage.getItem('builder.narrow') !== 'ok');
+  el.style.width = sw + 'px'; el.style.height = Math.min(innerHeight, screen.height || innerHeight) + 'px';   // the screen, not the page
+}
+document.getElementById('narrowGo').onclick = ()=>{ sessionStorage.setItem('builder.narrow', 'ok'); narrowCheck(); };
+addEventListener('resize', narrowCheck);
+let fitTimer = 0;
+addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { fitStage(); render(); }, 120); });
+async function init(){
+  narrowCheck();
+  try { LIMITS = await api('GET','/api/panels/limits') || {}; } catch(e){ LIMITS = {}; }
+  applyLimits();
+  fitStage();
+  try { devices = await api('GET','/api/devices'); } catch(e){ devices=[]; }
+  try { HW_LIST = await api('GET','/api/panels/hw'); } catch(e){ HW_LIST=[]; }
+  // ask for cameras only when the cameras plug-in is loaded: no 404 on every load
+  let plugins = [];
+  try { plugins = ((await api('GET','/api/plugins')) || {}).loaded || []; } catch(e){ console.warn('plugins:', e.message); }
+  CAMS = [];
+  if(plugins.some(p=>p.id==='cameras'))
+    try { CAMS = await api('GET','/api/cameras'); } catch(e){ console.warn('cameras:', e.message); }
+  try { ROOMS = await api('GET','/api/rooms'); } catch(e){ ROOMS=[]; }
+  document.getElementById('panelRoom').innerHTML = '<option value="">'+escapeHtml(T('no room'))+'</option>'
+    + ROOMS.map(r=>`<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)}</option>`).join('');
+  fillDevices('');
+  await loadTmReceivers();
+  await loadPanels();
+}
+function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+let panelTitles = {};
+let panelHw = {}, panelCaps = {}, panelCan = {};
+// Knob: not a canvas but a list of <= 4 rows; the array order = the order on screen
+const KNOB_HW = 'knob128', KNOB_MAX_ROWS = 4;
+let HW_LIST = [];          // /api/panels/hw: {hw,label,kind,w,h,can}
+let CAMS = [];             // /api/cameras: {id,name} -- all cameras of the home for the Camera widget
+let pendingHw = {};        // hw of panels created here and not saved yet -> goes into the first PUT
+function hwEntry(hw){ return HW_LIST.find(h => h.hw === hw); }
+function isKnob(){ const e = hwEntry(panelHw[curPanel]); return e ? e.kind === 'list' : panelHw[curPanel] === KNOB_HW; }
+const TIPS_CANVAS = () => T('New widget is "Text"; pick the type on the right.') + '<hr>'
+  + [T('Drag to move, corner to resize'), T('Arrows: 1 px, with Shift: one grid step'), T('Ctrl+D: duplicate'),
+     T('Ctrl+Z: undo'), T('Del: delete, Esc: clear selection')].map(escapeHtml).join('<br>');
+const TIPS_KNOB = () => T('New row is "Dimmer"; pick the type on the right.') + '<hr>'
+  + ['\u25B2\u25BC ' + T('or arrows: row order'), T('Ctrl+Z: undo'), T('Del: delete, Esc: clear selection')].map(escapeHtml).join('<br>');
+// Camera and microphone exist only on an Android panel (they cannot go into ESP
+// firmware), and only when the panel reports them in its "can" list
+const ANDROID_ONLY = ['camera', 'voice'];
+// The AC row lives only on the knob: turn = temperature, long push = on/off
+const KNOB_ONLY = ['climate'];
+// A knob row is a switch, a dimmer or an AC row: nothing else fits the ring
+const KNOB_TYPES = ['toggle', 'dimmer', 'climate'];
+function typeAllowed(t){
+  if(isKnob()) return KNOB_TYPES.includes(t);
+  const android = panelHw[curPanel]==='android', can = panelCan[curPanel] || [];
+  if(ANDROID_ONLY.includes(t)) return android && can.includes(t);
+  if(KNOB_ONLY.includes(t)) return false;
+  return !(android && can.length && can.indexOf(t) < 0);
+}
+function fillTypes(){
+  document.getElementById('ptype').innerHTML = TYPES.filter(([v])=>typeAllowed(v))
+    .map(([v, ic, l])=>`<option value="${v}">${ic} ${escapeHtml(T(l))}</option>`).join('');
+}
+// The angle counts from the NATIVE screen position, which differs per board: ONX 3.5"
+// is native portrait (90 = landscape), Waveshare 7" native landscape. Labels say it in
+// words, so nobody has to guess what 90 gives.
+const ROT_WORDS = () => {
+  const L = T('landscape'), P = T('portrait'), LF = T('landscape, upside down'), PF = T('portrait, upside down');
+  return {
+    onx35:      {0:P, 90:L, 180:PF, 270:LF},
+    waveshare7: {0:L, 90:P, 180:LF, 270:PF},
+    android:    {0:L, 90:P, 180:LF, 270:PF},
+  };
+};
+let curRot = 0;   // current layout angle (explicit or the profile default)
+function defRotation(){ return (panelHw[curPanel]==='onx35') ? 90 : 0; }
+// Orientation change (landscape <-> portrait): the canvas swaps sides, widgets and
+// font sizes scale proportionally -- the rest by hand. The same angle or a turn by
+// 180 keeps the layout.
+function applyRotation(){
+  const v=document.getElementById('panelRot').value;
+  const nr = v==='' ? defRotation() : +v;
+  const flips = ((nr - curRot) % 180) !== 0;
+  curRot = nr;
+  if(!flips) return;
+  const oW=curW, oH=curH; curW=oH; curH=oW;
+  const sx=curW/oW, sy=curH/oH, sf=Math.min(sx,sy);
+  const r2=v=>Math.round(v/2)*2;
+  for(const w of layout){
+    w.x=r2(w.x*sx); w.y=r2(w.y*sy); w.w=Math.max(10,r2(w.w*sx)); w.h=Math.max(10,r2(w.h*sy));
+    if(w.size!=null && !(w.fit ?? (w.type==='clock'))) w.size=Math.max(10,Math.round(w.size*sf));
+    if(w.pad!=null) w.pad=Math.max(2,Math.round(w.pad*sf));
+  }
+  fitStage(); render(); selectWidget(null);
+  setStatus(T('Canvas rotated: {0}, widgets rescaled. Adjust and save', curW+'\u00D7'+curH));
+}
+document.getElementById('panelRot').onchange = applyRotation;
+function labelRotations(){
+  const RW = ROT_WORDS();
+  const words = RW[panelHw[curPanel]] || RW.waveshare7;
+  const def = (panelHw[curPanel]==='onx35') ? 90 : 0;
+  for(const o of document.getElementById('panelRot').options){
+    if(o.value==='') o.textContent = T('auto ({0})', words[def]);
+    else o.textContent = o.value+'\u00B0 '+words[+o.value];
+  }
+}
+// "Kitchen . panel_1 (11)": name for people, node code and the number of widgets
+function panelOptText(name, n){ const t=panelTitles[name]; return (t && t!==name ? t+' \u00B7 ' : '')+name+' ('+n+')'; }
+function curTitle(){ const v=(document.getElementById('panelTitle').value||'').trim(); return v||curPanel; }
+// "auto" = leave the key out (the generator takes the hardware profile default)
+function curRotation(){ const v=document.getElementById('panelRot').value; return v===''?undefined:+v; }
+function layoutBody(){
+  if(isKnob()) layout.forEach((w,i)=>{ w.x=0; w.y=34+44*i; w.w=240; w.h=40; });
+  const o={w:curW,h:curH,widgets:layout,title:curTitle()};
+  if(pendingHw[curPanel]) o.hw=pendingHw[curPanel]; const r=curRotation(); if(r!==undefined) o.rotation=r;
+  if(panelHw[curPanel]==='android'){ const v=document.getElementById('barTm').value; o.bar = v ? [{type:'touchmouse', receiver:v}] : []; }
+  return o; }
+// touchmouse receivers (/api/touchmouse) for the status-bar select of an Android panel
+let tmReceivers = [];
+async function loadTmReceivers(){
+  try { tmReceivers = await api('GET','/api/touchmouse') || []; } catch(e){ tmReceivers = []; }
+}
+// a receiver missing from the list stays selected: saving must not drop it silently
+function fillBarTm(want){
+  const opts = tmReceivers.map(t=>'<option value="'+escapeHtml(t.id)+'">'+escapeHtml(t.name)
+    +(t.os ? ' \u00B7 '+escapeHtml(t.os==='linux' ? 'Linux' : t.os==='android' ? 'Android' : t.os) : '')+'</option>');
+  if(want && !tmReceivers.some(t=>t.id===want))
+    opts.push('<option value="'+escapeHtml(want)+'">'+escapeHtml(T('{0} (not found)', want))+'</option>');
+  const el = document.getElementById('barTm');
+  el.innerHTML = '<option value="">'+escapeHtml(T('none'))+'</option>' + opts.join('');
+  el.value = want || '';
+}
+async function loadPanels(){
+  const panels = (await api('GET','/api/panels')).filter(p => !LIMITS.only || p.name === LIMITS.only);
+  const sel=document.getElementById('panelSel');
+  panelTitles = Object.fromEntries(panels.map(p=>[p.name, p.title||p.name]));
+  panelHw = Object.fromEntries(panels.map(p=>[p.name, p.hw||'waveshare7']));
+  panelCaps = Object.fromEntries(panels.map(p=>[p.name, p.caps||{}]));
+  panelCan = Object.fromEntries(panels.map(p=>[p.name, p.can||[]]));
+  sel.innerHTML = panels.map(p=>`<option value="${escapeHtml(p.name)}">${escapeHtml(panelOptText(p.name, p.widgets))}</option>`).join('');
+  const want = new URLSearchParams(location.search).get('panel');
+  // opened over the dashboard's settings (?embed=1): its own way back to the list of panels
+  if(new URLSearchParams(location.search).get('embed') && parent !== window){
+    const back = document.getElementById('backAll');
+    back.hidden = false;
+    back.onclick = () => parent.postMessage({type: 'panel-builder-close'}, location.origin);
+  }
+  if(want && !panels.some(p=>p.name===want)){ curPanel=null; sel.value=''; layout=[]; render(); setStatus(T('Unknown panel: {0}', want), true); }
+  else if(panels.length){ curPanel = want || panels[0].name; sel.value=curPanel; await loadLayout().catch(e=> setStatus(T('Layout did not load: {0}', e.message), true)); }
+  else { curPanel=null; layout=[]; render(); }
+}
+async function loadLayout(){
+  if(!curPanel){ layout=[]; render(); return; }
+  const o = await api('GET','/api/panels/'+encodeURIComponent(curPanel)+'/layout');
+  curW = o.w||800; curH = o.h||480; layout = o.widgets||[];
+  document.getElementById('panelTitle').value = (o.title && o.title!==curPanel) ? o.title : '';
+  document.getElementById('panelRoom').value = ROOMS.some(r=>r.id===o.room) ? o.room : '';
+  labelRotations();
+  document.getElementById('renPanel').hidden = panelHw[curPanel] !== 'android';
+  document.getElementById('panelRot').value = (o.rotation==null) ? '' : String(o.rotation);
+  curRot = (o.rotation==null) ? defRotation() : +o.rotation;
+  const tm = (o.bar||[]).find(b=>b.type==='touchmouse');
+  fillBarTm(tm ? tm.receiver : '');
+  for(const w of layout){            // migrate legacy fixed-preset fonts -> family + size
+    // "temp" differed from "sensor" only by the unit in suffix: one display type,
+    // the channel decides the kind of value (see applyBinding).
+    if(w.type==='temp') w.type='sensor';
+    if(w.font==='info'){ w.font='text'; if(w.size==null) w.size=46; if(w.fit==null) w.fit=false; }
+    else if(w.font==='btn'){ w.font='text'; if(w.size==null) w.size=26; if(w.fit==null) w.fit=false; }
+    else if(w.font==='clock' && w.fit==null){ w.fit=true; }
+  }
+  applyHwProfile();
+  sel=null; fitStage(); render(); selectWidget(null);
+  resetHistory();
+  refreshLive();
+  setStatus(T('Loaded: {0} ({1})', curPanel, curW+'\u00D7'+curH));
+}
+// A tablet panel is drawn by the browser, not LVGL: the canvas size is the real
+// screen from the device passport, the launcher gets the rotation with its heartbeat reply.
+function applyHwProfile(){
+  const android = panelHw[curPanel] === 'android';
+  const knob = isKnob();
+  const chip = document.getElementById('hwchip');
+  document.getElementById('barBox').hidden = !android;   // ESP screens have no touchpad
+  document.getElementById('flash').hidden = !(hwEntry(panelHw[curPanel]) || {}).firmware;   // only a board with firmware of ours
+  const rot = document.getElementById('panelRot');
+  rot.disabled = knob;
+  rot.previousElementSibling.style.opacity = knob ? .35 : 1;
+  for(const id of ['panelW','panelH']) document.getElementById(id).readOnly = android || knob;
+  fillTypes();
+  // A list instead of the canvas: a row needs no geometry, grid, alignment or font size
+  stage.hidden = knob;
+  document.getElementById('rowList').hidden = !knob;
+  document.getElementById('gridStep').parentElement.hidden = knob;
+  document.getElementById('paletteTips').innerHTML = knob ? TIPS_KNOB() : TIPS_CANVAS();
+  for(const el of document.querySelectorAll('#props .iconrow, #props .grid4')) el.hidden = knob;
+  for(const id of ['pfit','palign']) document.getElementById(id).parentElement.hidden = knob;
+  for(const id of ['pbg','pfg']) document.getElementById(id).parentElement.hidden = knob;
+  if(knob){
+    chip.hidden = false;
+    chip.textContent = '\u{1F39B} ' + [T('knob'), T('a list of up to {0} rows', KNOB_MAX_ROWS),
+      T('turn: level or temperature, short push: next row, long push: on/off')].join(' \u00B7 ');
+    chip.title = T('The order of the rows is the order on the screen');
+    return;
+  }
+  if(!android){ chip.hidden = true; return; }
+  const c = panelCaps[curPanel] || {}, sc = c.screen || {}, parts = [];
+  if(c.model) parts.push(c.model);
+  if(c.android) parts.push('Android ' + c.android);
+  if(sc.inch) parts.push(sc.inch + '\u2033 \u00B7 ' + sc.dpi + ' dpi');
+  if((c.cameras||[]).length) parts.push(T('cameras: {0}', c.cameras.length));
+  if(c.mic) parts.push(T('microphone'));
+  if(c.battery != null) parts.push(T('battery {0}%', c.battery));
+  chip.hidden = false;
+  chip.textContent = '\u{1F4DF} ' + parts.join(' \u00B7 ');
+  chip.title = T('Device passport sent at pairing: {0}. Nothing to flash, the tablet picks up changes by itself (rotation within a minute)', parts.join(' \u00B7 '));
+}
+
+document.getElementById('panelSel').onchange = e=>{ curPanel=e.target.value; loadLayout(); };
+document.getElementById('reload').onclick = loadLayout;
+document.getElementById('panelRoom').onchange = async e=>{
+  try{
+    await api('PUT','/api/panels/'+encodeURIComponent(curPanel)+'/room', {room: e.target.value || null});
+    setStatus(T('Room: {0}', (e.target.selectedOptions[0]||{}).textContent));
+  }catch(err){ setStatus(T('Room not saved (save a new panel first): {0}', err.message), true); }
+};
+
+// Deleting a panel: two clicks in a row (the second within 5 s) instead of confirm(),
+// so kiosks and browser automation are not blocked. An unsaved new panel lives only
+// in the browser and is just dropped from the list.
+let delArmUntil = 0;
+// The code of an Android panel: from the automatic and-0a1b2c3d to a human one. The
+// launcher learns the new code from its heartbeat reply; until then the old one works too.
+document.getElementById('renPanel').onclick = ()=>{
+  const sel=document.getElementById('panelSel'), inp=document.getElementById('renTo');
+  sel.hidden=true; inp.hidden=false; inp.value=curPanel; inp.focus(); inp.select();
+};
+document.getElementById('renTo').onkeydown = async e=>{
+  const sel=document.getElementById('panelSel'), inp=e.target;
+  const close = ()=>{ inp.hidden=true; sel.hidden=false; };
+  if(e.key==='Escape'){ close(); return; }
+  if(e.key!=='Enter') return;
+  const to=inp.value.trim(), from=curPanel;
+  if(!to || to===from){ close(); return; }
+  if(dirty){ setStatus(T('Save the layout first'), true); return; }
+  try{
+    await api('POST','/api/panels/'+encodeURIComponent(from)+'/rename',{to});
+    close();
+    history.replaceState(null,'','?panel='+encodeURIComponent(to));
+    await loadPanels();
+    setStatus(T('Code "{0}" -> "{1}"; the tablet switches to it within a minute', from, to));
+  }catch(err){ setStatus(T('Not renamed: {0}', err.message), true); }
+};
+
+document.getElementById('delPanel').onclick = async ()=>{
+  const b=document.getElementById('delPanel');
+  if(!curPanel){ setStatus(T('No panel selected'), true); return; }
+  if(Date.now() > delArmUntil){
+    delArmUntil = Date.now()+5000; const armed=curPanel;
+    b.textContent=T('Really delete "{0}"?', armed);
+    setTimeout(()=>{ if(Date.now()>=delArmUntil){ b.textContent='\u{1F5D1} '+T('panel'); } }, 5100);
+    return;
+  }
+  delArmUntil = 0; b.textContent='\u{1F5D1} '+T('panel');
+  const name=curPanel, unsaved=!!pendingHw[name];
+  try{
+    let r={unpaired:[],retained_cleared:0};
+    if(!unsaved) r = await api('DELETE','/api/panels/'+encodeURIComponent(name));
+    delete pendingHw[name]; delete panelHw[name]; delete panelCan[name]; delete panelCaps[name]; delete panelTitles[name];
+    setDirty(false);
+    await loadPanels();
+    setStatus(unsaved ? T('Unsaved "{0}" removed', name) :
+      T('Panel "{0}" deleted: bindings {1}, retained {2}', name, (r.unpaired||[]).length, r.retained_cleared||0));
+  }catch(e){ setStatus(T('Not deleted: {0}', e.message), true); }
+};
+
+document.getElementById('addWidget').onclick = ()=> addWidget();
+function addWidget(type){
+  if(isKnob()){
+    if(layout.length >= KNOB_MAX_ROWS){ setStatus(T('A knob has at most {0} rows', KNOB_MAX_ROWS), true); return; }
+    const w={id:uid('row'), type:type||'dimmer', x:0, y:0, w:240, h:40, text:''};
+    layout.push(w); render(); selectWidget(w.id); commit(); return;
+  }
+  type = type||'label';
+  const d = JSON.parse(JSON.stringify(DEFAULTS()[type]||{w:150,h:80}));
+  d.w = Math.min(d.w, curW); d.h = Math.min(d.h, curH);
+  const [x, y] = freeSpot(d.w, d.h);
+  const w = Object.assign({id:uid(type),type,x,y}, d);
+  layout.push(w); render(); selectWidget(w.id); commit();
+}
+// The first grid spot, one step in from the edges, where a new widget covers nothing
+// and keeps clear of the brand icon in the top-left corner; on a full canvas a cascade
+// from past that corner that does not start on another widget's corner. Always inside.
+const brandCorner = () => Math.round(Math.max(14, (+document.getElementById('panelH').value || 480) / 26) * 1.6) + 4;   // the view's icon size
+function freeSpot(ww, hh){
+  const st = gridStep(), C = brandCorner();
+  const hit = (x,y)=> (x<C && y<C) || layout.some(o=> x<o.x+o.w && o.x<x+ww && y<o.y+o.h && o.y<y+hh);
+  for(let y=st; y+hh<=curH; y+=st) for(let x=st; x+ww<=curW; x+=st) if(!hit(x,y)) return [x,y];
+  let x=C, y=C;
+  while(layout.some(o=> o.x===x && o.y===y) && x+20+ww<=curW && y+20+hh<=curH){ x+=20; y+=20; }
+  return [Math.max(0, Math.min(curW-ww, x)), Math.max(0, Math.min(curH-hh, y))];
+}
+
+function rowBindLabel(w){
+  const t=w.cmd_topic||w.dim_topic||w.state_topic||'';
+  const m=t.match(/^home\/(?:cmd|state)\/([^/]+)\//);
+  const own=m ? null : ownerOfTopic(t);
+  const d=m ? deviceById(m[1]) : (own ? own.dev : null);
+  const code=boundCode(w);
+  if(d) return d.name+(code?' \u00B7 '+code:'');
+  return t ? t : '\u2014 '+T('not bound')+' \u2014';
+}
+function rowLive(w){
+  const v=liveVal(w);
+  if(w.type==='climate'){
+    const on=liveVal(w, w.onoff_topic);
+    return (v==null?'\u2014':YDisp.temp(v, 'b:'+w.id)+'\u00B0')+' '+(on==null?'':(isOnPayload(w,on)?T('on'):T('off')));
+  }
+  if(v==null) return '\u2014';
+  if(w.type!=='dimmer') return isOnPayload(w,v) ? T('on') : T('off');
+  const n=parseFloat(v); if(!isFinite(n)) return String(v);
+  return Math.round(w.state_max ? n*100/w.state_max : n)+'%';
+}
+// same geometry and colours as the knob firmware generator (sector_ticks, BG/LIT_SEL/LIT/UNLIT): change both
+const KNOB_RING={d:236, w:16, sectorGap:8, tickGap:2, bg:'#1A1F29', litSel:'#3CC2B8', lit:'#0F3D3A', unlit:'#000000', numDim:'#2B3240'};
+// the brand wordmark (76x32 PNG) in the middle of the knob
+const KNOB_LOGO='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEwAAAAgCAYAAAC4oZ4KAAAABmJLR0QA/wD/AP+gvaeTAAAJQElEQVRogeWZe3BcdRXHP+fezSYtTQvaAh0eWqEDApWBgmnSu7vZNu3m0ZSRTovA8HJw0BEYQRiUVoxKFfHBiCKoIAMIlKAopE12W2aSvbsbaEjBirU8FFCmlE5LKX0n2b3HP7LZ3L3Z3TYxMFi/M5nc33n9zjn7u79zfr8r/B8hGI/Ny8D0dHmmbf2cxt1jsSHj7dTHEbWdnZMyZt/9ChdlSf9CZEkyENkwWltHfMLmJjtOE0f+CJzpYR1U1WtToYYHRmPviE6YlYg1o/owcHQJsUcyvt3XPFez7MDh2DwiE7a0tdXcOr3ydlRu4XBiVO3F9C1JWgv+fSjRIy5hAbt9mmI8Dsz38hTeEpWXEP1CAdUd6sglqdrIulL2jfFy9OOAgB0918HooUCyEDrVlKpkKHIhItcA/R6JqWJozIpH70BbiubliFlhViJ6OSr3gU7wsBTlzunbdi9/ctmyTE4+2WHhSCswvYC51b5M+WVd4fAuL0MAajs7j86YB842M/pqV7jp3UM5N7u3t2zCwe1VCttTVsOro4xtXNHQ3l6+Z5LxNBApwN6tqlelQg1PFdIN2O3THGSVIPO8PIF/iGYutENNL7vpRsBun5Y2+/6uGF1p03zLSnQUer9zqHq+ffKE/TsSOJIQRzYH7I4rRxHfuCIYj520Z5LRQ+FkbTbUnFMsWQCJYOP2skxFBOVHXp7CqSq+Hm98Bhg1DC/LclQeCcbXziw2ia/feBioyg7FQUKHiOtDwdyuaNgR7QU+N4IpPDbxgJxvhxZsPpSdrnA4nQzVfxPRS4B9bp6iFYo8aMU7fn3mplY/gGSrymu4ehWB58xMebArHE67DViJ2JdQzWv0HDUi3aGFa0cT7H+LgB29VeH7FChagryXCEamjsVuML5mliPGiyC+EUwh4UsPXGgkgo3bVeVaN0+hOu3rvyXfWGwGqnd55O7/qJNlJWKLFFZSpMIrOqYzIoAdanpZxXjPazH7L5A2fff6AFKhyKOWHW0CLh6W05aaro613bUNL6AthpPgQWCyy9AbGP03jtW5McPhrJK1XSgP2NF7FWqAGUAlsJ/B86PtGHJf99yFfymqrqrFbctZualrOzuPTpt9G4GTXSKbM77ds4105dcF+YHbbUMlbIcidiG71d2tE4z+KRaGngJME9F96hjb0gPms+vr6raVCJeFsdhR+ycSVtVTgUoD2aHC2xP307k2EtmXPRtuAI4CVNF1giwsZXNk4Pz8wISpN28477wBL8uyo1uB44dFda8ikwYHsiLvtwrGY/Mc0XXkL/c/A42AP0dRViZD9Su8kwXs6LkK3wWZX6AfAnAQVmVMrnuupn6nm7G0tdXcelzltxG5icFkeLFX4Q9lmfIb+v0HPikZo1kdXW+YcjrK7wrIl4Siv0gFG6730r0JU9WvIFKGIf9MWZGOEYvbSkR/gvKNEnNtODBxanWRX2cjharWCEjcl/HXuYuKFY8+hHD5IVWVa5Oh+ntc/l41loQBCFQlgvU9blqBFXZxItiwamg8ohpU7nGW75lk1AFnF5jjoBpcUShZWbir6kaFl0TZJqInKrIEqBhkaWjAOLgYeAqgpqvj/LxkCa+Iyt3Adgc9XgaPOg0gjoi+4AlbchvzMPYKeh9IUlT2qOgEB50vyHXumFX5GtDjVS6FEQnraGzsC8bXXOaI2TMc4NAM3JSy6jcVNZbRJQOGETLBtkORN928gN2xWpHHcwSRZrIJMw1jjrqDFv1yIlCfdKn/sur59sn+fsoTwcbtbruieoI3Xap6UTLU0O4hr7Hi0X6E4eovhIvFUgwFS7MdanoZ4R4PeWMyGPlVKWNd4Ya3UqHIQ95kATiGmVcgRPjU0LOK7s3jOVwdjK+diWpuy1g/p3G3N1lZHJs3EpxUcH20oIOGeuknzu7tLSsWTyGMbNCG5lV2en65HYgUL7lZBOz2M1SMZlVOBz1ZkCkgfnWcyjxBh2OGHg1HnnVE95Hd7BW5QsW5wkrE9ogd/ZuD9opIe9KKxLw+qEgZ7k5AJYO0OIV8c9LGDsPMUxdz167JgLv3yrvFUKHPPR63653azs4Ky44+phibUO4QuDJ7qJ0NOkvg08V07VDkbYFLgfc9rEqFakGuQ+mYm4h11a1bN8UtIKKv5I09x5s8XtnIHqvc35+XA8luE1ns6O8ry3szxi1hGbPvevIaX9mCSIugV6nqBaq6pJR+Ilj/NJI+RdDLgN8yuBnnBS8QPOh3vuemqfJB3ljUm/RRwcyU3xzkjVt/LGu6EV9VT11dXudf9JUcLVSoyytWpvPFpNWQ27iD8TWzHMySNpKBRe8Dv8/+gbYYNXZNnSHOEwyddUVHXg7mOTIW77OqyeZLmBtfRfKFJxCjImnVvaH2os8jzi4JtL8G43njquJ3D8WRvFfHEfOGYqrV3a0TrET08mB8zaw8hrQ43cEF64CtLuqoNulRweF0Ur31mIYfIaWblvoRWYFp5Fb6+K0wNCWQu+pR5YGAHb3bgZ0CFwD1xXTN9OSfAl91xMSyo6+j2ikiW1TVIRmbB3zWJR4fL5+9kGDbbZpcdCkZNgEGO/sSbK0Iy7Incze1RRPmwO68Y4BKyVuAsszAXWmz7GIGD7wgHKewctiGpsA4N3dkEva7bA8wXPxmIjJTYWRPqrJFTWkp5cdYoMmmACq3oXI7qleSe/M0wPH9p2mi+TsIW8Rqu7H4Zb9hPgMMnfccEae11KRd4eYdhkoI1TbAW9Z7Mr70RYj+KeekSu7Z5/iXo6xEZUsR8/2CPupzMnNS1sJ3SvkxJrwzsRt0Ge9WJMH4q4uzE0PfRuRqKlgBh/gIUtvZNjVj+marOG8mA02vHe781d1tJ5gZ/zmiziQV4/WktfBFRDT7vTAAxp5in+lrUu2n+NLmCSoc6yimGM62ioO+l55dsOCDQvLZj7XP5AiqvclQw/mFZAN2dLrCFlfc/b5M+ZSucPgggKYWVaOiKPOBGThyD6ZTxdzzfiPZ3u5//qvRmZta/cfsnBxFCYMcQFiWDERWF5Ofa3f8TJAbGLwaWp4KNvxwiKfJ5kcYSH8Ln7EPkWqxVrdrYnELqp0SbPvQ9s6PHtpiBOz2M6q7o584HPFgPDYjGI+dVNRcfPE5mlj80Pg5eIRDNy31a6LpM4V4/wEUIsCsb9sYkAAAAABJRU5ErkJggg==';
+function knobPct(w){
+  const on = w.type==='toggle' ? liveVal(w) : liveVal(w, w.onoff_topic||w.state_topic);
+  if(on==null || !isOnPayload(w,on)) return 0;
+  if(w.type==='toggle') return 100;
+  const n=parseFloat(liveVal(w)); if(!isFinite(n)) return 0;
+  if(w.type==='climate'){ const lo=w.temp_min??16, hi=w.temp_max??30; return (n-lo)*100/(hi-lo); }
+  return w.state_max ? n*100/w.state_max : n;
+}
+function knobPreview(){
+  const R=KNOB_RING, n=layout.length, k=n<=2?20:10, span=360/n, c=R.d/2+2, r=R.d/2-R.w/2;
+  const pt=a=>[(c+r*Math.cos(a*Math.PI/180)).toFixed(1),(c+r*Math.sin(a*Math.PI/180)).toFixed(1)];
+  let svg='<svg class="knobprev" viewBox="0 0 '+(2*c)+' '+(2*c)+'"><circle cx="'+c+'" cy="'+c+'" r="'+(R.d/2+2)+'" fill="'+R.bg+'"/>';
+  const si=Math.max(0, layout.findIndex(w=>w.id===sel));
+  layout.forEach((w,i)=>{
+    const p=Math.max(0,Math.min(100,knobPct(w))); let lit=Math.round(p*k/100); if(p>0&&!lit) lit=1;
+    const step=(span-R.sectorGap)/k, a0=270+i*span+R.sectorGap/2;
+    for(let j=0;j<k;j++){
+      const s=a0+j*step+R.tickGap/2, e=s+step-R.tickGap, [x0,y0]=pt(s), [x1,y1]=pt(e);
+      const col=j<lit?(i===si?R.litSel:R.lit):R.unlit;
+      svg+='<path data-i="'+i+'" d="M'+x0+' '+y0+' A'+r+' '+r+' 0 0 1 '+x1+' '+y1+'" stroke="'+col+'" stroke-width="'+R.w+'" fill="none"/>';
+    }
+    const am=(270+i*span+span/2)*Math.PI/180;   // the row number in the middle of its sector (sector_labels)
+    svg+='<text data-i="'+i+'" x="'+(c+64*Math.cos(am)).toFixed(1)+'" y="'+(c+64*Math.sin(am)).toFixed(1)+'" fill="'+(i===si?'#fff':R.numDim)+'" font-size="88" font-weight="700" text-anchor="middle" dominant-baseline="middle" style="cursor:pointer">'+(i+1)+'</text>';
+  });
+  const w=layout[si];
+  if(w){
+    const v=rowLive(w);
+    svg+='<image href="'+KNOB_LOGO+'" x="'+(c-38)+'" y="'+(c+6-16)+'" width="76" height="32"/>';
+    const hm=new Date().toTimeString().slice(0,5);   // the knob shows the time (SNTP) where a title was
+    svg+='<text x="'+c+'" y="'+(c-46)+'" fill="#fff" font-size="30" font-weight="500" text-anchor="middle" dominant-baseline="middle">'+hm+'</text>';
+    const onSfx=' '+T('on');
+    svg+='<text x="'+c+'" y="'+(c+64)+'" fill="#fff" font-size="42" font-weight="500" text-anchor="middle" dominant-baseline="middle">'+escapeHtml(v.endsWith(onSfx) ? v.slice(0, -onSfx.length) : v)+'</text>';
+  }
+  const holder=document.createElement('div'); holder.innerHTML=svg+'</svg>';
+  const el=holder.firstChild;
+  el.addEventListener('click', e=>{ const i=e.target.dataset&&e.target.dataset.i; if(i!=null) selectWidget(layout[+i].id); });
+  el.title=T('This is how the knob shows the rows: a numbered sector per row, ticks by the real state. On the knob a short press = next row, turn = brightness, long press = on/off. Click here to select a row');
+  return el;
+}
+function renderRows(){
+  const box=document.getElementById('rowList'); box.innerHTML='';
+  if(layout.length) box.appendChild(knobPreview());
+  if(!layout.length){ box.innerHTML='<div class="muted">'+escapeHtml(T('No rows yet: "Add widget"'))+'</div>'; return; }
+  layout.forEach((w,i)=>{
+    const el=document.createElement('div'); el.className='rowitem'+(w.id===sel?' sel':''); el.dataset.id=w.id;
+    el.innerHTML = '<div class="ord"><button title="'+escapeHtml(T('up'))+'"'+(i===0?' disabled':'')+'>\u25B2</button>'
+      + '<button title="'+escapeHtml(T('down'))+'"'+(i===layout.length-1?' disabled':'')+'>\u25BC</button></div>'
+      + '<span>'+(w.type==='dimmer'?'\u{1F39A}':(w.type==='climate'?'\u2744':'\u{1F4A1}'))+'</span>'
+      + '<span class="rtext">'+escapeHtml(w.text||T('row {0}', i+1))+'<br><span class="rbind">'+escapeHtml(rowBindLabel(w))+'</span></span>'
+      + '<span class="rlive">'+escapeHtml(rowLive(w))+'</span>';
+    const [up,down]=el.querySelectorAll('.ord button');
+    up.onclick=e=>{ e.stopPropagation(); moveRow(i,-1); };
+    down.onclick=e=>{ e.stopPropagation(); moveRow(i,1); };
+    el.onclick=()=>selectWidget(w.id);
+    box.appendChild(el);
+  });
+}
+function moveRow(i,dir){
+  const j=i+dir; if(i<0||j<0||j>=layout.length) return;
+  [layout[i],layout[j]]=[layout[j],layout[i]];
+  render(); commit();
+}
+function render(){
+  if(isKnob()){ renderRows(); return; }
+  stage.querySelectorAll('.w').forEach(n=>n.remove());
+  for(const w of layout){
+    const el=document.createElement('div'); el.className='w'+(w.id===sel?' sel':''); el.dataset.id=w.id;
+    el.style.left=(w.x*SCALE)+'px'; el.style.top=(w.y*SCALE)+'px';
+    el.style.width=(w.w*SCALE)+'px'; el.style.height=(w.h*SCALE)+'px';
+    const isTile = w.type==='toggle'||w.type==='dimmer'||w.type==='button';
+    const tOn = w.type==='toggle' && isOnVal(liveVal(w));
+    el.style.background = tOn ? (w.accent||'var(--acc)') : (w.bg || (isTile?'var(--tile)':'transparent'));
+    if(tOn) el.classList.add('sel-on');   // the selection outline turns dark, see .w.sel.sel-on
+    el.style.borderRadius = isTile?'12px':'0';
+    if(w.type==='dimmer'){ const f=document.createElement('div'); f.className='fill';
+      const dv=liveVal(w); f.style.width=(dv==null?40:Math.max(0,Math.min(100,+dv||0)))+'%';
+      f.style.background=w.accent||'var(--acc)'; f.style.borderRadius='12px'; el.appendChild(f); }
+    const lbl=document.createElement('div'); lbl.className='lbl';
+    lbl.style.color = w.fg || '#FFFFFF';
+    lbl.style.width='100%'; lbl.style.textAlign=w.align||'center'; lbl.style.padding='0';
+    lbl.style.fontSize = (fontPx(w)*SCALE)+'px';
+    lbl.style.fontWeight = w.font==='clock'?'700':'500';
+    if(w.type==='weather' || w.type==='ac' || w.type==='remote'){
+      // the real tile from widgets.js on sample data, at the canvas scale
+      lbl.remove();
+      const pv=document.createElement('div'); const sw={...w, w:w.w*SCALE, h:w.h*SCALE};
+      pv.className=(w.type==='weather'?'wx':(w.type==='ac'?'ac':'rm'))+' pv';
+      pv.style.cssText='position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;background:'+(w.bg||'var(--tile)')
+        +';font-size:'+((w.type==='weather'?PW.wxFs(sw):(w.type==='ac'?PW.acFs(sw):PW.rmFs(sw))).toFixed(1))+'px';
+      pv.innerHTML = w.type==='weather' ? PW.wxHtml(sw, PW.sampleWeather(), '') : (w.type==='ac' ? PW.acMarkup(sw) : PW.rmHtml(sw));
+      if(w.type==='ac') PW.acApply(pv, sw, PW.SAMPLE_AC, false);
+      el.appendChild(pv);
+    } else {
+    lbl.textContent = previewText(w);
+    el.appendChild(lbl);
+    }
+    const h=document.createElement('div'); h.className='handle'; el.appendChild(h);
+    el.addEventListener('pointerdown', e=> startDrag(e,w,el,h));
+    stage.appendChild(el);
+  }
+  // like the panel view: after layout shrink a label to its real width (same font stack)
+  for(const l of stage.querySelectorAll('.w .lbl')){
+    if(l.scrollWidth <= l.clientWidth + 1) continue;
+    const px=parseFloat(l.style.fontSize)||16, npx=Math.max(4, Math.floor(px*l.clientWidth/l.scrollWidth*0.98));
+    l.style.fontSize=npx+'px';
+  }
+}
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MON=['January','February','March','April','May','June',
+           'July','August','September','October','November','December'];
+const two = n => String(n).padStart(2,'0');
+let LIVE = {};           // dev_id -> {values:{code:value}, raw:{code:string as received}}
+function liveRaw(w){      // the text the device sent (a number loses its ".0" in JSON): the panel prints this one
+  const t = w.state_topic || '', m = t.match(/^home\/state\/([^/]+)\/(.+)$/);
+  let id, code;
+  if(m){ id = m[1]; code = m[2]; } else { const own = ownerOfTopic(t); if(!own) return null; id = own.dev.id; code = own.code; }
+  const r = LIVE[id] && LIVE[id].raw;
+  return r && r[code] != null ? String(r[code]) : null;
+}
+function liveVal(w, topic){
+  const t = topic || w.state_topic || '';
+  const m = t.match(/^home\/state\/([^/]+)\/(.+)$/);
+  if(!m){
+    // transport=mqtt devices keep THEIR OWN topics: find the owner and take the
+    // value from its status, otherwise the preview would show a placeholder.
+    const own = ownerOfTopic(t);
+    if(!own) return null;
+    const v0 = LIVE[own.dev.id] && LIVE[own.dev.id].values
+      ? LIVE[own.dev.id].values[own.code] : null;
+    return v0 == null ? null : v0;
+  }
+  const vals = LIVE[m[1]] && LIVE[m[1]].values ? LIVE[m[1]].values : null;
+  if(!vals) return null;
+  // A dimmer tile subscribes to the synthetic "<code>_pct" mirror the server
+  // publishes, which is NOT a device code: strip it to read the real level.
+  let v = vals[m[2]];
+  if(v == null && m[2].endsWith('_pct')) v = vals[m[2].slice(0, -4)];
+  return v == null ? null : v;
+}
+function isOnVal(v){ return v===true || v===1 || v==='true' || v==='1' || v==='on' || v==='ON'; }
+async function refreshLive(){
+  const ids = new Set();
+  for(const w of layout){
+    const t = w.state_topic || '';
+    const m = t.match(/^home\/state\/([^/]+)\//);
+    if(m){ ids.add(m[1]); continue; }
+    const own = ownerOfTopic(t);       // an mqtt device with its own topic
+    if(own) ids.add(own.dev.id);
+  }
+  if(ids.size){
+    await Promise.all([...ids].map(async id=>{
+      try{
+        const st = await api('GET','/api/devices/'+encodeURIComponent(id)+'/status');
+        LIVE[id] = {values: st.values || {}, raw: st.raw || {}};
+      }catch(e){}
+    }));
+  }
+  render();
+}
+setInterval(()=>{ if(!drag) refreshLive(); }, 30000);   // keeps the preview current; never mid-drag
+
+// The value as the panel prints it: a temperature or a humidity as every screen shows it (display.js), anything else as
+// the device sent it ("46.0", not 46)
+function fmtVal(w, v, raw){
+  const c = YDisp.reading(w.type === 'temp' ? 'temperature' : String(w.state_topic || '').split('/').pop(), v, 'b:' + w.id);
+  return c || (raw != null ? String(raw) : String(v));
+}
+
+// A binary channel is shown as a pair of words, not a number
+function isOnPayload(w, v){
+  if(v==null) return false;
+  const t=String(v);
+  if(w.state_on) return t===String(w.state_on);
+  return ['ON','on','1','true','True'].includes(t);
+}
+function boolWord(w, v){
+  if(v==null) return w.text_off||T('no');
+  return isOnPayload(w,v) ? (w.text_on||T('yes')) : (w.text_off||T('no'));
+}
+
+function previewText(w){
+  const now = new Date();
+  switch(w.type){
+    case 'clock': return two(now.getHours())+':'+two(now.getMinutes());
+    case 'date':  return T(DOW[now.getDay()])+' '+now.getDate()+' '+T(MON[now.getMonth()]);
+    case 'toggle':return w.text||T('Button');
+    case 'dimmer':{ const p=PW.dimPercent(w, liveVal(w), devices); return (w.text? w.text+' ':'')+(p==null?40:p)+'%'; }
+    case 'climate':{ const v=liveVal(w); return (w.text? w.text+' ':'')+(v==null?22:YDisp.temp(v, 'b:'+w.id))+'\u00B0'; }
+    case 'ac':{ const d=deviceById(refOfAc(w)); const st=d&&LIVE[d.id]&&LIVE[d.id].values; const t=st&&st.temp!=null?st.temp:'--'; return '\u2744 '+(w.text||(d?d.name:T('Air conditioner')))+' \u00B7 '+t+'\u00B0 \u00B7 '+(st&&st.power?T('on'):T('off')); }
+    case 'remote':return '\u{1F39B} '+(w.text||T('Remote'))+' \u00B7 '+T('{0} buttons', (w.buttons||[]).length);
+    case 'touchmouse':return '\u{1F5B1} '+T('Touchmouse')+(w.receiver ? ' \u00B7 '+w.receiver : '');
+    case 'button':return w.text||T('Scene');
+    case 'camera':return camLabel(w);
+    case 'weather':return '\u{1F324} '+T('Weather')+' \u00B7 ' + T({auto:'auto',now:'now',hours:'hours',days:'days',both:'hours+days'}[w.mode||'auto']);
+    case 'voice': return w.text||'\u{1F3A4} '+T('Voice');
+    case 'temp':
+    case 'sensor':{ const v=liveVal(w);
+                    const pre = w.text? w.text+' ' : '';
+                    if(w.text_on || w.text_off) return pre+boolWord(w, v);
+                    return pre+fmtVal(w, v==null?42:v, v==null?null:liveRaw(w))+(w.suffix||''); }
+    default:      return w.text||T('Text');
+  }
+}
+
+let drag=null;
+function startDrag(e,w,el,handle){
+  e.preventDefault(); selectWidget(w.id);
+  const resize = e.target===handle;
+  drag={w,el,resize,sx:e.clientX,sy:e.clientY,ox:w.x,oy:w.y,ow:w.w,oh:w.h};
+  el.setPointerCapture(e.pointerId);
+  el.addEventListener('pointermove',onDrag); el.addEventListener('pointerup',endDrag);
+}
+function onDrag(e){
+  if(!drag) return;
+  const dx=(e.clientX-drag.sx)/SCALE, dy=(e.clientY-drag.sy)/SCALE;
+  const step=document.getElementById('gridOn').checked ? gridStep() : 5;
+  const snap=v=>Math.round(v/step)*step;
+  if(drag.resize){ drag.w.w=Math.max(20,snap(drag.ow+dx)); drag.w.h=Math.max(16,snap(drag.oh+dy)); }
+  else { drag.w.x=snap(drag.ox+dx); drag.w.y=snap(drag.oy+dy); }
+  positionEl(drag.el,drag.w); if(drag.w.id===sel) syncProps();
+}
+function endDrag(e){ if(!drag) return; drag.el.removeEventListener('pointermove',onDrag); drag.el.removeEventListener('pointerup',endDrag); drag=null; commit(); }
+function positionEl(el,w){ el.style.left=(w.x*SCALE)+'px'; el.style.top=(w.y*SCALE)+'px'; el.style.width=(w.w*SCALE)+'px'; el.style.height=(w.h*SCALE)+'px'; }
+
+function selectWidget(id){
+  sel=id;
+  stage.querySelectorAll('.w').forEach(n=>n.classList.toggle('sel',n.dataset.id===id));
+  if(isKnob()) renderRows();
+  const p=document.getElementById('props');
+  if(!id){ p.classList.add('hidden'); return; }
+  p.classList.remove('hidden'); syncProps();
+}
+function cur(){ return layout.find(w=>w.id===sel); }
+function syncProps(){
+  const w=cur(); if(!w) return;
+  px.value=w.x; py.value=w.y; pw.value=w.w; ph.value=w.h;
+  ptext.value=w.text||''; palign.value=w.align||'center';
+  const tsel=document.getElementById('ptype');
+  if(tsel && ![...tsel.options].some(o=>o.value===w.type)){
+    // the widget has a type no longer in the list: show it as is. The option must
+    // exist BEFORE the value is set: a select silently ignores an unknown value.
+    tsel.insertAdjacentHTML('beforeend',
+      `<option value="${escapeHtml(w.type)}">${escapeHtml(T('{0} (as is)', w.type))}</option>`);
+  }
+  document.getElementById('ptype').value=w.type;
+  pfit.checked=widgetFit(w); psize.value=w.size||''; psize.disabled=widgetFit(w);
+  ppad.value=(w.pad!=null?w.pad:8);
+  pbg.value=w.bg||'#232a36'; pfg.value=w.fg||'#ffffff'; paccent.value=w.accent||'#177a75';
+  document.getElementById('picon').value=w.icon||'';
+  pstate.value=w.state_topic||''; pcmd.value=w.cmd_topic||''; pcmdp.value=w.cmd_payload||''; pdim.value=w.dim_topic||''; psuffix.value=w.suffix||'';
+  // device dropdown: match state/cmd topic back to a device id, and offer only the
+  // devices this widget type can drive (keeping an already-bound one regardless)
+  const t0=(w.cmd_topic||w.state_topic||'');
+  const m=t0.match(/^home\/(?:cmd|state)\/([^/]+)\//);
+  const own=m ? null : ownerOfTopic(t0);
+  const bound=(m && devices.some(d=>d.id===m[1])) ? m[1]
+            : (own ? own.dev.id : '');
+  fillDevices(bound);
+  fillCodes(boundCode(w));
+  applyBindVisibility(w);
+  document.getElementById('topicPreview').textContent='';
+  fillCams(w);
+}
+// Camera widget: the panel's own camera or any camera of the home from /api/cameras.
+// The own one is stored as facing without cam_id (as old layouts have it), another one as cam_id.
+function fillCams(w){
+  const sel=document.getElementById('pcam');
+  const own=`<option value="own-front">${escapeHtml(T('this panel, front'))}</option><option value="own-back">${escapeHtml(T('this panel, back'))}</option>`;
+  sel.innerHTML = own + CAMS.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name||c.id)}</option>`).join('');
+  sel.value = w.cam_id ? w.cam_id : ('own-'+(w.facing==='back'?'back':'front'));
+  if(sel.selectedIndex<0){ sel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(w.cam_id)}">${escapeHtml(T('{0} (not in the list)', w.cam_id))}</option>`); sel.value=w.cam_id; }
+}
+function camLabel(w){
+  if(w.cam_id){ const c=CAMS.find(x=>x.id===w.cam_id); return '\u{1F4F7} '+(c ? (c.name||c.id) : w.cam_id); }
+  return w.facing==='back' ? '\u{1F4F7} '+T('back') : '\u{1F4F7} '+T('front');
+}
+document.getElementById('pcam').onchange=()=>{
+  const w=cur(); if(!w) return;
+  const v=document.getElementById('pcam').value;
+  if(v.indexOf('own-')===0){ delete w.cam_id; w.facing=v.slice(4); } else { w.cam_id=v; }
+  render();
+};
+document.getElementById('prcv').onchange=()=>{ const w=cur(); if(!w) return; w.receiver=document.getElementById('prcv').value; render(); commit(); };
+document.getElementById('pwmode').onchange=()=>{ const w=cur(); if(!w) return; w.mode=document.getElementById('pwmode').value; render(); commit(); };
+['px','py','pw','ph'].forEach(id=> document.getElementById(id).oninput=()=>{ const w=cur(); if(!w) return; w.x=+px.value;w.y=+py.value;w.w=+pw.value;w.h=+ph.value; render(); });
+ptext.oninput=()=>{ const w=cur(); if(w){ w.text=ptext.value; render(); } };
+pfit.onchange=()=>{ const w=cur(); if(w){ w.fit=pfit.checked; psize.disabled=pfit.checked; render(); } };
+psize.oninput=()=>{ const w=cur(); if(!w) return; const mx=FONT_MAX(w); let v=+psize.value; if(v>mx){ v=mx; psize.value=mx; } if(v>0) w.size=v; else delete w.size; render(); };
+ppad.oninput=()=>{ const w=cur(); if(w){ w.pad=Math.max(0,+ppad.value||0); render(); } };
+palign.onchange=()=>{ const w=cur(); if(w){ w.align=palign.value; render(); } };
+document.getElementById('picon').onchange=()=>{ const w=cur(); if(!w) return; const v=document.getElementById('picon').value; if(v) w.icon=v; else delete w.icon; render(); };   // Android tiles only (the server refuses it elsewhere)
+pbg.oninput=()=>{ const w=cur(); if(w){ w.bg=pbg.value; render(); } };
+document.getElementById('pbgClr').onclick=()=>{ const w=cur(); if(w){ delete w.bg; render(); } };
+pfg.oninput=()=>{ const w=cur(); if(w){ w.fg=pfg.value; render(); } };
+paccent.oninput=()=>{ const w=cur(); if(w){ w.accent=paccent.value; render(); } };
+[['pstate','state_topic'],['pcmd','cmd_topic'],['pcmdp','cmd_payload'],['pdim','dim_topic'],['psuffix','suffix'],['pton','text_on'],['ptoff','text_off']].forEach(([id,key])=>{
+  document.getElementById(id).oninput=()=>{ const w=cur(); if(!w) return; const v=document.getElementById(id).value; if(v) w[key]=v; else delete w[key]; if(key==='suffix') render(); };
+});
+
+function deviceById(id){ return devices.find(d=>d.id===id); }
+
+// What a widget type can actually drive or read: a toggle/dimmer tile is not offered
+// battery button remotes and sensors, and a dimmer is not offered brightness
+// channels, since the tile derives brightness itself from the picked channel.
+const RO_KINDS = ['sensor','sensor_text','trigger','trigger_text'];
+function isWritable(c){ return !c.ro && !RO_KINDS.includes(c.kind); }
+function refOfAc(w){ const o=ownerOfTopic(w.power_cmd||w.cmd_topic||''); return o ? o.dev.id : (w.device||''); }
+function codesFor(d, type){
+  const cs = d.controls || [];
+  if(type === 'remote')      // an IR tile of the home: a device with learned/built buttons
+    return cs.filter(c => c.kind === 'ir_press');
+  if(type === 'ac')          // a unit with power, temperature and modes -- an air conditioner
+    return cs.filter(c => c.kind === 'switch' && isWritable(c) && cs.some(t => t.code === 'temp' && t.command_topic));
+  if(type === 'dimmer')      // channels only; the brightness partner is derived
+    return cs.filter(c => c.kind === 'switch' && isWritable(c)
+                          && ctlForCode(d, c.code, 'bright'));
+  if(type === 'toggle') return cs.filter(c => c.kind === 'switch' && isWritable(c));
+  if(type === 'climate')     // the power switch of a unit that also has a numeric temp setting
+    return cs.filter(c => c.kind === 'switch' && isWritable(c)
+                          && cs.some(t => t.code === 'temp' && t.command_topic));
+  if(type === 'button') return cs.filter(isWritable);
+  if(type === 'temp' || type === 'label' || type === 'sensor')
+    return cs.filter(c => RO_KINDS.includes(c.kind));
+  return cs;
+}
+// Binding fields that make sense per type: a sensor gets no command topics and a
+// button no state it does not have.
+const BIND_FIELDS = {
+  toggle: ['pstate', 'pcmd', 'pcmdp'],
+  dimmer: ['pstate', 'pcmd', 'pdim'],
+  climate: ['pstate', 'pcmd', 'pdim'],
+  ac:     ['pstate', 'pcmd'],
+  remote: ['pcmd'],
+  touchmouse: [],
+  button: ['pcmd', 'pcmdp'],
+  sensor: ['pstate', 'psuffix'],
+  temp:   ['pstate', 'psuffix'],
+  label:  ['pstate', 'psuffix'],
+  clock:  [],
+  date:   [],
+  camera: [],
+  voice:  [],
+};
+// English hint keys; translated when shown
+const BIND_HINT = {
+  camera: 'Camera picture: the panel\'s own camera or a camera of the home. The tablets\' cameras are cameras of the home too (Cameras tab).',
+  voice:  'A press turns on the tablet microphone: speech goes to the same service as from the ESP microphones.',
+  toggle: 'Any device with an on/off channel: light, boiler, air conditioner.',
+  dimmer: 'A device with brightness; the tile splits itself into three zones.',
+  climate: 'Air conditioner: turn = target temperature, long push = on/off; the row shows degrees and state.',
+  ac:     'Air conditioner tile: power, target temperature, modes and fan, all from the device channels; room temperature from its card.',
+  remote: 'IR remote (a tile from the Remotes tab): buttons are laid out like on a real remote: power, arrows, volume, digits.',
+  touchmouse: 'A touchpad with rewind, Play/Pause, fast forward and the volume for a touchmouse receiver (Android panels).',
+  button: 'A one-shot command without state (scene, "find my phone").',
+  sensor: 'Device readings: temperature, humidity, light, motion.',
+  temp:   'Device readings (same as "Value").',
+  label:  'Static text, or a value if a device is bound.',
+  clock:  'A clock needs no device: the time comes from the server.',
+  date:   'A date needs no device: it comes from the server.',
+};
+function applyBindVisibility(w){
+  const keep = BIND_FIELDS[w.type] || [];
+  // for a value "Text" is the prefix before the number, for a button its caption
+  const tl = document.getElementById('ptextLbl');
+  if(tl) tl.textContent = ['sensor','temp'].includes(w.type) || (w.type==='label' && w.state_topic)
+    ? T('Before the value') : T('Text');
+  // A shown value is of three kinds and the fields must not conflict: numeric --
+  // a unit, binary -- a pair of words, text -- nothing.
+  const showsValue = ['sensor','temp','label'].includes(w.type);
+  const fr = document.getElementById('pfacingRow');
+  if(fr) fr.style.display = w.type==='camera' ? '' : 'none';
+  const rr = document.getElementById('prcvRow');
+  if(rr){
+    rr.style.display = w.type==='touchmouse' ? '' : 'none';
+    if(w.type==='touchmouse'){
+      if(!w.receiver && tmReceivers.length){ w.receiver = tmReceivers[0].id; commit(); }
+      const sel = document.getElementById('prcv');
+      sel.innerHTML = tmReceivers.map(t=>'<option value="'+escapeHtml(t.id)+'">'+escapeHtml(t.name)+'</option>').join('')
+        + (w.receiver && !tmReceivers.some(t=>t.id===w.receiver) ? '<option value="'+escapeHtml(w.receiver)+'">'+escapeHtml(T('{0} (not found)', w.receiver))+'</option>' : '');
+      sel.value = w.receiver || '';
+    }
+  }
+  const wr = document.getElementById('pwmodeRow');
+  if(wr){ wr.style.display = w.type==='weather' ? '' : 'none'; document.getElementById('pwmode').value = w.mode||'auto'; }
+  const isBool = !!(w.text_on || w.text_off);
+  const vis = (id, on)=>{ const e=document.getElementById(id);
+    if(e && e.parentElement) e.parentElement.style.display = on ? '' : 'none'; };
+  vis('psuffix', showsValue && !isBool);
+  vis('pton',    showsValue && isBool);
+  vis('ptoff',   showsValue && isBool);
+  let anyTopic = false;
+  for(const id of ['pstate','pcmd','pcmdp','pdim']){
+    const el = document.getElementById(id);
+    const on = keep.includes(id);
+    if(on) anyTopic = true;
+    if(el && el.parentElement) el.parentElement.style.display = on ? '' : 'none';
+  }
+  // without a single topic the details block would open into nothing
+  const adv = document.getElementById('advTopics');
+  if(adv) adv.style.display = anyTopic ? '' : 'none';
+  const bindable = keep.length > 0;
+  for(const id of ['pdev','pcode']){
+    const el = document.getElementById(id);
+    if(el && el.parentElement) el.parentElement.style.display = bindable ? '' : 'none';
+  }
+  const hint = document.getElementById('bindHint');
+  if(hint) hint.textContent = BIND_HINT[w.type] ? T(BIND_HINT[w.type]) : '';
+}
+
+// The control code a widget is currently bound to, read back out of its topics.
+function boundCode(w){
+  const t = w.cmd_topic || w.dim_topic || w.state_topic || '';
+  const m = t.match(/^home\/(?:cmd|state)\/[^/]+\/(.+)$/);
+  if(m) return m[1].replace(/_pct$/,'');
+  // transport=mqtt devices keep THEIR OWN topics (the dashboard does not mirror them),
+  // so the channel is found by an exact match; otherwise the UI would not recognise
+  // its own topic and would rebind the widget to the first channel.
+  const own = ownerOfTopic(t);
+  return own ? own.code : '';
+}
+
+// The device and channel that own an arbitrary topic (for mqtt devices).
+function ownerOfTopic(t){
+  if(!t) return null;
+  for(const d of devices){
+    // the command topic counts too: a toggle tile has cmd_topic = the channel's command_topic
+    const c = (d.controls || []).find(x => x.state_topic === t || x.command_topic === t);
+    if(c) return { dev: d, code: c.code };
+  }
+  return null;
+}
+function fillDevices(keep){
+  const dsel = document.getElementById('pdev');
+  const w = cur();
+  let list = w ? devices.filter(d => codesFor(d, w.type).length) : devices.slice();
+  // a widget already bound to a device that no longer qualifies must still show it
+  if(keep && !list.some(d => d.id === keep)){
+    const d0 = deviceById(keep);
+    if(d0) list = [d0].concat(list);
+  }
+  dsel.innerHTML = '<option value="">\u2014 '+escapeHtml(T('none'))+' \u2014</option>'
+    + list.map(d=>`<option value="${escapeHtml(d.id)}">${escapeHtml(d.name)}</option>`).join('');
+  dsel.value = keep || '';
+}
+
+// Gang suffix of a control code: 'state_l2' -> 'l2', 'brightness' -> ''.
+function chanOf(code){
+  for(const base of ['state','brightness'])
+    if(String(code||'').startsWith(base))
+      return String(code).slice(base.length).replace(/^_/,'');
+  return '';
+}
+// The control of `kind` sitting on the SAME gang as `code`.
+function ctlForCode(d, code, kind){
+  // Same rule as the dashboard: with no gang suffix, only pair when there is
+  // exactly one control of each kind, or a two-switch card binds both to one dimmer.
+  const all=(d.controls||[]);
+  const list=all.filter(c=>c.kind===kind);
+  if(!list.length) return null;
+  // an explicit pair from the device description ("pair": partner code): a matrix
+  // has two brightness channels for two switches that the suffix cannot tell apart
+  const me=all.find(c=>c.code===code);
+  if(me && me.pair){ const p=list.find(c=>c.code===me.pair); if(p) return p; }
+  const back=list.find(c=>c.pair===code); if(back) return back;
+  const want=chanOf(code);
+  if(want) return list.find(c=>chanOf(c.code)===want) || null;
+  const sw=(d.controls||[]).filter(c=>c.kind==='switch' && !c.card_toggle);
+  return (list.length===1 && sw.length===1) ? list[0] : null;
+}
+function fillCodes(keep){
+  const w=cur(); const d=deviceById(pdev.value);
+  const cs=document.getElementById('pcode');
+  if(!d || !w){ cs.innerHTML='<option value="">\u2014</option>'; return; }
+  const list=codesFor(d, w.type);
+  if(!list.length){ cs.innerHTML='<option value="">\u2014 '+escapeHtml(T('nothing to bind'))+' \u2014</option>'; return; }
+  // a dimmer tile is bound per channel, so name the option "channel", not "switch"
+  const kindName=c=>(w.type==='dimmer' && c.kind==='switch') ? T('channel') : c.kind;
+  cs.innerHTML=list.map(c=>
+    `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label||c.code)} (${escapeHtml(kindName(c))})</option>`).join('');
+  if(keep && list.some(c=>c.code===keep)) cs.value=keep;
+}
+// Changing the type must rewire the widget, not leave it half-converted: a toggle
+// turned into a dimmer kept its cmd_payload:"toggle" and its plain state topic, so
+// the tile had no zones and no fill. Re-derive the binding for the new type.
+document.getElementById('ptype').onchange=()=>{
+  const w=cur(); if(!w) return;
+  const prevDev=pdev.value, prevCode=document.getElementById('pcode').value;
+  // the old type's default text was not typed by the user: do not carry it over
+  if(w.text && w.text===(DEFAULTS()[w.type]||{}).text) w.text='';
+  w.type=document.getElementById('ptype').value;
+  // drop fields the new type does not use, and take its defaults for the rest
+  for(const k of ['cmd_topic','cmd_payload','dim_topic','suffix','onoff_topic','state_max','cmd_max','cmd_on','cmd_off','state_on','temp_min','temp_max','temp_step']) delete w[k];
+  const def=DEFAULTS()[w.type]||{};
+  if(def.cmd_payload) w.cmd_payload=def.cmd_payload;
+  if(def.suffix!=null) w.suffix=def.suffix;
+  fillDevices(prevDev);
+  fillCodes(prevCode);
+  if(pdev.value) applyBinding(); else { syncProps(); render(); }
+};
+pdev.onchange=()=>{ fillCodes(); applyBinding(); };
+document.getElementById('pcode').onchange=applyBinding;
+// A display widget does not pick its kind itself: the bound channel sets it. The
+// device model knows: a numeric channel has unit, a binary one vtype:"bool" (and its
+// own payload_on if the word is unusual), a text one kind:"sensor_text". So unit and
+// words need no typing.
+function applySensorKind(w, ctl){
+  if(!ctl) return;
+  const bool = ctl.vtype==='bool' || (ctl.payload_on!=null && ctl.unit==null);
+  const text = ctl.kind==='sensor_text';
+  if(bool){
+    if(!w.text_on)  w.text_on  = T('yes');
+    if(!w.text_off) w.text_off = T('no');
+    if(ctl.payload_on && !['ON','on','1','true'].includes(String(ctl.payload_on)))
+      w.state_on = ctl.payload_on;
+    delete w.suffix; delete w.decimals;
+  } else {
+    delete w.text_on; delete w.text_off; delete w.state_on;
+    if(text){ delete w.suffix; delete w.decimals; }
+    else if(ctl.unit && !w.suffix) w.suffix = ctl.unit;   // deg C, %, lx -- from the channel
+  }
+}
+
+function applyBinding(){
+  const w=cur(); if(!w) return; const d=deviceById(pdev.value); if(!d) return;
+  const code=document.getElementById('pcode').value;
+  if(w.type==='dimmer'){
+    // The 3-zone tile (left -10%, centre on/off, right +10%) needs a brightness
+    // channel AND the on/off switch on the SAME gang, so a multi-gang dimmer gets
+    // one tile per channel. Derive both from whichever of the pair was picked.
+    const picked=(d.controls||[]).find(c=>c.code===code);
+    const br=(picked && picked.kind==='bright') ? picked : ctlForCode(d, code, 'bright');
+    if(!br){
+      document.getElementById('topicPreview').textContent='\u00D7 '+T('This device has no brightness channel');
+      return;
+    }
+    const sw=(picked && picked.kind==='switch') ? picked : ctlForCode(d, br.code, 'switch');
+    if(d.transport==='mqtt' && br.state_topic && br.command_topic){
+      // own topics and own scale (e.g. 0..255, ON/OFF): the dashboard does not mirror them
+      w.state_topic=br.state_topic; w.dim_topic=br.command_topic;
+      if(br.max){ w.state_max=br.max; w.cmd_max=br.max; } else { delete w.state_max; delete w.cmd_max; }
+      if(sw && sw.state_topic && sw.command_topic){
+        w.onoff_topic=sw.state_topic; w.cmd_topic=sw.command_topic;
+        w.cmd_on=sw.payload_on||'ON'; w.cmd_off=sw.payload_off||'OFF'; w.state_on=w.cmd_on;
+      } else { for(const k of ['cmd_topic','onoff_topic','cmd_on','cmd_off','state_on']) delete w[k]; }
+    } else {
+      for(const k of ['state_max','cmd_max','cmd_on','cmd_off','state_on']) delete w[k];
+      w.state_topic=`home/state/${d.id}/${br.code}_pct`;
+      w.dim_topic=`home/cmd/${d.id}/${br.code}`;
+      if(sw){
+        w.cmd_topic=`home/cmd/${d.id}/${sw.code}`;
+        // the percent mirror keeps showing the level while the channel is off, so
+        // the tile needs the switch state separately to print "off"
+        w.onoff_topic=`home/state/${d.id}/${sw.code}`;
+      } else { delete w.cmd_topic; delete w.onoff_topic; }
+    }
+    if(!w.text){
+      const ch=chanOf(br.code);
+      w.text=d.name+(ch?' '+ch:'');
+    }
+  } else if(w.type==='remote'){
+    // all IR buttons of the tile: id and label go into the widget, so ESP firmware knows the layout in advance
+    const ps=(d.controls||[]).filter(c=>c.kind==='ir_press');
+    if(!ps.length){ document.getElementById('topicPreview').textContent='\u00D7 '+T('This device has no IR buttons'); return; }
+    w.device=d.id; w.buttons=ps.map(c=>({id:(c.button||String(c.code).replace(/^ir_/,'')), label:c.label||c.code}));
+    if((d.ir_hide||[]).length) w.hide=d.ir_hide.slice(); else delete w.hide;
+    w.cmd_topic=`home/cmd/${d.id}/${ps[0].code}`; delete w.state_topic; delete w.cmd_payload;
+  } else if(w.type==='ac'){
+    // all four AC channels + the room temperature from home/state (the server
+    // mirrors it for this tile)
+    const sw=(d.controls||[]).find(c=>c.code===code) || (d.controls||[]).find(c=>c.kind==='switch');
+    const tp=(d.controls||[]).find(c=>c.code==='temp' && c.command_topic);
+    if(!sw || !tp){ document.getElementById('topicPreview').textContent='\u00D7 '+T('This device has no power or temperature'); return; }
+    w.device=d.id; w.state_topic=sw.state_topic; w.cmd_topic=sw.command_topic;
+    w.power_state=sw.state_topic; w.power_cmd=sw.command_topic; w.power_on=sw.payload_on||'ON'; w.power_off=sw.payload_off||'OFF';
+    w.temp_state=tp.state_topic; w.temp_cmd=tp.command_topic;
+    const nums=(tp.range||[]).map(Number).filter(isFinite);
+    if(nums.length){ w.temp_min=Math.min(...nums); w.temp_max=Math.max(...nums); } else { w.temp_min=16; w.temp_max=30; }
+    w.temp_step=1;
+    for(const [code2,key] of [['mode','mode'],['fan','fan']]){
+      const c=(d.controls||[]).find(x=>x.code===code2 && x.range && x.command_topic);
+      if(c){ w[key+'_state']=c.state_topic; w[key+'_cmd']=c.command_topic; w[key+'s']=c.range.map(v=>[String(v), String((c.labels||{})[v]||v)]); }
+      else { delete w[key+'_state']; delete w[key+'_cmd']; delete w[key+'s']; }
+    }
+    if((d.controls||[]).some(c=>c.code==='room_temp')) w.room_state=`home/state/${d.id}/room_temp`; else delete w.room_state;
+    delete w.cmd_payload; delete w.dim_topic;
+  } else if(w.type==='climate'){
+    // power switch + the unit's numeric temp setting, both with their own topics;
+    // the range comes from the setting's enumerated values
+    const sw=(d.controls||[]).find(c=>c.code===code) || (d.controls||[]).find(c=>c.kind==='switch');
+    const tp=(d.controls||[]).find(c=>c.code==='temp' && c.command_topic);
+    if(!sw || !tp){ document.getElementById('topicPreview').textContent='\u00D7 '+T('This device has no power or temperature'); return; }
+    w.onoff_topic=sw.state_topic; w.cmd_topic=sw.command_topic;
+    w.cmd_on=sw.payload_on||'ON'; w.cmd_off=sw.payload_off||'OFF'; w.state_on=w.cmd_on;
+    w.state_topic=tp.state_topic; w.dim_topic=tp.command_topic;
+    const nums=(tp.range||[]).map(Number).filter(isFinite);
+    if(nums.length){ w.temp_min=Math.min(...nums); w.temp_max=Math.max(...nums); } else { delete w.temp_min; delete w.temp_max; }
+    delete w.cmd_payload;
+  } else if(w.type==='toggle'){
+    // transport=mqtt devices (a lock, ACs via a blaster) are not mirrored into
+    // home/state and use their own topics and words (LOCKED/UNLOCKED, ON/OFF): take
+    // them from the channel; the firmware treats the tile as on when state == state_on.
+    const own=(d.controls||[]).find(c=>c.code===code);
+    if(d.transport==='mqtt' && own && own.state_topic && own.command_topic){
+      w.state_topic=own.state_topic; w.cmd_topic=own.command_topic;
+      w.cmd_on=own.payload_on||'ON'; w.cmd_off=own.payload_off||'OFF'; w.state_on=w.cmd_on;
+      delete w.cmd_payload;
+    } else {
+      w.state_topic=`home/state/${d.id}/${code}`;
+      w.cmd_topic=`home/cmd/${d.id}/${code}`;
+      w.cmd_payload=w.cmd_payload||'toggle';
+      delete w.cmd_on; delete w.cmd_off; delete w.state_on;
+    }
+  } else if(w.type==='button'){       // momentary: publishes a fixed payload, no state
+    w.cmd_topic=`home/cmd/${d.id}/${code}`;
+    w.cmd_payload=w.cmd_payload||'1';
+  } else { // temp / label / sensor
+    // transport=mqtt devices are NOT mirrored into home/state: they own their topics,
+    // so take state_topic from the channel, otherwise the widget would subscribe to
+    // a topic nobody writes.
+    const own=(d.controls||[]).find(c=>c.code===code && c.state_topic);
+    w.state_topic = (d.transport==='mqtt' && own)
+      ? own.state_topic : `home/state/${d.id}/${code}`;
+    applySensorKind(w, (d.controls||[]).find(c=>c.code===code));
+  }
+  if(!w.text && (w.type==='toggle' || w.type==='climate' || w.type==='ac' || w.type==='remote')) w.text=d.name;
+  syncProps(); render();
+  document.getElementById('topicPreview').textContent='\u2713 '+T('Bound to {0}', d.name);
+}
+
+document.getElementById('del').onclick=()=>{ if(!sel) return; layout=layout.filter(w=>w.id!==sel); selectWidget(null); render(); commit(); };
+const NUDGE={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+document.addEventListener('keydown',e=>{
+  const t=e.target;
+  // nothing is caught in input fields: they have their own Ctrl+Z and arrows
+  if(['INPUT','SELECT','TEXTAREA'].includes(t.tagName) || t.isContentEditable) return;
+  const mod=e.ctrlKey||e.metaKey;
+  if(mod && e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
+  if(mod && e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); return; }
+  if(mod && e.key.toLowerCase()==='d'){ e.preventDefault(); duplicateWidget(); return; }
+  if(e.key==='Escape'){ selectWidget(null); return; }
+  if((e.key==='Delete'||e.key==='Backspace') && sel && t.tagName!=='BUTTON'){
+    e.preventDefault(); document.getElementById('del').click(); return; }
+  if(NUDGE[e.key] && sel){
+    e.preventDefault();
+    if(isKnob()){
+      const i=layout.findIndex(w=>w.id===sel);
+      if(e.key==='ArrowUp') moveRow(i,-1); else if(e.key==='ArrowDown') moveRow(i,1);
+      return;
+    }
+    const w=cur(); if(!w) return;
+    const s=e.shiftKey?gridStep():1;
+    w.x=Math.round(w.x+NUDGE[e.key][0]*s);
+    w.y=Math.round(w.y+NUDGE[e.key][1]*s);
+    render(); syncProps(); commitSoon();   // key auto-repeat = one history step
+  }
+});
+// All property fields at once, without touching each handler
+{
+  const pr=document.getElementById('props');
+  pr.addEventListener('input', commitSoon);
+  pr.addEventListener('change', commit);
+  pr.addEventListener('click', e=>{ if(e.target.closest('button')) commit(); });
+}
+document.getElementById('undo').onclick=undo;
+document.getElementById('redo').onclick=redo;
+document.getElementById('dup').onclick=duplicateWidget;
+document.getElementById('zTop').onclick=()=>moveZ(true);
+document.getElementById('zBot').onclick=()=>moveZ(false);
+for(const [id,mode] of [['alL','l'],['alC','c'],['alR','r'],['alT','t'],['alM','m'],['alB','b']])
+  document.getElementById(id).onclick=()=>alignWidget(mode);
+// size, rotation, panel name and the status bar go to the server with the layout
+for(const id of ['panelW','panelH','panelRot','panelTitle','barTm'])
+  document.getElementById(id).addEventListener('change',()=>setDirty(true));
+stage.addEventListener('pointerdown',e=>{ if(e.target===stage) selectWidget(null); });
+
+document.getElementById('save').onclick=async()=>{
+  if(!curPanel){ setStatus(T('Pick or create a panel first'),true); return; }
+  try{
+    setStatus(T('Saving')+'\u2026');
+    const r=await api('PUT','/api/panels/'+encodeURIComponent(curPanel)+'/layout',layoutBody());
+    setStatus('\u2713 '+T('Saved: {0} widgets, {1}', r.widgets, r.w+'\u00D7'+r.h));
+    setDirty(false); delete pendingHw[curPanel];
+    panelTitles[curPanel]=curTitle();
+    const o=[...document.getElementById('panelSel').options].find(o=>o.value===curPanel); if(o) o.textContent=panelOptText(curPanel, r.widgets);
+  }catch(e){ setStatus(T('Error: {0}', e.message),true); }
+};
+
+// Build and flash: save what is open, compile the firmware, flash it over the air; the phase shows in the status line
+const FLASH_PHASE = {compiling: 'compiling', ready: 'compiled', safe_mode: 'restarting the panel in safe mode',
+                     uploading: 'flashing', done: 'done', error: 'failed'};
+document.getElementById('flash').onclick = async ()=>{
+  const btn = document.getElementById('flash'), name = curPanel;
+  if(!name){ setStatus(T('Pick or create a panel first'), true); return; }
+  btn.disabled = true;
+  try{
+    if(dirty) await document.getElementById('save').onclick();
+    if(dirty) return;                                   // the save failed: its message stays
+    await api('POST','/api/panels/'+encodeURIComponent(name)+'/build', {ota: true});
+    for(;;){
+      await new Promise(r=>setTimeout(r, 3000));
+      const st = await api('GET','/api/panels/'+encodeURIComponent(name)+'/build');
+      if(!st || !st.job) break;
+      const phase = st.phase==='error' || st.state==='error' ? 'error' : st.state==='done' ? 'done'
+        : (st.phase==='safe_mode' ? 'safe_mode' : st.state);
+      setStatus(T('Firmware: {0}', T(FLASH_PHASE[phase] || phase || '')) + (st.progress!=null && phase!=='done' ? ' '+st.progress+'%' : '')
+        + (st.error ? ' \u00B7 '+st.error : ''), phase==='error');
+      if(phase==='done' || phase==='error') break;
+    }
+  }catch(e){ setStatus(T('Error: {0}', e.message), true); }
+  finally{ btn.disabled = false; }
+};
+
+// start: the dictionary first, then the static texts, then the data
+loadI18n().then(()=>{
+  translateDom(document);
+  fillTypes();
+  document.getElementById('paletteTips').innerHTML = TIPS_CANVAS();
+  return init();
+}).catch(e=> setStatus(T('Failed to load: {0}', e.message), true));
+</script>
+</body>
+</html>

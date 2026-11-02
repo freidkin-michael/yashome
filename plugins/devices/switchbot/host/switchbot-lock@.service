@@ -1,0 +1,26 @@
+[Unit]
+Description=Yashome SwitchBot lock %i: BLE <-> MQTT switchbot/%i
+After=network-online.target bluetooth.target
+Wants=network-online.target bluetooth.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/yashome/switchbot-%i.env
+ExecStart=/usr/local/lib/yashome/switchbot-venv/bin/python /usr/local/lib/yashome/switchbot-lock.py
+Restart=always
+RestartPreventExitStatus=2
+RestartSec=10
+# BlueZ takes D-Bus calls from any user: no root, no files
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_BLUETOOTH
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target

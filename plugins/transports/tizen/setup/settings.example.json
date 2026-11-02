@@ -1,0 +1,24 @@
+{
+  "tizen_tvs": [
+    {
+      "id": "tv_bedroom",
+      "name": "TV bedroom",
+      "host": "192.0.2.50",
+      "mac": "00:11:22:33:44:55",
+      "inputs": {
+        "HDMI 1": "KEY_HDMI1",
+        "HDMI 2": "KEY_HDMI2",
+        "TV": "KEY_TV"
+      },
+      "apps": {
+        "YouTube": "111299001912",
+        "Netflix": "3201907018807",
+        "Browser": "org.tizen.browser"
+      },
+      "ir_on": {
+        "device": "tv_bedroom_ir",
+        "code": "ir_power_on"
+      }
+    }
+  ]
+}

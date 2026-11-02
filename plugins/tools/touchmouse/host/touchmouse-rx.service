@@ -1,0 +1,30 @@
+[Unit]
+Description=Yashome touchmouse receiver (UDP 7709 -> uinput)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/etc/yashome/touchmouse.env
+ExecStart=/usr/bin/python3 /usr/local/lib/yashome/touchmouse-rx.py
+Restart=always
+RestartSec=3
+# /dev/uinput only: no files, no home, no new privileges
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+DevicePolicy=closed
+DeviceAllow=/dev/uinput w
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+# Only the private ranges (LAN, a VPN) may send - whatever the firewall says; narrow it in a drop-in
+IPAddressDeny=any
+IPAddressAllow=localhost 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10
+
+[Install]
+WantedBy=multi-user.target

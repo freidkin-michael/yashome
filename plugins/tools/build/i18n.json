@@ -1,0 +1,9 @@
+{
+  "ru": {
+    "Build server": "Сервер сборки",
+    "not set": "не задан",
+    "ESPHome {0}": "ESPHome {0}",
+    "Only needed for ESP firmware": "Нужен только для прошивок ESP",
+    "Settings -> Computers and servers": "Настройки → Компьютеры и серверы"
+  }
+}

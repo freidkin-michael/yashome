@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/connect_label" android:textSize="18sp"
+            style="@style/Yash.Heading" />
+        <TextView android:id="@+id/status" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="4dp" />
+        <TextView android:id="@+id/server_status" android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Button android:id="@+id/pair" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="8dp" />
+        <Button android:id="@+id/open_dashboard" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/open_dashboard" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:text="@string/family_label" android:textSize="18sp"
+            style="@style/Yash.Heading" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button android:id="@+id/test" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="@string/test" />
+            <Button android:id="@+id/stop" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="@string/stop" />
+        </LinearLayout>
+        <Button android:id="@+id/battery" android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Button android:id="@+id/check_update" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/update_check" />
+
+        <LinearLayout android:id="@+id/lang_row" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="24dp"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:minHeight="56dp" android:background="?attr/selectableItemBackground">
+            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:text="@string/lang_label" android:textSize="18sp" style="@style/Yash.Heading" />
+            <TextView android:id="@+id/lang_value" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:textSize="16sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="  &#x203A;" android:textSize="22sp" android:textColor="@color/brand_muted" />
+        </LinearLayout>
+
+        <!-- Manual server setup: only for debugging, the pairing QR fills it -->
+        <LinearLayout android:id="@+id/advanced_row" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="horizontal"
+            android:gravity="center_vertical" android:minHeight="56dp"
+            android:background="?attr/selectableItemBackground">
+            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:text="@string/advanced_label" android:textSize="18sp" style="@style/Yash.Heading" />
+            <TextView android:id="@+id/advanced_arrow" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="&#x203A;" android:textSize="22sp"
+                android:textColor="@color/brand_muted" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/advanced_box" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+            <EditText android:id="@+id/server_url" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:inputType="textUri" android:hint="@string/server_url_hint" />
+            <EditText android:id="@+id/server_token" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:inputType="textPassword" android:hint="@string/server_token_hint" />
+            <Button android:id="@+id/server_save" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="@string/server_save" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" android:text="@string/events_label" />
+            <TextView android:id="@+id/events" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:fontFamily="monospace" android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

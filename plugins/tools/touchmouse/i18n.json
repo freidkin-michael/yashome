@@ -1,0 +1,26 @@
+{
+  "ru": {
+    "Touchmouse": "Тачмаус",
+    "A phone or a wall panel moves the pointer of a TV box or a computer. Each one needs the receiver running (see the plug-in README).": "Телефон или настенная панель двигают курсор ТВ-приставки или компьютера. На каждом должен работать приёмник (см. README плагина).",
+    "Add a receiver": "Добавить приёмник",
+    "id, latin letters: tv-box": "id латиницей: tv-box",
+    "name": "имя",
+    "address: 192.0.2.30": "адрес: 192.0.2.30",
+    "a device": "устройство",
+    "No receivers yet.": "Приёмников пока нет.",
+    "A phone as the touchpad of a TV box or a computer": "Телефон как тачпад ТВ-приставки или компьютера",
+    "Latin letters: the receiver's id in the house.": "Латинские буквы: id приёмника в доме.",
+    "What a phone or a panel shows for this receiver.": "Как приёмник называется на телефоне или панели.",
+    "The address of the computer or TV box the receiver runs on.": "Адрес компьютера или ТВ-приставки, где работает приёмник.",
+    "The receiver's port: 7709 unless it was started with another.": "Порт приёмника: 7709, если его не запускали с другим.",
+    "The system of that computer or box: Linux or Android.": "Система того компьютера или приставки: Linux или Android.",
+    "Adds the receiver; a phone or a panel can then move its pointer.": "Добавляет приёмник; после этого телефон или панель могут двигать его указатель.",
+    "Takes the receiver out; one that comes with a device has no Delete: it goes with its device.": "Убирает приёмник; у того, что пришёл вместе с устройством, кнопки нет: он уходит вместе с устройством.",
+    "System": "Система",
+    "Port": "Порт",
+    "Address": "Адрес",
+    "Id": "Id",
+    "Add": "Добавить",
+    "found in the network": "найден в сети"
+  }
+}

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Yash!</title>
+<style>
+  /* Yashome palette (branding/README.md): fill #177A75 with white text, #3CC2B8 only for text on dark */
+  :root { --bg:#FFFFFF; --text:#1E2B30; --muted:#5F6F74; --surface:#F3F7F7; --primary:#177A75; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0E1116; --text:#E6EAF0; --muted:#8A93A3; --surface:#1A1F29; --primary:#3CC2B8; } }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, sans-serif; }
+  main { max-width:440px; margin:0 auto; padding:28px 20px; }
+  .tile { width:72px; height:72px; }
+  h1 { font:900 26px/1.2 system-ui, sans-serif; margin:14px 0 4px; }
+  p { color:var(--muted); margin:6px 0 18px; }
+  .step { background:var(--surface); border-radius:16px; padding:16px; margin:12px 0; }
+  .step b { color:var(--primary); }
+  a.btn { display:block; text-align:center; background:#177A75; color:#fff; text-decoration:none;
+          font-weight:600; padding:14px; border-radius:12px; margin-top:10px; }
+  .err { color:#d9534f; }
+</style>
+</head>
+<body>
+<main>
+  <svg class="tile" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#177A75"/><g fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"><path d="M92 262 L256 116 L420 262"/><path d="M256 222 L256 316"/></g><circle cx="256" cy="392" r="30" fill="#F5B642"/><path d="M256 344 L256 329 M256 440 L256 455 M208 392 L193 392 M304 392 L319 392 M288.9 424.9 L297.4 433.4 M223.1 424.9 L214.6 433.4 M288.9 359.1 L297.4 350.6 M223.1 359.1 L214.6 350.6" stroke="#F5B642" stroke-width="13" stroke-linecap="round" fill="none"/></svg>
+  <h1 id="title"></h1>
+  <p id="sub"></p>
+  <div class="step"><b>1.</b> <span id="s2"></span><a class="btn" id="open" href="#"></a></div>
+  <p id="note"></p>
+</main>
+<script>
+// the one-time code leaves the address bar and the history at once; the app button keeps it
+var PAIR_D = location.hash.slice(1);
+if (PAIR_D) history.replaceState(null, '', location.pathname + location.search);
+// The pairing data rides in the #fragment: browsers never send it to the server or into logs.
+const EN = { title:'Connect to home', sub:'This page is from the home dashboard. The link works for one hour.',
+        s2:'Open the Yash! app: the phone connects by itself.', open:'Open and connect',
+        note:'No app yet? Get it from the Family card on the dashboard.', bad:'This link has no pairing data. Ask for a new QR on the dashboard.' };
+const APP_ID = (/^[A-Za-z][A-Za-z0-9_.]{0,99}$/.exec(new URLSearchParams(location.search).get('app') || '') || ['com.yash.home'])[0];
+const lang = (navigator.language || 'en').slice(0, 2);
+let t = EN;
+(async () => {
+  try {
+    const dict = ((await (await fetch('/plugins/family/i18n.json')).json()) || {})[lang];
+    if (dict) { t = {}; for (const k in EN) t[k] = dict[EN[k]] || EN[k]; document.documentElement.lang = lang; }
+  } catch (e) { /* English then */ }
+  show();
+})();
+function show() {
+for (const k of ['title', 'sub', 's2', 'open', 'note']) document.getElementById(k).textContent = t[k];
+const d = PAIR_D;
+const open = document.getElementById('open');
+if (!/^[A-Za-z0-9_-]{40,}$/.test(d)) {
+  open.remove(); document.getElementById('note').textContent = t.bad; document.getElementById('note').className = 'err';
+} else {
+  // intent:// is what Chrome and Samsung Internet hand to an installed app
+  open.href = 'intent://pair?d=' + d + '#Intent;scheme=yash;package=' + APP_ID + ';end';
+}
+}
+</script>
+</body>
+</html>

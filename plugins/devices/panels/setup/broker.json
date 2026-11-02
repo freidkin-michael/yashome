@@ -1,0 +1,22 @@
+{
+  "accounts_file": "mqtt_accounts.json",
+  "accounts": [
+    {
+      "user_key": "MQTT_PANELS_USER",
+      "user_default": "panels",
+      "password_key": "MQTT_PANELS_PASSWORD",
+      "role": "panels",
+      "topics": [
+        "panel/#"
+      ],
+      "read": [
+        "home/state/#",
+        "home/weather",
+        "home/clock/#"
+      ],
+      "hidden": [
+        "panel/_new/#"
+      ]
+    }
+  ]
+}

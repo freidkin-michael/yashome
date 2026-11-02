@@ -1,0 +1,20 @@
+{
+  "ru": {
+    "Device descriptions": "Описания устройств",
+    "Firmware and hardware": "Прошивка и железо",
+    "Yash build {0}, {1}": "Сборка Yash {0}, {1}",
+    "Description updated from the device, build {0}, {1}": "Описание обновлено из устройства, сборка {0}, {1}",
+    "Build not from this house": "Сборка не из этого дома",
+    "The description does not match its hash": "Описание не совпало с хэшем",
+    "Board": "Плата",
+    "Entities": "Каналы",
+    "Earlier builds": "Прежние сборки",
+    "Powered from pins": "Питание с выводов",
+    "The firmware was not built in the Yash builder, so its wiring is unknown. Rebuild it in the builder to see the pin map.": "Прошивка собрана не в конструкторе Yash, поэтому схема подключения неизвестна. Пересобери в конструкторе, чтобы видеть распиновку.",
+    "Firmware changed: +{0} channels, -{1} channels compared with the previous build": "Прошивка изменилась: +{0} каналов, -{1} каналов по сравнению с прежней сборкой",
+    "The device has {0} more channels than its card shows": "Устройство умеет ещё {0} каналов, на карточке их нет - показать",
+    "secret check on the nodes' secrets file": "проверка подписи по файлу секретов узлов",
+    "the nodes' secrets file is not readable: {0}": "файл секретов узлов не читается: {0}",
+    "Point ESPHOME_SECRETS in .env at that file": "Укажите этот файл в ESPHOME_SECRETS в .env"
+  }
+}

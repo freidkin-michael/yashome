@@ -1,0 +1,24 @@
+[Unit]
+Description=Yashome presence: phones on the Wi-Fi -> MQTT presence/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/yashome/phone-presence.sh
+EnvironmentFile=/etc/yashome/presence.env
+Restart=always
+RestartPreventExitStatus=2
+RestartSec=5
+DynamicUser=yes
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+StateDirectory=phone-presence
+RuntimeDirectory=phone-presence
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
