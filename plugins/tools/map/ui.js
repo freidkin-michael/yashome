@@ -745,6 +745,11 @@
         if(h && e.button !== 2) editGrab(h);
         return;
       }
+      const oh = S.mode !== 'edit' && opHandle(e);
+      if(oh){                                                                    // a handle of the selected door or window: it is dragged
+        const p = plan(), q = planXY(e); wallPush();
+        S.opDrag = {...oh, id: e.pointerId, a: oh.o.a.slice(), b: oh.o.b.slice(), start: {x: q.x * p.w, y: q.y * p.h}}; S.noPan = true; return;
+      }
       if(S.mode === 'opening'){                                                  // one pointer draws a stroke; a second one makes it a pinch
         S.noPan = true;
         S.opDraw = ptrs.size === 1 ? {id: e.pointerId, a: planXY(e), b: planXY(e), x0: e.clientX, y0: e.clientY} : null;
@@ -789,6 +794,7 @@
     view.addEventListener('pointermove', e => {
       const prev = ptrs.get(e.pointerId); if(!prev) return;
       if(S.drag){ editDrag(e); return; }
+      if(S.opDrag && S.opDrag.id === e.pointerId){ opDragTo(S.opDrag, e); moved = true; draw(); return; }
       if(S.opDraw && S.opDraw.id === e.pointerId && ptrs.size === 1){ S.opDraw.b = planXY(e); ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY}); moved = true; draw(); return; }
       if(lift && lift.id === e.pointerId){
         if(lift.active){ liftTo(lift, planXY(e)); hiSnap(lift, planXY(e)); draw(); return; }
@@ -811,6 +817,7 @@
     let lastCorner = {i: -1, at: 0};
     const up = e => {
       const was = ptrs.has(e.pointerId); ptrs.delete(e.pointerId);
+      if(S.opDrag && S.opDrag.id === e.pointerId){ const d = S.opDrag; S.opDrag = null; if(moved) changed(); else draw(); if(!moved) openingSheet(d.o); return; }
       if(S.opDraw && S.opDraw.id === e.pointerId){                               // a stroke: an opening on the nearest wall; a tap: the one under it
         const D = S.opDraw; S.opDraw = null;
         if(Math.hypot(e.clientX - D.x0, e.clientY - D.y0) >= 8) newOpening(D.a, D.b);
@@ -1030,7 +1037,29 @@
         const sweep = (T.x - H.x) * (E.y - H.y) - (T.y - H.y) * (E.x - H.x) > 0 ? 1 : 0;
         g += `<path d="M${H.x},${H.y} L${T.x},${T.y} A${len},${len} 0 0 ${sweep} ${E.x},${E.y}" fill="none" stroke="${hi}" stroke-width="1.2" vector-effect="non-scaling-stroke"/>`;
       }
+      if(S.opSel === o.id){                                             // the one being changed: its ends and middle are handles
+        const r = 7 / S.scale, M = {x: (A.x + B.x) / 2, y: (A.y + B.y) / 2};
+        for(const P of [A, B]) g += `<circle cx="${P.x}" cy="${P.y}" r="${r}" fill="#ffb020" stroke="#0b0e13" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+        g += `<rect x="${M.x - r}" y="${M.y - r}" width="${2 * r}" height="${2 * r}" rx="${r * 0.3}" fill="#ffb020" stroke="#0b0e13" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+      }
       return `<g data-op="${esc(o.id)}">${g}</g>`;
+    }
+    // a handle of the selected opening under the pointer: 'a', 'b' (its ends: the width) or 'm' (its middle: along the wall)
+    function opHandle(e){
+      const o = S.opSel && data.openings.find(x => x.id === S.opSel); if(!o) return null;
+      const near = (x, y) => { const [sx, sy] = planToScreen(x, y); return Math.hypot(sx - e.clientX, sy - e.clientY) < 16; };
+      if(near(o.a[0], o.a[1])) return {o, which: 'a'};
+      if(near(o.b[0], o.b[1])) return {o, which: 'b'};
+      if(near((o.a[0] + o.b[0]) / 2, (o.a[1] + o.b[1]) / 2)) return {o, which: 'm'};
+      return null;
+    }
+    function opDragTo(D, e){                                           // the pointer projected onto the opening's own line (the wall)
+      const p = plan(), q = planXY(e), P = {x: q.x * p.w, y: q.y * p.h}, A0 = {x: D.a[0] * p.w, y: D.a[1] * p.h}, B0 = {x: D.b[0] * p.w, y: D.b[1] * p.h};
+      const len = Math.hypot(B0.x - A0.x, B0.y - A0.y) || 1, ux = (B0.x - A0.x) / len, uy = (B0.y - A0.y) / len, min = Math.max(len * 0.15, p.w * 0.01);
+      const along = (Q, O) => (Q.x - O.x) * ux + (Q.y - O.y) * uy, at = (O, t) => [+((O.x + ux * t) / p.w).toFixed(6), +((O.y + uy * t) / p.h).toFixed(6)];
+      if(D.which === 'm'){ const t = along(P, D.start); D.o.a = at(A0, t); D.o.b = at(B0, t); }
+      else if(D.which === 'a'){ const t = Math.min(along(P, A0), len - min); D.o.a = at(A0, t); }
+      else { const t = Math.max(along(P, A0), min); D.o.b = at(A0, t); }
     }
     const wallPush = () => { (S.wallHist = S.wallHist || []).push(JSON.stringify({walls: data.walls, openings: data.openings})); S.wallRedo = []; };
     function wallUndo(from, to){
@@ -1075,10 +1104,17 @@
       S.opMsg = '';
       openingSheet({id: uid(), a: on.a, b: on.b, kind: '', open: 'left', side: false}, true);
     }
+    function inSwing(o, e){                                            // a press inside a swing door's quarter circle is on that door
+      const L = opAB(o); if(!L || o.kind !== 'door' || o.open === 'slide') return false;
+      const p = plan(), q = planXY(e), P = {x: q.x * p.w, y: q.y * p.h}, {A, B} = L, dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
+      const sgn = o.side ? -1 : 1, nx = -dy / len * sgn, ny = dx / len * sgn, H = o.open === 'right' ? B : A, E = o.open === 'right' ? A : B;
+      const vx = P.x - H.x, vy = P.y - H.y, ux = (E.x - H.x) / len, uy = (E.y - H.y) / len;
+      return Math.hypot(vx, vy) <= len * 1.05 && vx * nx + vy * ny >= -len * 0.05 && vx * ux + vy * uy >= -len * 0.05;
+    }
     function hitWall(e){                                                // what wall or opening is under the pointer (screen distance)
       const d2 = (A, B) => { const [ax, ay] = planToScreen(A.x, A.y), [bx, by] = planToScreen(B.x, B.y), dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1;
         const t = Math.max(0, Math.min(1, ((e.clientX - ax) * dx + (e.clientY - ay) * dy) / l2)); return [Math.hypot(e.clientX - ax - t * dx, e.clientY - ay - t * dy), t]; };
-      for(const o of data.openings) if(d2({x: o.a[0], y: o.a[1]}, {x: o.b[0], y: o.b[1]})[0] < 10) return {op: o};
+      for(const o of data.openings) if(d2({x: o.a[0], y: o.a[1]}, {x: o.b[0], y: o.b[1]})[0] < 10 || inSwing(o, e)) return {op: o};
       for(const wl of data.walls){ const [d, t] = d2({x: wl.a[0], y: wl.a[1]}, {x: wl.b[0], y: wl.b[1]}); if(d < 9) return {wall: wl.id, t}; }
       return null;
     }
@@ -1100,12 +1136,14 @@
     // an opening's sheet: Window / Door; a door opens sliding, to the left or to the right, and its leaf may lie on the other side; remove.
     // A new one (just drawn) is kept only once Window or Door is chosen.
     function openingSheet(o, isNew){
+      S.opSel = isNew ? null : o.id; draw();
       const seg = (k, v, label) => `<button class="dlg-btn${o[k] === v ? ' primary' : ''}" data-s="${k}-${v}">${esc(i18n(label))}</button>`;
       openSheet(`<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">${esc(i18n(o.kind === 'door' ? 'Door' : o.kind === 'window' ? 'Window' : 'Window or door?'))}</h3><button class="dlg-btn" data-s="close">&times;</button></div>
         <div style="display:flex;gap:8px;margin:10px 0">${seg('kind', 'window', 'Window')}${seg('kind', 'door', 'Door')}</div>
         ${o.kind === 'door' ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">${seg('open', 'slide', 'Sliding')}${seg('open', 'left', 'To the left')}${seg('open', 'right', 'To the right')}</div>
           <div style="margin:6px 0"><button class="dlg-btn" data-s="side">${esc(i18n('The other way'))}</button></div>` : ''}
-        ${isNew ? '' : `<div style="margin-top:10px"><button class="dlg-btn" data-s="del" style="color:#e5484d;border-color:#e5484d">${esc(i18n('Remove'))}</button></div>`}`);
+        ${isNew ? '' : `<div class="bindcaption" style="margin-top:8px">${esc(i18n('On the map: drag an end to change its width, the middle to move it along the wall'))}</div>
+          <div style="margin-top:10px"><button class="dlg-btn" data-s="del" style="color:#e5484d;border-color:#e5484d">${esc(i18n('Remove'))}</button></div>`}`);
       const sq = k => sheet.querySelector(`[data-s="${k}"]`);
       sq('close').onclick = closeSheet;
       const set = (k, v) => { wallPush(); o[k] = v; if(isNew){ data.openings.push(o); isNew = false; } changed(); openingSheet(o, false); };
@@ -1380,7 +1418,7 @@
     box.append(tapMark);
     const lastTap = {x: 0, y: 0, at: 0};
     view.addEventListener('pointerdown', e => { lastTap.x = e.clientX; lastTap.y = e.clientY; lastTap.at = Date.now(); }, true);
-    const closeSheet = () => { sheet.style.display = 'none'; sheet.innerHTML = ''; tapMark.style.display = 'none'; };
+    const closeSheet = () => { sheet.style.display = 'none'; sheet.innerHTML = ''; tapMark.style.display = 'none'; if(S.opSel){ S.opSel = null; draw(); } };
     document.addEventListener('keydown', e => {                    // Esc closes the open card (a field in it first loses its focus)
       if(e.key !== 'Escape' || sheet.style.display === 'none' || !sheet.isConnected) return;
       if(sheet.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){ document.activeElement.blur(); return; }

@@ -268,6 +268,7 @@
   "Thermometer...": "Термометр...",
   "Which thermometer and hygrometer the room shows, Ask answers with and an AC set to the room reads: Auto, or one by hand.": "Какой термометр и гигрометр показывает комната, по какому отвечает «Спросить» и что читает кондиционер, привязанный к комнате: «Авто» или выбранный вручную.",
   "What it does": "Что делает",
-  "Do it now": "Выполнить сейчас"
+  "Do it now": "Выполнить сейчас",
+  "On the map: drag an end to change its width, the middle to move it along the wall": "На карте: тяните конец, чтобы изменить ширину, середину - чтобы сдвинуть вдоль стены"
  }
 }
