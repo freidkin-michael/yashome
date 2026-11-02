@@ -5,20 +5,27 @@
   let owner = false, btn = null, rooms = [];
   const dev = id => Home.devices().find(d => d.id === id);
   const name = e => e.name || (dev(e.device) || {}).name || e.device || '';
-  const ctl = (id, code) => { const c = ((dev(id) || {}).controls || []).find(x => x.code === code); return (c && (c.label && c.label !== '-' ? c.label : '')) || code || ''; };
-  const fmt = v => v === true || v === 'ON' ? i18n('on') : v === false || v === 'OFF' ? i18n('off') : v == null ? '' : typeof v === 'number' ? String(Math.round(v * 100) / 100)
-    : typeof v === 'object' ? Object.entries(v).map(([k, x]) => k + '=' + fmt(x)).join(', ') : String(v);       // a transport answers an object ({state: OFF})
+  // a channel by its label; without one, its code as words ("color_temp" -> "color temp"), translated when the house knows the word
+  const ctl = (id, code) => { const c = ((dev(id) || {}).controls || []).find(x => x.code === code); return (c && c.label && c.label !== '-' ? i18n(c.label) : '') || i18n(String(code || '').replace(/_/g, ' ')); };
+  const fmt = (v, id) => v === true || v === 'ON' ? i18n('on') : v === false || v === 'OFF' ? i18n('off') : v == null ? '' : typeof v === 'number' ? String(Math.round(v * 100) / 100)
+    : typeof v === 'object' ? Object.entries(v).map(([k, x]) => (k === 'state' ? '' : ctl(id, k) + ' ') + fmt(x, id)).join(', ') : i18n(String(v));   // a transport answers an object ({state: OFF}): in words
+  const gword = (g, id) => typeof whenGesture === 'function' ? whenGesture(g, dev(id)) : String(g || '');      // the core's gesture words ("double press")
   const words = e => (e.parts || []).map(([t, a]) => i18n(t, ...a.map(x => i18n(x)))).join('');
   const span = s => s < 90 ? i18n('{0} s', s) : s < 5400 ? i18n('{0} min', Math.round(s / 60)) : i18n('{0} h', Math.round(s / 360) / 10);
   const source = s => !s ? '' : s === 'device' ? i18n('the device itself (a hand, a sensor)') : s === 'app' ? i18n('the app') : s === 'voice' ? i18n('voice') : s === 'watchdog' ? i18n('the watchdog')
-    : s === 'timer' ? i18n('a timer') : s === 'log' ? i18n('the log') : s.startsWith('rule:') ? i18n('rule {0}', s.slice(5)) : s;
+    : s === 'timer' ? i18n('a timer') : s === 'log' ? i18n('the log') : s.startsWith('rule:') ? ruleSource(s.slice(5)) : s;
+  // "rule:<device>/<code>=<gesture>": the rule's trigger in words, never its ids
+  const ruleSource = t => {
+    const m = t.match(/^(.*)\/([^/=]+)=(.*?)(?: \(test\))?$/);
+    return m ? i18n('a rule: {0}', [name({device: m[1]}), gword(m[3], m[1])].filter(Boolean).join(' ')) : i18n('a rule');
+  };
   const line = e => {
     const n = name(e);
     switch(e.kind){
-      case 'state': return i18n('{0}: {1}: {2} \u2192 {3}', n, ctl(e.device, e.code), fmt(e.old), fmt(e.new));
-      case 'command': return i18n('{0}: {1} set to {2}', n, ctl(e.device, e.code), fmt(e.new));
-      case 'rule': return e.error ? i18n('Rule: when {0} {1} = {2}, {3} failed: {4}', n, ctl(e.device, e.code), e.gesture, name({device: e.target}), e.error)
-        : i18n('Rule: when {0} {1} = {2}, {3} is set to {4}', n, ctl(e.device, e.code), e.gesture, name({device: e.target}), fmt(e.value));
+      case 'state': return i18n('{0}: {1}: {2} \u2192 {3}', n, ctl(e.device, e.code), fmt(e.old, e.device), fmt(e.new, e.device));
+      case 'command': return i18n('{0}: {1} set to {2}', n, ctl(e.device, e.code), fmt(e.new, e.device));
+      case 'rule': return e.error ? i18n('Rule: when {0} {1} = {2}, {3} failed: {4}', n, ctl(e.device, e.code), gword(e.gesture, e.device), name({device: e.target}), e.error)
+        : i18n('Rule: when {0} {1} = {2}, {3} is set to {4}', n, ctl(e.device, e.code), gword(e.gesture, e.device), name({device: e.target}), fmt(e.value, e.target));
       case 'offline': return i18n('{0} went offline', n);
       case 'online': return i18n('{0} is back online', n);
       case 'watchdog': return i18n('Watchdog: {0}', words(e));
@@ -28,7 +35,7 @@
     }
   };
   const p2 = n => String(n).padStart(2, '0');
-  const when = ts => { const d = new Date(ts * 1000), t = p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); return (new Date().toDateString() === d.toDateString() ? '' : p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + ' ') + t; };       // 24 hours, whatever the browser's locale
+  const when = ts => { const d = new Date(ts * 1000), t = p2(d.getHours()) + ':' + p2(d.getMinutes()); return (new Date().toDateString() === d.toDateString() ? '' : p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + ' ') + t; };       // 24 hours, whatever the browser's locale
   const probe = async () => { try { await Home.api('/api/history/info'); owner = true; } catch(e){ owner = false; } if(btn) btn.style.display = owner ? 'inline-flex' : 'none'; };
 
   const openIt = async (into) => {                     // into: a box of a page (Settings -> History); none: the dialog

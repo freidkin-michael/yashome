@@ -15,6 +15,8 @@
   header h1, header .hf > span, header .hf > label, header .sep, header .grow, header #status, header #hwchip { height:auto; }
   header .hf { display:inline-flex; align-items:center; gap:6px; }
   header .hf[hidden], header #hwchip[hidden] { display:none; }
+  header details.adv > summary { cursor:pointer; }
+  header details.adv[open] { display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap; }
   header .props2 .hf + .hf { padding-left:10px; border-left:1px solid var(--line); }
   header .sep { width:1px; align-self:stretch; background:var(--line); margin:4px 2px; }
   header .grow { flex:1 1 0; min-width:0; }
@@ -107,11 +109,11 @@
   <div class="hrow">
     <button id="backAll" class="ghost" hidden><span data-t>&#x2190; All panels</span></button>
     <h1>&#x1F39B; <span data-t>Panel builder</span></h1>
-    <span class="hf"><label class="muted" data-t>Panel</label><select id="panelSel"></select><input id="renTo" type="text" hidden style="width:130px" title="New code: latin letters, digits, - and _. Enter to apply, Esc to cancel"><button id="renPanel" class="ghost icon" hidden title="Change the panel code (Android only: an ESP panel has its code in the firmware)">&#x270E;</button></span>
-    <input id="panelTitle" type="text" placeholder="name" title="Panel name for people; the node and the topics keep the code" style="width:130px">
+    <span class="hf"><label class="muted" data-t>Panel</label><select id="panelSel"></select></span>
+    <input id="panelTitle" type="text" placeholder="name" title="The panel's name; Save keeps it" style="width:130px">
     <span class="hf"><label class="muted" data-t>Room</label><select id="panelRoom" title="Where the panel hangs; the Panels tab groups panels by room"></select></span>
     <span class="sep"></span>
-    <button id="delPanel" class="ghost danger" title="Delete the whole panel: widgets, device bindings, retained messages on the broker">&#x1F5D1;</button>
+    <button id="delPanel" class="ghost danger" title="Delete the panel and everything on it">&#x1F5D1;</button>
     <span class="grow"></span>
     <div id="status"></div>
     <button id="undo" class="ghost" title="Undo (Ctrl+Z)" disabled><span data-t>Undo</span></button>
@@ -121,10 +123,12 @@
     <button id="save" class="primary">&#x1F4BE; <span data-t>Save</span></button>
   </div>
   <div class="hrow props2">
+    <details id="advBox" class="adv"><summary class="muted" data-t>Advanced</summary>
     <span class="hf"><label class="muted" data-t>Size</label>
       <input id="panelW" type="number" title="Display width, px" style="width:78px"><span class="muted">&times;</span>
       <input id="panelH" type="number" title="Display height, px" style="width:78px"></span>
     <span class="hf"><label class="muted" title="Screen rotation; the size above is the size AFTER rotation" data-t>rotation</label><select id="panelRot" style="width:215px"><option value="" data-t>auto</option><option value="0">0&deg;</option><option value="90">90&deg;</option><option value="180">180&deg;</option><option value="270">270&deg;</option></select></span>
+    </details>
     <span id="barBox" class="hf" hidden title="A mouse button in the panel status bar: the tablet becomes a touchpad for the chosen receiver"><label class="muted" data-t>Touchmouse</label><select id="barTm" style="width:200px"></select></span>
     <span class="hf"><label class="muted" title="Snap widgets to the grid while dragging"><input id="gridOn" type="checkbox" checked> <span data-t>grid</span></label><input id="gridStep" type="number" value="10" min="2" max="100" style="width:58px" title="Grid step, px"></span>
     <span id="hwchip" class="muted" hidden></span>
@@ -403,7 +407,7 @@ function sampleText(w){               // mirror of the generator's sample_text()
     case 'weather':return '\u{1F324} '+T('Weather');
     case 'ac':return (w.text||T('Air conditioner'))+' 22\u00B0';
     case 'remote':return '\u{1F39B} '+(w.text||T('Remote'));
-    case 'touchmouse':return '\u{1F5B1} '+T('Touchmouse')+(w.receiver ? ' \u00B7 '+w.receiver : '');
+    case 'touchmouse':{ const t=(tmReceivers||[]).find(x=>x.id===w.receiver); return '\u{1F5B1} '+T('Touchmouse')+(t ? ' \u00B7 '+t.name : ''); }
     default:      return w.text||'Ag';
   }
 }
@@ -552,8 +556,8 @@ function labelRotations(){
     else o.textContent = o.value+'\u00B0 '+words[+o.value];
   }
 }
-// "Kitchen . panel_1 (11)": name for people, node code and the number of widgets
-function panelOptText(name, n){ const t=panelTitles[name]; return (t && t!==name ? t+' \u00B7 ' : '')+name+' ('+n+')'; }
+// the panel's name only: its code and its widget count are no use to a person
+function panelOptText(name){ return panelTitles[name] || name; }
 function curTitle(){ const v=(document.getElementById('panelTitle').value||'').trim(); return v||curPanel; }
 // "auto" = leave the key out (the generator takes the hardware profile default)
 function curRotation(){ const v=document.getElementById('panelRot').value; return v===''?undefined:+v; }
@@ -564,7 +568,7 @@ function layoutBody(){
   if(panelHw[curPanel]==='android'){ const v=document.getElementById('barTm').value; o.bar = v ? [{type:'touchmouse', receiver:v}] : []; }
   return o; }
 // touchmouse receivers (/api/touchmouse) for the status-bar select of an Android panel
-let tmReceivers = [];
+var tmReceivers = [];   // var: the canvas labels may read it before this line runs
 async function loadTmReceivers(){
   try { tmReceivers = await api('GET','/api/touchmouse') || []; } catch(e){ tmReceivers = []; }
 }
@@ -573,7 +577,7 @@ function fillBarTm(want){
   const opts = tmReceivers.map(t=>'<option value="'+escapeHtml(t.id)+'">'+escapeHtml(t.name)
     +(t.os ? ' \u00B7 '+escapeHtml(t.os==='linux' ? 'Linux' : t.os==='android' ? 'Android' : t.os) : '')+'</option>');
   if(want && !tmReceivers.some(t=>t.id===want))
-    opts.push('<option value="'+escapeHtml(want)+'">'+escapeHtml(T('{0} (not found)', want))+'</option>');
+    opts.push('<option value="'+escapeHtml(want)+'">'+escapeHtml(T('receiver not found'))+'</option>');
   const el = document.getElementById('barTm');
   el.innerHTML = '<option value="">'+escapeHtml(T('none'))+'</option>' + opts.join('');
   el.value = want || '';
@@ -585,7 +589,7 @@ async function loadPanels(){
   panelHw = Object.fromEntries(panels.map(p=>[p.name, p.hw||'waveshare7']));
   panelCaps = Object.fromEntries(panels.map(p=>[p.name, p.caps||{}]));
   panelCan = Object.fromEntries(panels.map(p=>[p.name, p.can||[]]));
-  sel.innerHTML = panels.map(p=>`<option value="${escapeHtml(p.name)}">${escapeHtml(panelOptText(p.name, p.widgets))}</option>`).join('');
+  sel.innerHTML = panels.map(p=>`<option value="${escapeHtml(p.name)}">${escapeHtml(panelOptText(p.name))}</option>`).join('');
   const want = new URLSearchParams(location.search).get('panel');
   // opened over the dashboard's settings (?embed=1): its own way back to the list of panels
   if(new URLSearchParams(location.search).get('embed') && parent !== window){
@@ -601,10 +605,9 @@ async function loadLayout(){
   if(!curPanel){ layout=[]; render(); return; }
   const o = await api('GET','/api/panels/'+encodeURIComponent(curPanel)+'/layout');
   curW = o.w||800; curH = o.h||480; layout = o.widgets||[];
-  document.getElementById('panelTitle').value = (o.title && o.title!==curPanel) ? o.title : '';
+  document.getElementById('panelTitle').value = o.title || curPanel;
   document.getElementById('panelRoom').value = ROOMS.some(r=>r.id===o.room) ? o.room : '';
   labelRotations();
-  document.getElementById('renPanel').hidden = panelHw[curPanel] !== 'android';
   document.getElementById('panelRot').value = (o.rotation==null) ? '' : String(o.rotation);
   curRot = (o.rotation==null) ? defRotation() : +o.rotation;
   const tm = (o.bar||[]).find(b=>b.type==='touchmouse');
@@ -621,7 +624,7 @@ async function loadLayout(){
   sel=null; fitStage(); render(); selectWidget(null);
   resetHistory();
   refreshLive();
-  setStatus(T('Loaded: {0} ({1})', curPanel, curW+'\u00D7'+curH));
+  setStatus('');
 }
 // A tablet panel is drawn by the browser, not LVGL: the canvas size is the real
 // screen from the device passport, the launcher gets the rotation with its heartbeat reply.
@@ -652,16 +655,13 @@ function applyHwProfile(){
     return;
   }
   if(!android){ chip.hidden = true; return; }
-  const c = panelCaps[curPanel] || {}, sc = c.screen || {}, parts = [];
-  if(c.model) parts.push(c.model);
-  if(c.android) parts.push('Android ' + c.android);
-  if(sc.inch) parts.push(sc.inch + '\u2033 \u00B7 ' + sc.dpi + ' dpi');
+  const c = panelCaps[curPanel] || {}, parts = [];
   if((c.cameras||[]).length) parts.push(T('cameras: {0}', c.cameras.length));
   if(c.mic) parts.push(T('microphone'));
   if(c.battery != null) parts.push(T('battery {0}%', c.battery));
   chip.hidden = false;
-  chip.textContent = '\u{1F4DF} ' + parts.join(' \u00B7 ');
-  chip.title = T('Device passport sent at pairing: {0}. Nothing to flash, the tablet picks up changes by itself (rotation within a minute)', parts.join(' \u00B7 '));
+  chip.textContent = parts.length ? '\u{1F4DF} ' + parts.join(' \u00B7 ') : '';
+  chip.title = T('The tablet takes the changes by itself within a minute');
 }
 
 document.getElementById('panelSel').onchange = e=>{ curPanel=e.target.value; loadLayout(); };
@@ -677,48 +677,25 @@ document.getElementById('panelRoom').onchange = async e=>{
 // so kiosks and browser automation are not blocked. An unsaved new panel lives only
 // in the browser and is just dropped from the list.
 let delArmUntil = 0;
-// The code of an Android panel: from the automatic and-0a1b2c3d to a human one. The
-// launcher learns the new code from its heartbeat reply; until then the old one works too.
-document.getElementById('renPanel').onclick = ()=>{
-  const sel=document.getElementById('panelSel'), inp=document.getElementById('renTo');
-  sel.hidden=true; inp.hidden=false; inp.value=curPanel; inp.focus(); inp.select();
-};
-document.getElementById('renTo').onkeydown = async e=>{
-  const sel=document.getElementById('panelSel'), inp=e.target;
-  const close = ()=>{ inp.hidden=true; sel.hidden=false; };
-  if(e.key==='Escape'){ close(); return; }
-  if(e.key!=='Enter') return;
-  const to=inp.value.trim(), from=curPanel;
-  if(!to || to===from){ close(); return; }
-  if(dirty){ setStatus(T('Save the layout first'), true); return; }
-  try{
-    await api('POST','/api/panels/'+encodeURIComponent(from)+'/rename',{to});
-    close();
-    history.replaceState(null,'','?panel='+encodeURIComponent(to));
-    await loadPanels();
-    setStatus(T('Code "{0}" -> "{1}"; the tablet switches to it within a minute', from, to));
-  }catch(err){ setStatus(T('Not renamed: {0}', err.message), true); }
-};
-
 document.getElementById('delPanel').onclick = async ()=>{
   const b=document.getElementById('delPanel');
   if(!curPanel){ setStatus(T('No panel selected'), true); return; }
   if(Date.now() > delArmUntil){
     delArmUntil = Date.now()+5000; const armed=curPanel;
-    b.textContent=T('Really delete "{0}"?', armed);
+    b.textContent=T('Really delete "{0}"?', panelTitles[armed] || armed);
     setTimeout(()=>{ if(Date.now()>=delArmUntil){ b.textContent='\u{1F5D1} '+T('panel'); } }, 5100);
     return;
   }
   delArmUntil = 0; b.textContent='\u{1F5D1} '+T('panel');
   const name=curPanel, unsaved=!!pendingHw[name];
   try{
-    let r={unpaired:[],retained_cleared:0};
-    if(!unsaved) r = await api('DELETE','/api/panels/'+encodeURIComponent(name));
+    const title=panelTitles[name] || name;
+    if(!unsaved) await api('DELETE','/api/panels/'+encodeURIComponent(name));
     delete pendingHw[name]; delete panelHw[name]; delete panelCan[name]; delete panelCaps[name]; delete panelTitles[name];
     setDirty(false);
     await loadPanels();
-    setStatus(unsaved ? T('Unsaved "{0}" removed', name) :
-      T('Panel "{0}" deleted: bindings {1}, retained {2}', name, (r.unpaired||[]).length, r.retained_cleared||0));
+    setStatus(unsaved ? T('Unsaved "{0}" removed', title) :
+      T('Panel "{0}" deleted', title));
   }catch(e){ setStatus(T('Not deleted: {0}', e.message), true); }
 };
 
@@ -963,7 +940,7 @@ function previewText(w){
     case 'climate':{ const v=liveVal(w); return (w.text? w.text+' ':'')+(v==null?22:YDisp.temp(v, 'b:'+w.id))+'\u00B0'; }
     case 'ac':{ const d=deviceById(refOfAc(w)); const st=d&&LIVE[d.id]&&LIVE[d.id].values; const t=st&&st.temp!=null?st.temp:'--'; return '\u2744 '+(w.text||(d?d.name:T('Air conditioner')))+' \u00B7 '+t+'\u00B0 \u00B7 '+(st&&st.power?T('on'):T('off')); }
     case 'remote':return '\u{1F39B} '+(w.text||T('Remote'))+' \u00B7 '+T('{0} buttons', (w.buttons||[]).length);
-    case 'touchmouse':return '\u{1F5B1} '+T('Touchmouse')+(w.receiver ? ' \u00B7 '+w.receiver : '');
+    case 'touchmouse':{ const t=(tmReceivers||[]).find(x=>x.id===w.receiver); return '\u{1F5B1} '+T('Touchmouse')+(t ? ' \u00B7 '+t.name : ''); }
     case 'button':return w.text||T('Scene');
     case 'camera':return camLabel(w);
     case 'weather':return '\u{1F324} '+T('Weather')+' \u00B7 ' + T({auto:'auto',now:'now',hours:'hours',days:'days',both:'hours+days'}[w.mode||'auto']);
@@ -1043,10 +1020,10 @@ function fillCams(w){
   const own=`<option value="own-front">${escapeHtml(T('this panel, front'))}</option><option value="own-back">${escapeHtml(T('this panel, back'))}</option>`;
   sel.innerHTML = own + CAMS.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name||c.id)}</option>`).join('');
   sel.value = w.cam_id ? w.cam_id : ('own-'+(w.facing==='back'?'back':'front'));
-  if(sel.selectedIndex<0){ sel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(w.cam_id)}">${escapeHtml(T('{0} (not in the list)', w.cam_id))}</option>`); sel.value=w.cam_id; }
+  if(sel.selectedIndex<0){ sel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(w.cam_id)}">${escapeHtml(T('camera not found'))}</option>`); sel.value=w.cam_id; }
 }
 function camLabel(w){
-  if(w.cam_id){ const c=CAMS.find(x=>x.id===w.cam_id); return '\u{1F4F7} '+(c ? (c.name||c.id) : w.cam_id); }
+  if(w.cam_id){ const c=CAMS.find(x=>x.id===w.cam_id); return '\u{1F4F7} '+(c && c.name ? T('Camera: {0}', c.name) : T('camera not found')); }
   return w.facing==='back' ? '\u{1F4F7} '+T('back') : '\u{1F4F7} '+T('front');
 }
 document.getElementById('pcam').onchange=()=>{
@@ -1151,7 +1128,7 @@ function applyBindVisibility(w){
       if(!w.receiver && tmReceivers.length){ w.receiver = tmReceivers[0].id; commit(); }
       const sel = document.getElementById('prcv');
       sel.innerHTML = tmReceivers.map(t=>'<option value="'+escapeHtml(t.id)+'">'+escapeHtml(t.name)+'</option>').join('')
-        + (w.receiver && !tmReceivers.some(t=>t.id===w.receiver) ? '<option value="'+escapeHtml(w.receiver)+'">'+escapeHtml(T('{0} (not found)', w.receiver))+'</option>' : '');
+        + (w.receiver && !tmReceivers.some(t=>t.id===w.receiver) ? '<option value="'+escapeHtml(w.receiver)+'">'+escapeHtml(T('receiver not found'))+'</option>' : '');
       sel.value = w.receiver || '';
     }
   }
@@ -1456,7 +1433,7 @@ document.getElementById('save').onclick=async()=>{
     setStatus('\u2713 '+T('Saved: {0} widgets, {1}', r.widgets, r.w+'\u00D7'+r.h));
     setDirty(false); delete pendingHw[curPanel];
     panelTitles[curPanel]=curTitle();
-    const o=[...document.getElementById('panelSel').options].find(o=>o.value===curPanel); if(o) o.textContent=panelOptText(curPanel, r.widgets);
+    const o=[...document.getElementById('panelSel').options].find(o=>o.value===curPanel); if(o) o.textContent=panelOptText(curPanel);
   }catch(e){ setStatus(T('Error: {0}', e.message),true); }
 };
 

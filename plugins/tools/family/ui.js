@@ -44,11 +44,11 @@ function phoneTile(p){
 function openPhone(uid){
   const p = phonesNow.find(x => x.uid === uid);
   if(!p) return;
-  const info = `${i18n('last ring ack')} ${esc(when(p.ack))}${
-    p.link ? ' \u00b7 ' + esc(i18n(p.link)) : ''}${
-    p.live ? ' \u00b7 ' + i18n('reachable now') : p.cloud ? (p.token ? '' : ' \u00b7 ' + i18n('no push token')) : ' \u00b7 ' + i18n('not reachable now')}${
-    (p.app ? ' \u00b7 ' + i18n('app') + ' ' + esc(p.app) : '') + (p.update ? ' \u00b7 ' + i18n('update available') : '') + (p.server ? '' : ' \u00b7 ' + i18n('only in Firebase: a leftover'))}${
-    p.old_app ? ' \u00b7 ' + i18n('paired without its id: New QR (with an updated app) stops duplicates') : ''}`;
+  // what a family needs: home or away, reachable, an update; the push and app details are under Advanced
+  const info = [i18n(p.home === true ? 'at home' : p.home === false ? 'away' : 'not known yet'),
+                p.live ? i18n('reachable now') : i18n('not reachable now'), p.update ? i18n('update available') : ''].filter(Boolean).map(esc).join(' \u00b7 ');
+  const more = [p.link ? i18n(p.link) : '', p.ack ? i18n('last ring ack') + ' ' + when(p.ack) : '', p.cloud && !p.token ? i18n('no push token') : '',
+                p.app ? i18n('app') + ' ' + p.app : '', p.server ? '' : i18n('only in Firebase: a leftover')].filter(Boolean).map(esc).join(' \u00b7 ');
   Home.openModal(`
     <div class="head"><button class="closebtn" onclick="Home.closeModal()">\u00d7</button>
       <h2>${dotOf(p)} ${esc(p.name||p.uid)}</h2><div class="sub">${esc(i18n(p.state))}</div></div>
@@ -56,7 +56,7 @@ function openPhone(uid){
       <div class="bindcaption">${info}</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
       ${p.state==='active' ? `<button data-rights>${i18n('Rights')}</button>
-      ${p.server ? `<button data-repair>${i18n('New QR')}</button>` : ''}
+      ${p.server ? `<button data-repair${p.old_app ? ' class="primary"' : ''}>${i18n('New QR')}</button>` : ''}
       ${p.update ? `<button data-update>${i18n('Update app')}</button>` : ''}
       <button data-ring>${i18n('Ring')}</button>
       <button data-stop>${i18n('Stop')}</button>` : ''}
@@ -64,6 +64,7 @@ function openPhone(uid){
       ${p.server ? `<div class="row" style="margin-top:12px"><span class="rlabel">${esc(i18n('Also at home when'))}<br><span class="bindcaption">${
         esc(i18n('its Wi-Fi presence device says so (a phone of the cloud has no live link)'))}</span></span>
         <select data-presence><option value="">${esc(i18n('no device'))}</option></select></div>` : ''}
+      ${more ? `<details style="margin-top:12px"><summary>${esc(i18n('Advanced'))}</summary><div class="bindcaption">${more}</div></details>` : ''}
     </section></div>`, MID + 'phone');
   const md = document.getElementById('md');
   const on = (sel, fn) => { const b = md.querySelector(sel); if(b) b.onclick = () => fn(b); };
@@ -81,13 +82,13 @@ function openPhone(uid){
     };
   }
   on('[data-repair]', () => {
-    if(confirm(i18n('A new QR for this phone? Its current link stops working at once; its rights stay.') + '\n' + uid)) pair(uid);
+    if(confirm(i18n('A new QR for this phone? Its current link stops working at once; its rights stay.') + '\n' + (p.name || uid))) pair(uid);
   });
   on('[data-update]', b => act('/api/family/update', uid, b));
   on('[data-ring]', b => act('/api/family/ring', uid, b));
   on('[data-stop]', b => act('/api/family/stop', uid, b));
   on('[data-revoke]', b => {
-    if(confirm(i18n('Delete this phone? Its token, its widgets and the rules that ring it go; it can be paired again.') + '\n' + uid))
+    if(confirm(i18n('Delete this phone? Its token, its widgets and the rules that ring it go; it can be paired again.') + '\n' + (p.name || uid)))
       act('/api/family/revoke', uid, b).then(() => Home.closeModal());
   });
 }
@@ -130,10 +131,10 @@ async function load(){
   });
 }
 
-// a member: its name, at home or away (and when it was seen), its phone's link and app; what can be done with it
+// a member: its name, at home or away (and when it was seen), an update; what can be done with it
 function memberRow(p){
   const st = [i18n(p.home === true ? 'at home' : p.home === false ? 'away' : 'not known yet'), p.home_ts ? i18n('seen {0}', when(p.home_ts)) : '',
-              p.link ? i18n(p.link) : '', p.app ? i18n('app') + ' ' + p.app : '', p.update ? i18n('update available') : '',
+              p.update ? i18n('update available') : '',
               p.state !== 'active' ? i18n(p.state) : ''].filter(Boolean).join(' \u00b7 ');
   return `<div class="row" data-member="${esc(p.uid)}" style="flex-wrap:wrap"><span class="rlabel" style="display:flex;gap:10px;align-items:center">${dotOf(p)}<span><b>${esc(p.name || p.uid)}</b><br><span class="bindcaption">${esc(st)}</span></span></span>
     <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
@@ -150,16 +151,24 @@ function renderApp(box){
       <span class="rval" id="fam-app">\u2014</span></div>
     <div class="stx-actions"><button class="dlg-btn primary" id="fam-app-build">${esc(i18n('Build the app'))}</button></div>
     <pre class="bindcaption" id="fam-app-log" style="white-space:pre-wrap"></pre>
+    <div class="bindcaption" id="fam-srv-now"></div>
+    <details id="fam-srv-adv"><summary>${esc(i18n('Advanced'))}</summary>
     <div class="row" style="flex-wrap:wrap;gap:8px"><span class="rlabel">${esc(i18n('Address for the phones'))}<br><span class="bindcaption" id="fam-srv-note"></span></span>
       <span class="rval" style="display:flex;gap:6px;flex-wrap:wrap"><input id="fam-srv" style="min-width:240px">
-        <button class="dlg-btn" id="fam-srv-save">${esc(i18n('Save'))}</button></span></div></section>`;
+        <button class="dlg-btn" id="fam-srv-save">${esc(i18n('Save'))}</button></span></div></details></section>`;
   document.getElementById('fam-app-build').onclick = buildApp;
   appState();
   const inp = document.getElementById('fam-srv'), note = document.getElementById('fam-srv-note');
+  const now = document.getElementById('fam-srv-now'), adv = document.getElementById('fam-srv-adv');
+  // the address is the house's own (BIND_ADDRESS) or the one typed; the field opens by itself only when there is none
   const show = st => {
+    const addr = st.server_url || st.server_url_default || '';
     inp.value = st.server_url || ''; inp.placeholder = st.server_url_default || '';
-    note.textContent = i18n('It goes into every pairing QR. Empty: this house on its network ({0}); a name over https reaches the phones away from home too.', st.server_url_default || '?')
-      + (st.server_url_warning ? ' \u00b7 ' + i18n('Away from home the phones cannot reach this address.') : '');
+    now.textContent = addr ? i18n('The phones reach the house at {0}', addr) : i18n('The house does not know its address: type the address the phones open it at.');
+    now.style.color = addr && !st.server_url_warning ? '' : 'var(--bad)';
+    if(st.server_url_warning) now.textContent += ' ' + i18n('Away from home the phones cannot reach this address.');
+    if(!addr) adv.open = true;
+    note.textContent = i18n('It goes into every pairing QR. Empty: this house on its network ({0}); a name over https reaches the phones away from home too.', st.server_url_default || '?');
   };
   Home.api('/api/family/settings').then(show).catch(() => {});
   document.getElementById('fam-srv-save').onclick = async () => {

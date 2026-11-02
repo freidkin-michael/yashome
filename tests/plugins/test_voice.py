@@ -412,6 +412,22 @@ def test_two_satellites_of_one_room_waking_together_are_heard_once(vo, monkeypat
     assert any(t.startswith("panel/") for t, _p in vo)
 
 
+def test_a_satellite_takes_its_room_from_the_map_and_its_name_from_its_card(vo, monkeypatch):
+    c = TestClient(core.app)
+    add(c, room="")                                                                     # no room typed: the map says it
+    monkeypatch.setattr(core, "_rooms", [{"id": "r_k", "name": "Kitchen", "devices": ["kitchen_spk"]}])
+    core.set_device_name("kitchen_spk", "Fridge speaker")
+    try:
+        s = next(x for x in c.get("/api/voice/satellites", headers=HOUSE).json() if x["id"] == "kitchen")
+        assert s["room_name"] == "Kitchen" and s["cards"]["spk"] == "Fridge speaker"
+        assert [x["id"] for x in me._players("Kitchen")] == ["kitchen"] and [x["id"] for x in me._players("r_k")] == ["kitchen"]
+        assert me._room_refs("r_k") == [{"kind": "satellite", "name": "kitchen"}]
+        monkeypatch.setattr(core, "_rooms", [])
+        assert next(x for x in c.get("/api/voice/satellites", headers=HOUSE).json() if x["id"] == "kitchen")["room_name"] == ""
+    finally:
+        core._name_overrides.pop("kitchen_spk", None)                                   # the rename goes with the test
+
+
 def test_a_phone_is_a_satellite_with_push_to_talk(vo, monkeypatch):
     c = TestClient(core.app)
     r = c.put("/api/voice/satellites/phone_guest", headers=HOUSE, json={"phone": True, "name": "Phone", "room": ""})

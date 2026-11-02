@@ -42,6 +42,7 @@ const wait = (f, n = 100) => new Promise((ok, no) => { const t = setInterval(() 
     document.getElementById('pn-pair').click();
     await wait(() => document.querySelectorAll('#pn-list .row').length === 2);
     out.tablets = [...document.querySelectorAll('#pn-list .row > .bindcaption:nth-child(2)')].map(e => e.textContent);
+    out.more = [...document.querySelectorAll('#pn-list .row details > div > .bindcaption:first-child')].map(e => e.textContent);
     out.watch = [...document.querySelectorAll('#pn-list .pn-won')].map(t => [t.classList.contains('on'), t.closest('span').textContent.replace(/\s+/g, ' ').trim(),
       t.closest('span').querySelector('.pn-wafter').value, t.closest('span').querySelector('.pn-wevery').value]);
   } catch(e){ out.error = String(e); }

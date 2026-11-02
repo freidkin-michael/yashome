@@ -36,6 +36,13 @@
     "The house needs internet; its place is set on the Weather page": "Дому нужен интернет; место задаётся на странице «Погода»",
     "Is the internet reachable?": "Есть ли интернет?",
     "Find the city or enter the latitude and longitude": "Найдите город или введите широту и долготу",
-    "Pick the station; the IMS stations are public, no key": "Выберите станцию; станции IMS открыты, ключ не нужен"
+    "Pick the station; the IMS stations are public, no key": "Выберите станцию; станции IMS открыты, ключ не нужен",
+    "Advanced": "Дополнительно",
+    "Guessed from the internet address: find your city": "Угадано по интернет-адресу: найдите свой город",
+    "Now: from the forecast ({0})": "Сейчас: по прогнозу ({0})",
+    "The forecast is for this place": "Прогноз для этого места",
+    "no weather station near the house": "рядом с домом нет метеостанции",
+    "the weather stations do not answer now": "метеостанции сейчас не отвечают",
+    "the station has been silent for an hour": "станция молчит уже час"
   }
 }

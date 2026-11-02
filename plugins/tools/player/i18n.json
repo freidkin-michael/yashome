@@ -76,6 +76,8 @@
   "Files": "Файлы",
   "Link": "Ссылка",
   "Opens Films: search, a pasted page of a site, Continue and the players.": "Открывает «Кино»: поиск, вставленная ссылка с сайта, «Продолжить» и плееры.",
-  "Nowhere to search: no source of a site is connected. Put the sources of the sites in plugin-data/player/sources/ of the house (Settings -> TVs -> Players lists them), or give Files the folders of a NAS.": "Искать негде: ни один источник сайта не подключён. Положите источники сайтов в plugin-data/player/sources/ дома (их список: Настройки → Телевизоры → Плееры) или дайте «Файлам» папки NAS."
+  "Nowhere to search: no source of a site is connected. Put the sources of the sites in plugin-data/player/sources/ of the house (Settings -> TVs -> Players lists them), or give Files the folders of a NAS.": "Искать негде: ни один источник сайта не подключён. Положите источники сайтов в plugin-data/player/sources/ дома (их список: Настройки → Телевизоры → Плееры) или дайте «Файлам» папки NAS.",
+  "Advanced": "Дополнительно",
+  "Nowhere to search: no film site is connected. Give Files the folders of a NAS in Settings -> TVs -> Players, or ask whoever set up the house to add a site.": "Искать негде: ни один сайт с фильмами не подключён. Дайте «Файлам» папки NAS в Настройки -> Телевизоры -> Плееры или попросите того, кто настраивал дом, добавить сайт."
  }
 }

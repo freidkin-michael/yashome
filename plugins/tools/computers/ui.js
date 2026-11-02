@@ -1,5 +1,5 @@
 // Settings -> Devices -> Computers and servers (owner only): the house's computers, each a card: whether the house reaches it
-// (its key logs in, sudo asks no password), its name (renamed in place), the TV and input its screen is (offered from the
+// (and what to do when not), its name (renamed in place), the TV and input its screen is (offered from the
 // screen's EDID), its servers (install, remove, use: one computer per server), Remove; "Search the network" finds the others,
 // "Add by address" takes one by hand.
 (() => {
@@ -7,9 +7,13 @@
   const api = (path, opts) => Home.api(path, opts);
   const send = (method, path, body) => api(path, {method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
   const CARD = 'border:1px solid var(--line, rgba(148,163,184,.25));border-radius:12px;padding:10px 12px;margin:10px 0';
-  const WHY = {'the key is refused': 'the key of the house is refused', 'no ssh there': 'no SSH there', 'not reachable': 'not reachable',
-               'sudo asks for a password': 'sudo asks for a password', 'its host key changed': 'its host key changed', 'no answer': 'no answer'};
-  const why = e => i18n(WHY[e] || e || 'no answer');
+  // the helper's words -> what a person does about it; the words themselves stay in the log and under Advanced
+  const WHY = {'the key is refused': 'no connection: the computer does not let the house in; add it again',
+               'no ssh there': 'no connection: turn on remote login on the computer',
+               'not reachable': 'no connection: is the computer switched on?', 'no answer': 'no connection: is the computer switched on?',
+               'sudo asks for a password': 'the house cannot install there: the computer asks for a password',
+               'its host key changed': 'Reinstalled? Press Trust again'};
+  const why = e => i18n(WHY[e] || 'no connection: is the computer switched on?');
   const SERVERS = ['build', 'tts', 'llm', 'yashgen', 'player', 'touchmouse'];   // the app builder ('apk') is an option of the build server
   const MANY = ['player', 'touchmouse'];                       // on every computer that wants one: Servers lists where they are
 
@@ -38,7 +42,7 @@
           const act = !can || c.self && k !== 'build' && k !== 'apk' && !MANY.includes(k) ? '' : !x.installed ? ((k === 'yashgen' || MANY.includes(k)) && c.wsl ? '' : btn(k, 'install', 'Install')) : x.active && k !== 'apk' ? '' : btn(k, 'remove', 'Remove', 'var(--bad)');
           return `<div class="row" style="gap:8px;margin-top:4px${sub ? ';padding-left:18px' : ''}"><span class="rlabel">${esc(i18n(title))}<br><span class="bindcaption" style="color:${
             x.active && x.installed && !(c.self && k === 'llm') ? 'var(--ok)' : 'inherit'}">${esc(state)}${x.active && x.installed && !c.self && k !== 'apk'
-            ? ' \u00b7 ' + esc(i18n('another one: the Servers tab')) : ''}${(x.models || []).length ? ' \u00b7 ' + esc(x.models.join(', ')) : ''}</span></span>
+            ? ' \u00b7 ' + esc(i18n('another one: the Servers tab')) : ''}</span></span>
             <span class="rval">${act}</span></div>`;
         };
         const rows = SERVERS.filter(k => (v.roles[k] || {}).on).map(k => row(k, v.roles[k].title)
@@ -59,7 +63,7 @@
         const going = c.run && c.run.state === 'running';
         return `<section class="pc-card" data-open="${esc(c.id)}" role="button" tabindex="0" style="${CARD};margin:0;cursor:pointer"${going ? ' data-running' : ''}>
           <div>${dot} <b>${esc(c.name)}</b>${c.self ? ` <span class="bindcaption">(${esc(i18n('the house runs here'))})</span>` : ''}</div>
-          <div class="bindcaption">${esc([c.host, c.wsl ? 'WSL' : ''].filter(Boolean).join(' \u00b7 '))}${ok || !st.ts ? '' : ` \u00b7 <span style="color:var(--bad)">${esc(why(st.error))}</span>`}</div>
+          ${ok || !st.ts ? '' : `<div class="bindcaption" style="color:var(--bad)">${esc(why(st.error))}</div>`}
           ${c.tv ? `<div class="bindcaption">${esc(tvName(c.tv) + (c.input ? ' \u00b7 ' + c.input : ''))}</div>` : ''}
           <div class="bindcaption" style="margin-top:4px">${going ? esc(i18n(c.run.action === 'remove' ? 'removing...' : 'installing...')) : srv || esc(i18n('no servers'))}</div></section>`;
       };
@@ -68,16 +72,16 @@
         const st = c.status || {}, ok = st.ok === true, g = c.guess || {};
         const dot = `<span style="color:${ok ? 'var(--ok)' : st.ts ? 'var(--bad)' : 'var(--muted, #94a3b8)'}">\u25cf</span>`;
         const line = [c.hostname, c.host, c.os, c.wsl ? 'Windows, WSL ' + c.wsl : ''].filter(Boolean).join(' \u00b7 ');
-        const state = ok ? i18n('reachable, sudo works') + (st.ts ? ' \u00b7 ' + i18n('checked {0}', Home.ago(Date.now() / 1000 - st.ts)) : '')
+        const state = ok ? i18n('reachable')
           : st.ts ? why(st.error) + (st.seen ? ' \u00b7 ' + i18n('last seen {0}', Home.ago(Date.now() / 1000 - st.seen)) : '') : i18n('not checked yet');
         const head = renaming === c.id
           ? `<span class="rlabel" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"><input class="pc-name" value="${esc(c.name)}" maxlength="40" style="flex:1;min-width:140px" data-autosave>
                <button class="dlg-btn primary" data-rename-ok="${esc(c.id)}">${esc(i18n('Save'))}</button><button class="dlg-btn" data-rename-off>${esc(i18n('Cancel'))}</button></span>`
           : `<span class="rlabel">${dot} <b>${esc(c.name)}</b>${c.self ? ` <span class="bindcaption">(${esc(i18n('the house runs here'))})</span>` : ''}
                <button class="dlg-btn" data-rename="${esc(c.id)}" title="${esc(i18n('Rename'))}" aria-label="${esc(i18n('Rename'))}" style="padding:2px 8px">${Home.icon('pen', 14)}</button><br>
-               <span class="bindcaption">${esc(line)}</span><br><span class="bindcaption" style="color:${ok || !st.ts ? 'inherit' : 'var(--bad)'}">${esc(state)}</span></span>
+               <span class="bindcaption" style="color:${ok || !st.ts ? 'inherit' : 'var(--bad)'}">${esc(state)}</span></span>
              <span class="rval" style="display:flex;gap:6px;flex-wrap:wrap"><button class="dlg-btn" data-close>${esc(i18n('Close'))}</button>${st.error === 'its host key changed'
-               ? `<button class="dlg-btn" data-forget="${esc(c.id)}" title="${esc(i18n('After a reinstall: take its new key'))}">${esc(i18n('Take the new key'))}</button>` : ''}${
+               ? `<button class="dlg-btn" data-forget="${esc(c.id)}" title="${esc(i18n('After a reinstall: the house trusts the computer again'))}">${esc(i18n('Trust again'))}</button>` : ''}${
                c.self ? '' : `<button class="dlg-btn" data-del="${esc(c.id)}" style="color:var(--bad)">${esc(i18n('Remove'))}</button>`}</span>`;
         const tv = tvs[c.tv], inputs = tv ? tv.inputs : [];
         const seen = (st.screens || []).filter(s => s.port).map(s => i18n('its screen is HDMI {0} of a {1} TV', s.port, s.name || s.vendor));
@@ -88,27 +92,32 @@
             <span class="rval" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${offer}
               <select data-tv="${esc(c.id)}"><option value="">${esc(i18n('no TV'))}</option>${c.tv && !tv ? `<option value="${esc(c.tv)}" selected>${esc(c.tv)}</option>` : ''}${v.tvs.map(t => `<option value="${esc(t.id)}"${t.id === c.tv ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
               ${tv ? `<select data-input="${esc(c.id)}"><option value="">${esc(i18n('input?'))}</option>${inputs.map(i => `<option${i === c.input ? ' selected' : ''}>${esc(i)}</option>`).join('')}</select>` : ''}</span></div>
-          ${roles(c)}</section>`;
+          ${roles(c)}
+          ${line || st.error ? `<details style="margin-top:8px"><summary class="bindcaption">${esc(i18n('Advanced'))}</summary><div class="bindcaption">${
+            esc([line, st.ts ? i18n('checked {0}', Home.ago(Date.now() / 1000 - st.ts)) : '', st.error || ''].filter(Boolean).join(' \u00b7 '))}</div></details>` : ''}</section>`;
       };
       const found = v.found.map(f => `<div class="row" style="${CARD};flex-wrap:wrap;gap:8px;${f.ok ? 'border-color:var(--on)' : 'opacity:.7'}">
-          <span class="rlabel"><b>${esc(f.hostname || f.host)}</b><br><span class="bindcaption">${esc([f.host, f.os].filter(Boolean).join(' \u00b7 '))}${
-            f.ok ? '' : ' \u00b7 ' + esc(i18n('not a computer of the house: {0}', why(f.error)))}</span></span>
+          <span class="rlabel"><b>${esc(f.hostname || f.host)}</b>${f.ok ? '' : `<br><span class="bindcaption">${esc(why(f.error))}</span>`}</span>
           ${f.ok ? `<button class="dlg-btn primary" data-addfound="${esc(f.host)}" data-name="${esc(f.hostname || '')}">${esc(i18n('Add'))}</button>` : ''}</div>`).join('');
       box.innerHTML = `
-        ${v.user ? '' : `<div class="bindcaption" style="color:var(--bad);margin-bottom:8px">${esc(i18n('COMPUTERS_SSH_USER is not set: the user the house logs in to its computers as.'))}</div>`}
-        <div class="bindcaption" style="margin-bottom:8px">${esc(i18n('A computer of the house: the house logs in to it with its key as {0} and sudo asks no password.', v.user || '?'))}</div>
+        ${v.user ? '' : `<div class="bindcaption" style="color:var(--bad);margin-bottom:8px">${esc(i18n('The house does not know which user to log in to its computers as: whoever set up the house sets it (see Advanced).'))}</div>`}
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px">
           <button class="dlg-btn primary" data-scan ${busy ? 'disabled' : ''}>${esc(busy === 'scan' ? i18n('Searching...') : i18n('Search the network'))}</button>
           <button class="dlg-btn" data-check ${busy ? 'disabled' : ''}>${esc(busy === 'check' ? i18n('Checking...') : i18n('Check again'))}</button>
           <button class="dlg-btn" data-adding>${esc(i18n('+ Add by address'))}</button>
-          <span class="bindcaption">${esc(v.scan.ts ? i18n('searched {0} ({1})', Home.ago(Date.now() / 1000 - v.scan.ts), v.scan.net) : v.net ? i18n('network {0}', v.net) : '')}</span></div>
+          <span class="bindcaption">${esc(v.scan.ts ? i18n('searched {0}', Home.ago(Date.now() / 1000 - v.scan.ts)) : '')}</span></div>
         ${adding ? `<div class="row" style="${CARD};flex-wrap:wrap;gap:8px"><input class="pc-host" placeholder="${esc(i18n('address or host name'))}" style="width:180px" data-autosave>
             <input class="pc-newname" placeholder="${esc(i18n('name (optional)'))}" maxlength="40" style="flex:1;min-width:120px" data-autosave>
-            <input class="pc-wsl" placeholder="${esc(i18n('Windows: WSL distribution/user'))}" maxlength="80" style="width:220px" data-autosave>
-            <button class="dlg-btn primary" data-add>${esc(i18n('Add'))}</button><button class="dlg-btn" data-adding-off>${esc(i18n('Cancel'))}</button></div>` : ''}
+            <button class="dlg-btn primary" data-add>${esc(i18n('Add'))}</button><button class="dlg-btn" data-adding-off>${esc(i18n('Cancel'))}</button>
+            <details style="flex-basis:100%"><summary class="bindcaption">${esc(i18n('Advanced'))}</summary>
+              <input class="pc-wsl" placeholder="${esc(i18n('Windows: WSL distribution/user'))}" maxlength="80" style="width:220px" data-autosave></details></div>` : ''}
         ${v.computers.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">${v.computers.map(card).join('')}</div>`
           : `<div class="bindcaption">${esc(i18n('No computers yet: press "Search the network".'))}</div>`}
-        ${found ? `<div class="bindcaption" style="margin-top:14px">${esc(i18n('Found on the network, not on the list:'))}</div>${found}` : ''}`;
+        ${found ? `<div class="bindcaption" style="margin-top:14px">${esc(i18n('Found on the network, not on the list:'))}</div>${found}` : ''}
+        <details style="margin-top:14px"><summary class="bindcaption">${esc(i18n('Advanced'))}</summary><div class="bindcaption">${
+          esc(i18n('A computer of the house: the house logs in to it with its key as {0} and sudo asks no password.', v.user || '?'))}${
+          v.user ? '' : ' ' + esc(i18n('COMPUTERS_SSH_USER is not set: the user the house logs in to its computers as.'))}${
+          v.scan.net || v.net ? ' \u00b7 ' + esc(i18n('network {0}', v.scan.net || v.net)) : ''}</div></details>`;
       const act = (sel, fn) => box.querySelectorAll(sel).forEach(b => b.onclick = async () => {
         b.disabled = true;
         let nv;
@@ -203,7 +212,7 @@
             have.map(c => `<option value="${esc(c.id)}"${c === cur ? ' selected' : ''}>${esc(where(c, k))}</option>`).join('')}</select>`
           : `<span class="bindcaption">${esc(i18n('not installed anywhere'))}</span>`;
         return `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="rlabel">${esc(i18n(v.roles[k].title))}${down
-            ? `<br><span class="bindcaption" style="color:var(--bad)">${esc(i18n('no ssh connection: {0}', t.error || '...'))}</span>` : ''}</span>
+            ? `<br><span class="bindcaption" style="color:var(--bad)" title="${esc(t.error || '')}">${esc(i18n('no connection: is the computer switched on?'))}</span>` : ''}</span>
           <span class="rval">${pick}</span></div>`;
       }).join('') + many;
       box.querySelectorAll('[data-server]').forEach(sel => sel.onchange = async () => {

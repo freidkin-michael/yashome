@@ -511,6 +511,26 @@
     "The Android tablets of the house: the home-screen pin, the launcher restart, unbinding.": "Android-планшеты дома: закрепление на главном экране, перезапуск лаунчера, отвязка.",
     "The launcher the Android tablets install: its version and build date. A tablet behind it updates itself; ESP screens have their own firmware.": "Лаунчер, который ставят Android-планшеты: его версия и дата сборки. Отставший планшет обновляется сам; у ESP-экранов своя прошивка.",
     "ESP screens only: builds this screen's firmware and sends it over Wi-Fi.": "Только для ESP-экранов: собирает прошивку этого экрана и отправляет её по Wi-Fi.",
-    "Android tablets only: opens the Android tablets window; the tablet is bound again by its new code.": "Только для Android-планшетов: открывает окно Android-планшетов; планшет привязывается заново по новому коду."
+    "Android tablets only: opens the Android tablets window; the tablet is bound again by its new code.": "Только для Android-планшетов: открывает окно Android-планшетов; планшет привязывается заново по новому коду.",
+    "A screen on the network says it is this panel: confirm it under Advanced so the house can update it.": "Экран в сети говорит, что это эта панель: подтвердите его в разделе «Дополнительно», чтобы дом мог его обновлять.",
+    "A tablet": "Планшет",
+    "Advanced": "Дополнительно",
+    "Bound: its firmware is on the way": "Привязан: прошивка уже в пути",
+    "Connected: the panel is ready to fill in the builder.": "Подключён: панель можно заполнять в конструкторе.",
+    "Delete panel {0}? What is on it goes, and its tablet must be connected again.": "Удалить панель {0}? Всё, что на ней, удалится, а планшет придётся подключить заново.",
+    "The home screen cannot be pinned on this tablet (see the launcher README)": "На этом планшете нельзя закрепить главный экран (см. README лаунчера)",
+    "The screen is not on the network: switch it on": "Экрана нет в сети: включите его",
+    "What the tablet shows": "Что показывает планшет",
+    "a new panel": "новая панель",
+    "the house cannot restart it: turn on network debugging on the tablet": "дом не может его перезапустить: включите на планшете отладку по сети",
+    "the update failed": "обновление не удалось",
+    "update available": "есть обновление",
+    "Camera: {0}": "Камера: {0}",
+    "Panel \"{0}\" deleted": "Панель «{0}» удалена",
+    "The tablet takes the changes by itself within a minute": "Планшет сам подхватит изменения в течение минуты",
+    "camera not found": "камера не найдена",
+    "receiver not found": "приёмник не найден",
+    "Deletes the panel and what is on it; its tablet must be connected again.": "Удаляет панель и всё, что на ней; планшет придётся подключить заново.",
+    "What this tablet shows: a new panel, or a panel the house has.": "Что показывает этот планшет: новую панель или панель, которая уже есть в доме."
   }
 }

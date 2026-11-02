@@ -3,8 +3,7 @@
   const esc = Home.escapeHtml;
   const COLOUR = {green: '#3ddc84', yellow: '#ffd24d', orange: '#ff9a3d', red: '#ff5c5c'};
   const WORDS = {green: 'Everything is fine', yellow: 'Needs a look', orange: 'The house is trying again', red: 'Needs attention'};
-  const LEVEL = {warn: 'Warning', retry: 'Trying again', alert: 'Alert', info: 'Note'};
-  let H = {status: 'green', count: 0, issues: [], fixes: [], resolved: [], slow: [], digest: {}}, owner = false, badge = null, last = 0, busy = false, more = {};
+  let H = {status: 'green', count: 0, issues: [], fixes: [], resolved: [], slow: [], digest: {}}, owner = false, badge = null, last = 0, busy = false, more = {}, advOpen = false;
   const hist = (sec, title, list, at, mk, k) => {             // the last 24 h; older rows behind "More N"
     const now = Date.now() / 1000, day = list.filter(x => now - at(x) < 86400), older = list.length - day.length;
     const rows = (more[k] ? list : day).map(mk);
@@ -34,7 +33,7 @@
   const MODAL = '__watchdog__';
   let open = null;
   const show = () => {
-    more = {};
+    more = {}; advOpen = false;
     Home.openModal('<div data-w="box"></div>', MODAL, {onClose: () => { open = null; }});
     const box = document.getElementById('md').querySelector('[data-w="box"]');
     open = () => {
@@ -45,15 +44,17 @@
       box.innerHTML = `<div style="padding:12px 16px;max-width:760px">
         <div style="display:flex;align-items:center;gap:12px"><span style="flex:none;width:18px;height:18px;border-radius:50%;background:${COLOUR[H.status]}"></span><h2 style="margin:0;font-size:20px;flex:1">${esc(i18n('Home health'))}: ${esc(w)}</h2><button class="dlg-btn" data-w="close">&times;</button></div>
         ${sec('Open issues', H.issues.map(i => row(i.level === 'alert' ? COLOUR.red : i.level === 'retry' ? COLOUR.orange : i.level === 'info' ? 'var(--dim)' : COLOUR.yellow, esc(text(i)) + (i.link ? ` <button class="dlg-btn" data-link="${esc(i.link)}">${esc(i18n('Open'))}</button>` : ''),
-          `${i18n(LEVEL[i.level] || 'Warning')} \u00b7 ${i18n('since {0}', when(i.since))}${i.opened > 1 ? ' \u00b7 ' + i18n('came back {0} times', i.opened) : ''}${i.hint ? ' \u00b7 ' + i18n(i.hint[0]) : ''}`,
+          `${i18n('since {0}', when(i.since))}${i.opened > 1 ? ' \u00b7 ' + i18n('came back {0} times', i.opened) : ''}${i.hint ? ' \u00b7 ' + i18n(i.hint[0]) : ''}`,
           i.resend ? `<div><button class="dlg-btn" data-resend="${esc(i.key)}" style="margin-top:6px">${esc(i18n('Send again'))}</button></div>` : '')))}
         ${hist(sec, 'Fixed by the house', H.fixes, f => f.ts, f => row(COLOUR.green, esc(text(f)), when(f.ts)), 'fixes')}
+        <details data-w="adv" style="margin-top:18px"${advOpen ? ' open' : ''}><summary>${esc(i18n('Advanced'))}</summary>
         ${hist(sec, 'Answered slowly', H.slow || [], x => x.ts, x => row(COLOUR.yellow, esc(text(x)), when(x.ts)), 'slow')}
         ${hist(sec, 'Solved by themselves', H.resolved, r => r.until, r => row(COLOUR.green, esc(text(r)), `${when(r.until)} \u00b7 ${i18n('lasted {0}', span(r.seconds))}${r.opened > 1 ? ' \u00b7 ' + i18n('came back {0} times', r.opened) : ''}`), 'resolved')}
         ${sec('Observations', (H.notes || []).map(n => row(COLOUR.green, `<b>${esc(n.title)}</b><pre style="white-space:pre-wrap;margin:4px 0 0;font:12px/1.4 monospace">${esc(n.text)}</pre>`, when(n.ts))))}
         ${d.ts ? `<h3 style="margin:18px 0 6px;font-size:15px">${esc(i18n('Daily digest'))}</h3><div class="bindcaption">${esc(i18n('{0} open issues, {1} fixes, {2} solved by themselves in the last 24 hours', d.open, d.fixes, d.solved))}</div>` : ''}
-        <div class="bindcaption" style="margin-top:14px">${esc(i18n('Checked every 45 seconds'))}</div></div>`;
+        <div class="bindcaption" style="margin-top:14px">${esc(i18n('Checked every 45 seconds'))}</div></details></div>`;
       box.querySelector('[data-w="close"]').onclick = () => Home.closeModal();
+      box.querySelector('[data-w="adv"]').ontoggle = e => { advOpen = e.target.open; };      // a redraw every 30 s keeps it as it was
       box.querySelectorAll('[data-more]').forEach(b => { b.onclick = () => { more[b.dataset.more] = true; open(); }; });
       box.querySelectorAll('[data-link]').forEach(b => { b.onclick = () => { Home.closeModal(); openSettings(...b.dataset.link.split('/')); }; });
       box.querySelectorAll('[data-resend]').forEach(b => { b.onclick = async () => {

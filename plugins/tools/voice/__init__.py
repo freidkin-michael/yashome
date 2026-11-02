@@ -151,10 +151,32 @@ def _sats() -> list:
     return [s for s in _cfg["satellites"] if isinstance(s, dict) and ID_RE.match(str(s.get("id", "")))]
 
 
+def _map_room(s: dict) -> dict:
+    """The room of the map (the dashboard rooms) that holds one of the satellite's cards or its tablet, else {}."""
+    ids = {s["id"] + "_mic", s["id"] + "_spk"} | ({s["panel"]} if s.get("panel") else set())
+    return next((r for r in core.get_rooms() if ids & set(r.get("devices") or [])), {})
+
+
+def _room(s: dict) -> str:
+    """Where the satellite stands: the map's room id, else the room it was saved with."""
+    return _map_room(s).get("id") or s.get("room") or ""
+
+
+def _room_name(s: dict) -> str:
+    """The name of the satellite's room, for the dashboard."""
+    rid = _room(s)
+    return next((r.get("name") or rid for r in core.get_rooms() if rid in (r.get("id"), r.get("name"))), rid)
+
+
+def _room_keys(s: dict) -> set:
+    r = _map_room(s)
+    return {k for k in (r.get("id"), r.get("name"), s.get("room")) if k}
+
+
 def _room_refs(rid: str) -> list:
     """The satellites that stand in the room (by its id or its name)."""
     keys = {rid} | {r.get("name") for r in core.get_rooms() if r.get("id") == rid}
-    return [{"kind": "satellite", "name": s.get("name") or s["id"]} for s in _sats() if s.get("room") in keys]
+    return [{"kind": "satellite", "name": s.get("name") or s["id"]} for s in _sats() if _room_keys(s) & keys]
 
 
 core.ROOM_REFS.append(_room_refs)
@@ -308,7 +330,7 @@ _room_wake: dict = {}            # room -> (time, satellite id) of the first wak
 def _room_first(s: dict):
     """The id of the satellite of this room that woke within ROOM_WINDOW_S before this one (this one is a duplicate), else None
     (this one is the first: it is remembered). A satellite without a room is its own room."""
-    room, now = s.get("room"), time.time()
+    room, now = _room(s), time.time()
     if not room:
         return None
     t, who = _room_wake.get(room, (0.0, ""))
@@ -452,7 +474,7 @@ def _players(target: str) -> list:
     ps = [s for s in _sats() if s.get("player")]
     if target in ("all", "*"):
         return ps
-    return [s for s in ps if s["id"] == target or s.get("room") == target]
+    return [s for s in ps if s["id"] == target or target in _room_keys(s)]
 
 
 def play(s: dict, url: str, what: str = "") -> None:
@@ -614,7 +636,8 @@ def voice_status(request: Request):
 @core.app.get("/api/voice/satellites")
 def satellites(request: Request):
     core.house_token_only(request)
-    return [{**s, "stats": _stat(s["id"])} for s in _sats()]
+    cards = lambda s: {r: core.DEVICES[s["id"] + "_" + r].get("name") for r in ("mic", "spk") if s["id"] + "_" + r in core.DEVICES}
+    return [{**s, "stats": _stat(s["id"]), "room_name": _room_name(s), "cards": cards(s)} for s in _sats()]   # shown names: renamed cards, the map's room
 
 
 @core.app.put("/api/voice/satellites/{sid}")
