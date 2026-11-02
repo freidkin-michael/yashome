@@ -426,8 +426,39 @@ async def tizen_pair(dev_id: str):
         with _lock:
             _tokens[dev_id] = token
             _save_tokens()
+            if not t.get("mac"):                          # its MAC for Wake-on-LAN: the TV says it, nobody types it
+                try:
+                    t["mac"] = tv.mac(t["host"])
+                    core.save_settings()
+                except (OSError, ValueError):
+                    pass
         return {"ok": True, "paired": True}
     return await asyncio.to_thread(keep)
+
+
+# well-known apps, offered while the TV is off; the TV's own list (Load from the TV) adds the rest
+KNOWN_APPS = {"YouTube": "111299001912", "Netflix": "3201907018807", "Prime Video": "3201910019365",
+              "Disney+": "3201901017640", "Spotify": "3201606009684", "Plex": "3201512006963"}
+
+
+@core.app.get("/api/tizen/tvs/{dev_id}/apps")
+async def tizen_apps(dev_id: str):
+    """The apps to pick from: the well-known ones, and those installed on the TV when it answers."""
+    t = _tv(dev_id)
+    if not t:
+        raise HTTPException(404, "no such TV")
+    known = [{"id": v, "name": k} for k, v in KNOWN_APPS.items()]
+    token = _tokens.get(dev_id)
+    if not token:
+        return {"apps": known, "from_tv": False, "why": "not paired"}
+    try:
+        got = await tv.installed_apps(t["host"], token)
+    except tv.Unauthorized:
+        return {"apps": known, "from_tv": False, "why": "pair it again"}
+    except (OSError, asyncio.TimeoutError, ValueError):
+        return {"apps": known, "from_tv": False, "why": "the TV does not answer"}
+    ids = {a["id"] for a in got}
+    return {"apps": sorted(got, key=lambda a: a["name"].lower()) + [a for a in known if a["id"] not in ids], "from_tv": True}
 
 
 @core.app.post("/api/tizen/tvs/{dev_id}/adopt")

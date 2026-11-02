@@ -110,6 +110,27 @@ async def _keys(host: str, token: str, *names: str):
         await _close(ws)
 
 
+def mac(host: str) -> str:
+    """The TV's own MAC (for Wake-on-LAN) from its REST info; "" when it does not say."""
+    m = str(((info(host).get("device") or {}).get("wifiMac") or "")).lower()
+    return m if re.fullmatch(r"([0-9a-f]{2}:){5}[0-9a-f]{2}", m) else ""
+
+
+async def installed_apps(host: str, token: str, wait: float = 8) -> list:
+    """The apps installed on the TV: [{"id", "name"}] (ed.installedApp.get over the remote-control channel)."""
+    ws, _ = await _open(host, token, wait)
+    try:
+        await ws.send(json.dumps({"method": "ms.channel.emit", "params": {"event": "ed.installedApp.get", "to": "host"}}))
+        while True:
+            msg = json.loads(await asyncio.wait_for(ws.recv(), wait))
+            if msg.get("event") == "ed.installedApp.get":
+                rows = ((msg.get("data") or {}).get("data")) or []
+                return [{"id": str(a.get("appId")), "name": str(a.get("name") or a.get("appId"))[:40]} for a in rows
+                        if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", str(a.get("appId") or ""))]
+    finally:
+        await _close(ws)
+
+
 def launch(host: str, app_id: str, timeout: float = 5):
     """Start an app by its id (POST :8001/api/v2/applications/<id>)."""
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", app_id):

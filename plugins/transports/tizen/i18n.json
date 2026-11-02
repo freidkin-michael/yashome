@@ -40,6 +40,17 @@
     "Samsung": "Samsung",
     "{0}: the TV does not answer. Is it on and on the network? ({1})": "{0}: телевизор не отвечает. Он включён и в сети? ({1})",
     "The TV did not allow it: press Pairing again and Allow on the TV within 30 s ({0})": "Телевизор не разрешил: нажмите «Сопряжение» ещё раз и «Разрешить» на телевизоре в течение 30 с ({0})",
-    "The TV does not answer: switch it on (with its remote), then press Pairing again ({0})": "Телевизор не отвечает: включите его (своим пультом) и нажмите «Сопряжение» ещё раз ({0})"
+    "The TV does not answer: switch it on (with its remote), then press Pairing again ({0})": "Телевизор не отвечает: включите его (своим пультом) и нажмите «Сопряжение» ещё раз ({0})",
+    "Bedroom TV": "Телевизор в спальне",
+    "Ticked ones are buttons on the card; a name of your own, e.g. PlayStation, is optional": "Отмеченные входы - кнопки на карточке; своё имя, например PlayStation, по желанию",
+    "Loading...": "Загрузка...",
+    "Advanced": "Дополнительно",
+    "Its IP on the home network: keep it fixed in the router": "Его IP в домашней сети: закрепите его в роутере",
+    "For power-on (Wake-on-LAN); the house reads it from the TV when it pairs": "Для включения (Wake-on-LAN); дом узнаёт его у телевизора при сопряжении",
+    "More apps after the pairing": "Остальные приложения - после сопряжения",
+    "The TV is off: the usual apps only; switch it on and open Edit again for its own list": "Телевизор выключен: показаны только обычные приложения; включите его и снова откройте «Изменить», чтобы увидеть его список",
+    "Give the TV a name": "Дайте телевизору имя",
+    "The address is under Advanced: Find on the network fills it": "Адрес - в «Дополнительно»; «Найти в сети» заполнит его сам",
+    "not paired: press Pairing with the TV on": "не сопряжён: включите телевизор и нажмите «Сопряжение»"
   }
 }

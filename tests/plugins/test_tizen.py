@@ -51,7 +51,7 @@ class FakeTV:
             def do_GET(self):
                 if not fake.on:
                     return self._send(503)
-                self._send(200, json.dumps({"device": {"OS": "Tizen", "name": "Fake TV", "TokenAuthSupport": "true"}}).encode())
+                self._send(200, json.dumps({"device": {"OS": "Tizen", "name": "Fake TV", "TokenAuthSupport": "true", "wifiMac": "00:11:22:33:44:55"}}).encode())
 
             def do_POST(self):
                 n = int(self.headers.get("Content-Length") or 0)
@@ -93,7 +93,12 @@ class FakeTV:
                 tok = TOKEN
             await ws.send(json.dumps({"event": "ms.channel.connect", "data": {"token": tok}}))
             async for msg in ws:
-                k = json.loads(msg)["params"]["DataOfCmd"]
+                m = json.loads(msg)
+                if m.get("method") == "ms.channel.emit" and m["params"].get("event") == "ed.installedApp.get":
+                    await ws.send(json.dumps({"event": "ed.installedApp.get", "data": {"data": [
+                        {"appId": "3201907018807", "name": "Netflix"}, {"appId": "bad id!", "name": "x"}, {"appId": "111", "name": "Kino"}]}}))
+                    continue
+                k = m["params"]["DataOfCmd"]
                 self.keys.append(k)
                 if k == "KEY_POWER":
                     self.on = False
@@ -429,3 +434,15 @@ def test_the_ir_on_key_follows_a_rename_or_a_merge(monkeypatch):
     assert tz._merge_plan("tv_ir", "s1") == {"samsung: IR on key": 1}
     tz._on_rename("tv_ir", "s1")
     assert tz.TVS[0]["ir_on"] == {"device": "s1", "code": "ir_power_on"} and tz._merge_plan("tv_ir", "s1") == {}
+
+
+def test_pairing_learns_the_mac_and_edit_offers_the_tv_s_own_apps(fake):
+    c = TestClient(core.app)
+    assert _add(c, mac="").status_code == 200
+    r = c.get("/api/tizen/tvs/tv_t/apps", headers=HOUSE).json()
+    assert not r["from_tv"] and r["why"] == "not paired" and {"id": "111299001912", "name": "YouTube"} in r["apps"]
+    assert c.post("/api/tizen/tvs/tv_t/pair", headers=HOUSE).status_code == 200
+    assert me._tv("tv_t")["mac"] == "00:11:22:33:44:55"                # read from the TV, nobody typed it
+    r = c.get("/api/tizen/tvs/tv_t/apps", headers=HOUSE).json()
+    ids = [a["id"] for a in r["apps"]]
+    assert r["from_tv"] and ids[:2] == ["111", "3201907018807"] and "bad id!" not in ids and ids.count("3201907018807") == 1

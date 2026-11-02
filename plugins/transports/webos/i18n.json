@@ -20,13 +20,20 @@
     "name = input id (HDMI_1), one a line": "имя = id входа (HDMI_1), по одному в строке",
     "name = app id, one a line": "имя = id приложения, по одному в строке",
     "Save": "Сохранить",
-    "The TV shows a question: press Allow on it within 30 s. Once is enough; the key is kept in the house.": "Телевизор покажет вопрос: нажмите «Разрешить» в течение 30 с. Достаточно одного раза; ключ хранится в доме.",
     "Its name, address, MAC for power-on, and the inputs and apps its card offers.": "Его имя, адрес, MAC для включения, а также входы и приложения на его карточке.",
     "Remove": "Убрать",
     "Remove {0} from the house? Its card, rules and pairing go; the TV itself is not touched.": "Убрать {0} из дома? Его карточка и сопряжение уйдут; сам телевизор не трогается.",
     "Takes the TV out of the house: its card and its pairing go; the TV itself is not touched.": "Убирает телевизор из дома: его карточка и сопряжение уходят; сам телевизор не трогается.",
     "The TV does not answer. Is it on and on the network? ({0})": "Телевизор не отвечает. Он включён и в сети? ({0})",
     "The TV refused the command: {0}": "Телевизор не выполнил команду: {0}",
-    "The TV did not pair: switch it on, press Pairing again and accept on the TV ({0})": "Сопряжение не прошло: включите телевизор, нажмите «Сопряжение» ещё раз и примите запрос на телевизоре ({0})"
+    "The TV did not pair: switch it on, press Pairing again and accept on the TV ({0})": "Сопряжение не прошло: включите телевизор, нажмите «Сопряжение» ещё раз и примите запрос на телевизоре ({0})",
+    "The TV shows a question: accept it within 40 s. Once is enough; the key is kept in the house.": "Телевизор покажет запрос: примите его в течение 40 с. Достаточно одного раза, ключ хранится в доме.",
+    "Accept the request on the TV now (40 s)": "Примите запрос на телевизоре (40 с)",
+    "Switch the TV on and open Edit again: the list comes from the TV": "Включите телевизор и снова откройте «Изменить»: список берётся у телевизора",
+    "The TV is off or not paired: only what is set now is shown": "Телевизор выключен или не сопряжён: показано только то, что уже задано",
+    "Loading...": "Загрузка...",
+    "Advanced": "Дополнительно",
+    "Ticked ones are buttons on the card; a name of your own, e.g. PlayStation, is optional": "Отмеченные входы - кнопки на карточке; своё имя, например PlayStation, по желанию",
+    "not paired: press Pairing with the TV on": "не сопряжён: включите телевизор и нажмите «Сопряжение»"
   }
 }

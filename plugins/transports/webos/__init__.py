@@ -288,6 +288,22 @@ async def webos_pair(dev_id: str):
     return await asyncio.to_thread(keep)            # an fsync under the lock: not on the event loop
 
 
+@core.app.get("/api/webos/tvs/{dev_id}/lists")
+async def webos_lists(dev_id: str):
+    """The TV's own inputs and apps ({id: label}) to pick from in Edit; when it does not answer, only those set."""
+    cfg = core.DEVICES.get(dev_id)
+    if not cfg or cfg.get("transport") != "webos":
+        raise HTTPException(404, "unknown webos device")
+    key = _webos_keys.get(dev_id)
+    if key:
+        try:
+            got = await asyncio.wait_for(webos.lists(_webos_host(cfg), key), 15)
+            return {"inputs": got["inputs"], "apps": got["apps"], "from_tv": True}
+        except Exception:                            # off or refused: the lists that are set, said so
+            pass
+    return {"inputs": {}, "apps": {}, "from_tv": False, "why": "not paired" if not key else "the TV does not answer"}
+
+
 def _row(d: dict) -> dict:
     return {"id": d["id"], "name": d.get("name") or d["id"], "host": d.get("host") or "", "live_host": _webos_host(d) or "",
             "mac": d.get("mac") or "", "paired": d["id"] in _webos_keys, "inputs": dict(d.get("_webos_inputs") or {}),
