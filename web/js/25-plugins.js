@@ -148,6 +148,12 @@ const Home = {
   openEsphomeAdd: () => openEsphomeAdd(),   // the core's "Add ESPHome" dialog
   openAdd: () => openAddDevice(),           // the header's Add button: a plug-in's addFlow window, else the Add menu
   roomClimate: id => { const r = roomById(id), c = r ? roomClimate(r) : null; return c ? {value: c.value, humidity: c.humidity, note: c.note} : null; },     // the temperature the room's tab shows (same rule), or null
+  // what a device does when it is pressed or fires (its bindings and the rules it triggers), each runnable now
+  triggersOf: async id => (await api(`/api/devices/${encodeURIComponent(id)}/rules`)).filter(r => (r.roles || []).includes('trigger'))
+    .map(r => { const t = ruleTitle(r), who = (((r.when || [])[0] || {}).device_name || '') + ': ';
+                const x = t.startsWith(who) ? t.slice(who.length) : t;
+                return {id: r.id, text: x.charAt(0).toUpperCase() + x.slice(1), enabled: r.enabled !== false}; }),
+  runRule: id => api('/api/rules/run', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})}),
   openDevice: id => openModal(id),         // the window of another device (it replaces the open one)
   rules: async () => (RULES = await api('/api/rules')),     // every rule, as Automations lists them
   ruleCard: r => ruleCard(r),              // one rule's card: tap to edit, run, switch, delete
