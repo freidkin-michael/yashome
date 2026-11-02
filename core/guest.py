@@ -260,7 +260,9 @@ def guest_list(request: Request):
                    for i, r in _guest_reqs.items() if r["state"] == "pending"]
         guests = [{"gid": g, "label": k.get("label", ""), "scope": k["scope"], "expires": k["expires"],
                    "ip": k.get("ip", ""), "ua": k.get("ua", "")} for g, k in _guest_keys.items()]
-    return {"pending": pending, "guests": sorted(guests, key=lambda x: x["expires"])}
+    devs, _ = lock_reach()                        # what no guest key reaches, by name: the owner sees it before allowing
+    off = sorted((DEVICES.get(d) or {}).get("name") or d for d in devs if d in DEVICES)
+    return {"pending": pending, "guests": sorted(guests, key=lambda x: x["expires"]), "locked_out": off}
 
 
 class GuestAllowBody(Body):

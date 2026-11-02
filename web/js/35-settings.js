@@ -364,6 +364,7 @@ function stGuests(sec){
         <span class="rlabel">${escapeHtml(g.ua || g.label)}<br><span class="bindcaption">${escapeHtml(i18n(GUEST_RIGHTS[g.scope] || g.scope))} \u00b7 ${escapeHtml(i18n('until {0}', hhmm(g.expires)))} \u00b7 ${escapeHtml(g.ip)}</span></span>
         <button class="dlg-btn g-revoke">${i18n('Revoke')}</button></div>`).join('')
       : `<div class="bindcaption">${i18n('No guest has a key now.')}</div>`;
+    if(d.locked_out && d.locked_out.length) keys.insertAdjacentHTML('beforeend', `<div class="bindcaption" style="margin-top:8px">${escapeHtml(i18n('A guest never uses: {0}', d.locked_out.join(', ')))}</div>`);
     const act = async (path, opts) => { try { await api(path, opts); } catch(e){ stToast(e.message || String(e)); } shown = ''; draw(); };
     wait.querySelectorAll('[data-req]').forEach(row => {
       const id = encodeURIComponent(row.dataset.req);

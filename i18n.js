@@ -568,6 +568,7 @@ const I18N = {
     "The whole house: its language": "Весь дом: его язык",
     "House language": "Язык дома",
     "Sign-in": "Вход",
+    "A guest never uses: {0}": "Гостю всегда недоступны: {0}",
     "Guest until {0}": "Гость до {0}",
     "Signed in through the front door": "Вход через входную дверь дома",
     "The house's web address signs every browser in by itself (its own login page): nothing to do here.": "Адрес дома сам впускает каждый браузер (через свою страницу входа): здесь делать ничего не нужно.",
