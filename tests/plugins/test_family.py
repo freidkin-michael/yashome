@@ -1213,11 +1213,11 @@ def test_the_house_network_without_bind_address(phones, monkeypatch):
     monkeypatch.setattr(me, "HOME_NETS", [])
     monkeypatch.setattr(me, "_BIND", "")
     monkeypatch.setattr(me, "_settings", {})
-    assert me._is_home_addr("192.168.1.20") is False                   # no source: no guessed range
-    monkeypatch.setattr(me, "_settings", {"server_url": "http://192.168.7.2:8765"})
-    assert me._is_home_addr("192.168.7.40") is True and me._is_home_addr("192.168.1.20") is False
+    assert me._is_home_addr("198.51.100.20") is False                   # no source: no guessed range
+    monkeypatch.setattr(me, "_settings", {"server_url": "http://192.0.2.2:8765"})
+    assert me._is_home_addr("192.0.2.40") is True and me._is_home_addr("198.51.100.20") is False
     monkeypatch.setattr(me, "_settings", {"server_url": "https://home.example.org"})
-    assert me._is_home_addr("192.168.7.40") is False
+    assert me._is_home_addr("192.0.2.40") is False
 
 
 def test_the_address_for_the_phones_is_the_houses_own_unless_set(phones, monkeypatch):
