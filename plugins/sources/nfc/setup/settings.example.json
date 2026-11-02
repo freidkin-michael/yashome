@@ -1,0 +1,5 @@
+{
+  "nfc": {
+    "card_url": "https://home.example.org/nfc?picc={PICC}&cmac={MAC}"
+  }
+}

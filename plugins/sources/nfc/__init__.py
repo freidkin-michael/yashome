@@ -3,13 +3,17 @@ that verifies is an event of the device `nfc` (code "card", gesture = the card's
 rules decide what it does (unlock a door, run a scene). The keys come from .env (NFC_SDM_*); the cards are
 plugin-data/nfc/cards.json, set in Settings -> Devices -> NFC tags."""
 import asyncio
+import hmac
 import html
 import json
 import os
 import pathlib
+import secrets
 import threading
 import time
 import urllib.parse
+
+from typing import Optional
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, Response
@@ -17,9 +21,9 @@ from starlette.concurrency import run_in_threadpool
 
 import app as core
 
-from . import _sdm
+from . import _ntag424, _sdm
 
-PLUGIN = {"name": "NFC", "version": "2.1.0", "icon": "nfc"}
+PLUGIN = {"name": "NFC", "version": "2.2.0", "icon": "nfc"}
 
 def _max_counters(new: bytes, old: bytes) -> bytes:
     """Two copies of the counters: the higher one per card (anything unreadable stays as it was)."""
@@ -56,6 +60,7 @@ def _key(name: str) -> bytes:
 
 _META_KEY = _key("NFC_SDM_META_KEY")
 _FILE_KEY = _key("NFC_SDM_FILE_KEY")
+_MASTER_KEY = _key("NFC_MASTER_KEY")              # key 0 of the cards the house writes: only the house knows it
 
 
 def _load_cards() -> dict:
@@ -282,7 +287,9 @@ def _view() -> dict:
             "cards": [{"uid": u, "name": n, "last": _last.get(u)} for u, n in sorted(_CARDS.items(), key=lambda kv: kv[1].lower())],
             "new": [{"uid": u, "ts": v["ts"]} for u, v in sorted(_new.items(), key=lambda kv: -kv[1]["ts"]) if now - v["ts"] <= NEW_S],
             "enroll": {"name": _enroll["name"], "left": int(_enroll["until"] - now)} if _enroll else None,
-            "added": dict(_added) if _added else None}
+            "added": dict(_added) if _added else None,
+            "write": _w_view(), "write_ready": bool(_MASTER_KEY and _META_KEY and _FILE_KEY),
+            "card_url": _settings.get("card_url") or "", "card_url_default": default_card_url()}
 
 
 def _check_name(name: str, uid: str = "") -> str:
@@ -394,4 +401,208 @@ def api_remove_card(uid: str, request: Request):
     name, _CARDS = _CARDS[uid], cards
     core.update_device(_device())
     core.log.info(f"[nfc] tag {name} ({uid}) removed")
+    return _view()
+
+
+# ---- "Write a card": the house writes an NTAG 424 DNA through an administrator's phone, one APDU at a time ----
+# The keys stay here: the phone only carries the APDUs (MACed or encrypted) between the house and the card.
+WRITE_IDLE_S = 60                 # a session with no step for this long ends
+WRITE_KEEP_S = 300                # a finished session is shown this long
+AAR_PKG = os.environ.get("FAMILY_APP_ID") or "com.yash.home"      # the app a tap opens (the card's AAR)
+_settings: dict = dict(core.cfg_section("nfc", {}))
+core.SETTINGS_SECTIONS["nfc"] = lambda: _settings
+_w_lock = threading.Lock()
+_w: dict = {}                     # the one write session: sid, name, gen, state, apdu, last, result, ended
+
+
+def default_card_url() -> str:
+    """The card's link on the house's public https address (the first https one of DASHBOARD_ORIGINS), else ""."""
+    for o in (os.environ.get("DASHBOARD_ORIGINS") or "").split(","):
+        o = o.strip().rstrip("/")
+        if o.startswith("https://"):
+            return o + "/nfc?picc={PICC}&cmac={MAC}"
+    return ""
+
+
+def card_url() -> str:
+    return _settings.get("card_url") or default_card_url()
+
+
+def _admin_only(request: Request):
+    """An administrator: core.is_admin_request where the core has it, else the house token alone."""
+    if core.request_token(request.headers).startswith("yg_"):
+        raise HTTPException(403, "a guest may not do this")
+    check = getattr(core, "is_admin_request", None)
+    if check is None:
+        core.house_token_only(request)
+    elif not check(request):
+        raise HTTPException(403, "only an administrator writes cards")
+
+
+def _w_finish(result: dict) -> None:
+    """The end of the session (lock held): the card on the list when it worked, one log line either way."""
+    name = _w["name"]
+    if result.get("ok"):
+        uid = result["uid"]
+        if uid in _CARDS:
+            result["listed"] = _CARDS[uid]
+        else:
+            try:
+                _add(uid, name)
+                result["listed"] = name
+            except HTTPException as e:
+                result["note"] = f"written, not put on the list: {e.detail}"
+        core.log.info(f"[nfc] card {name} ({uid}) written with the house keys (it had the {result.get('keys')} keys)")
+    else:
+        core.log.warning(f"[nfc] writing card {name} failed at {result.get('step')}: {result.get('error')}")
+    _w.update(result={k: v for k, v in result.items() if k in ("ok", "step", "error", "uid", "keys", "listed", "note")},
+              ended=time.time(), gen=None, apdu=None)
+
+
+def _w_sweep(now: float) -> None:
+    if _w and not _w.get("result") and now - _w["last"] > WRITE_IDLE_S:
+        _w_finish({"ok": False, "step": _w["state"].get("step", "start"),
+                   "error": f"timed out: no step for {WRITE_IDLE_S} s"})
+    if _w.get("result") and now - _w["ended"] > WRITE_KEEP_S:
+        _w.clear()
+
+
+def _w_view():
+    with _w_lock:
+        _w_sweep(time.time())
+        if not _w:
+            return None
+        r = _w.get("result")
+        return {"sid": _w["sid"], "name": _w["name"], "step": (r or {}).get("step") or _w["state"].get("step", "start"),
+                "done": r is not None, "result": r,
+                "left": None if r else max(0, int(WRITE_IDLE_S - (time.time() - _w["last"])))}
+
+
+def _w_session(sid: str) -> None:
+    if not _w or not hmac.compare_digest(sid.encode(), _w["sid"].encode()):
+        raise HTTPException(404, "no such write session: it ended or timed out")
+
+
+class WriteBody(core.Body):
+    name: str
+
+
+class StepBody(core.Body):
+    resp_hex: Optional[str] = None
+
+
+class NfcSettingsBody(core.Body):
+    card_url: str
+
+
+@core.use_route
+@core.app.post("/api/nfc/write/start")
+def api_write_start(body: WriteBody, request: Request):
+    """A write session for a new card with this name; the administrators' phones are told (NFC_WRITE)."""
+    _admin_only(request)
+    if not _MASTER_KEY:
+        raise HTTPException(503, "NFC_MASTER_KEY is not set in the house's .env: the house cannot write cards")
+    if not (_META_KEY and _FILE_KEY):
+        raise HTTPException(503, "NFC_SDM_META_KEY and NFC_SDM_FILE_KEY are not set in the house's .env")
+    url = card_url()
+    if not url:
+        raise HTTPException(409, "the card address is not known: set it in Settings -> NFC tags -> Advanced")
+    try:
+        _ntag424.card_file(url, AAR_PKG)
+    except _ntag424.CardError as e:
+        raise HTTPException(400, f"the card address: {e}")
+    name = _check_name(body.name)
+    now = time.time()
+    with _w_lock:
+        _w_sweep(now)
+        if _w and not _w.get("result"):
+            raise HTTPException(409, "another card is being written: finish or cancel it first")
+        state: dict = {}
+        _w.clear()
+        _w.update(sid=secrets.token_urlsafe(16), name=name, state=state, apdu=None, last=now, result=None, ended=0,
+                  gen=_ntag424.write_card({0: _MASTER_KEY, 1: _META_KEY, 2: _FILE_KEY}, url, AAR_PKG, state))
+        sid = _w["sid"]
+    core.log.info(f"[nfc] writing card {name}: waiting for an administrator's phone")
+    for fn in list(getattr(core, "NFC_WRITE", ())):
+        try:
+            fn(sid)
+        except Exception as e:                    # noqa: BLE001  a phone not told: the dashboard still shows the session
+            core.log.error(f"[nfc] NFC_WRITE {getattr(fn, '__name__', fn)}: {e}")
+    return _w_view()
+
+
+@core.use_route
+@core.app.post("/api/nfc/write/{sid}/step")
+def api_write_step(sid: str, body: StepBody, request: Request):
+    """No resp_hex: the APDU to send now (the first, or the one not answered yet, again). resp_hex: the card's answer
+    to it -> the next APDU, or {done, result}."""
+    _admin_only(request)
+    with _w_lock:
+        _w_sweep(time.time())
+        _w_session(sid)
+        if _w["result"] is not None:
+            return {"done": True, "result": _w["result"]}
+        try:
+            if not body.resp_hex:
+                if _w["apdu"] is None:
+                    _w["apdu"] = next(_w["gen"])
+            else:
+                if _w["apdu"] is None:
+                    raise HTTPException(409, "no command was sent yet: ask for the first one without an answer")
+                try:
+                    resp = bytes.fromhex(body.resp_hex)
+                except ValueError:
+                    raise HTTPException(400, "resp_hex: the card's answer in hex")
+                if not 2 <= len(resp) <= 512:
+                    raise HTTPException(400, "resp_hex: 2-512 bytes")
+                _w["apdu"] = _w["gen"].send(resp)
+        except StopIteration as e:
+            _w_finish(e.value or {"ok": False, "error": "ended without a result"})
+        except HTTPException:
+            raise
+        except Exception as e:                    # noqa: BLE001  a bug: the session ends, nothing secret in the log
+            core.log.error(f"[nfc] card writer: {type(e).__name__}")
+            _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": "the house's card writer failed, see the log"})
+        _w["last"] = time.time()
+        if _w["result"] is not None:
+            return {"done": True, "result": _w["result"]}
+        return {"apdu_hex": _w["apdu"].hex(), "step": _w["state"].get("step")}
+
+
+@core.app.get("/api/nfc/write/{sid}")
+def api_write_state(sid: str, request: Request):
+    """The dashboard's progress: step, done, result."""
+    _admin_only(request)
+    with _w_lock:
+        _w_session(sid)
+    return _w_view()
+
+
+@core.use_route
+@core.app.delete("/api/nfc/write/{sid}")
+def api_write_cancel(sid: str, request: Request):
+    _admin_only(request)
+    with _w_lock:
+        _w_session(sid)
+        if _w["result"] is None:
+            _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": "cancelled"})
+    return _w_view()
+
+
+@core.app.put("/api/nfc/settings")
+def api_nfc_settings(body: NfcSettingsBody, request: Request):
+    """card_url: the link written into new cards ({PICC} and {MAC} in it); "" = the one the house knows."""
+    _admin_only(request)
+    url = body.card_url.strip()
+    if url:
+        if not url.startswith("https://"):
+            raise HTTPException(400, "the card address starts with https://")
+        try:
+            _ntag424.card_file(url, AAR_PKG)
+        except _ntag424.CardError as e:
+            raise HTTPException(400, f"the card address: {e}")
+        _settings["card_url"] = url
+    else:
+        _settings.pop("card_url", None)
+    core.save_settings()
     return _view()
