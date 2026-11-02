@@ -1372,6 +1372,7 @@
       if(icon){ itemSheet(data.items.find(i => i.id === icon.dataset.id)); return; }
       if(!plan() || !EDIT()) return;
       const lz = labelHit(e); if(lz){ zoneSheet(lz); return; }
+      const wh = hitWall(e); if(wh && wh.op){ openingSheet(wh.op); return; }      // a door or a window: its own card, in any mode
       spotSheet(at);
     }
     const tapMark = Object.assign(document.createElement('div'), {className: 'map-tapmark'});      // the point a popover belongs to
@@ -1380,6 +1381,11 @@
     const lastTap = {x: 0, y: 0, at: 0};
     view.addEventListener('pointerdown', e => { lastTap.x = e.clientX; lastTap.y = e.clientY; lastTap.at = Date.now(); }, true);
     const closeSheet = () => { sheet.style.display = 'none'; sheet.innerHTML = ''; tapMark.style.display = 'none'; };
+    document.addEventListener('keydown', e => {                    // Esc closes the open card (a field in it first loses its focus)
+      if(e.key !== 'Escape' || sheet.style.display === 'none' || !sheet.isConnected) return;
+      if(sheet.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){ document.activeElement.blur(); return; }
+      closeSheet();
+    });
     const finishPath = () => {                                                   // a strip drawn (or re-drawn) with its points: saved, its handle is the middle
       const P = S.pathItem;
       if(!P || P.points.length < 2) return;
