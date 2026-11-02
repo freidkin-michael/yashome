@@ -307,7 +307,7 @@ def test_a_pasted_page_goes_to_the_source_of_its_site_and_link_takes_the_rest(fi
     assert src.Link.stream("https://other.example.org/watch/9")["url"] == "https://other.example.org/v/a-720p.mp4"
     monkeypatch.setattr(src, "fetch", lambda *a, **k: ("https://x.example.org/", "text/html", b"<html>nothing</html>"))
     r = films.post("/api/player/resolve", headers=HOUSE, json={"url": "https://x.example.org/"})
-    assert r.status_code == 502 and r.json()["detail"].startswith("no video on this page")
+    assert r.status_code == 503 and r.json()["detail"].startswith("no video on this page")
     assert films.post("/api/player/resolve", headers=HOUSE, json={"url": "ftp://x"}).status_code == 400
 
 

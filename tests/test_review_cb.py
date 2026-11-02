@@ -2447,7 +2447,7 @@ class P3SweepCore(unittest.TestCase):
         app._bindings["rr1"] = {"action": {"single": {"target": "zz", "code": "state", "action": "on"}}}
         try:
             for res, status, text in (({"target": "zz", "error": "offline"}, 409, "zz is offline: nothing was sent"),
-                                      ({"target": "zz", "error": "publish failed"}, 502, "zz: publish failed"),
+                                      ({"target": "zz", "error": "publish failed"}, 503, "zz: publish failed"),
                                       ({"target": "zz", "value": 1}, 200, '"ok":true'),
                                       (None, 409, "zz is gone: nothing was sent")):
                 app._execute_binding = lambda *a, r=res: dict(r) if r is not None else None

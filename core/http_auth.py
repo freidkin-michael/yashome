@@ -11,6 +11,9 @@ app = FastAPI(title="Yashome")
 @app.middleware("http")
 async def _security_headers(request, call_next):
     resp = await call_next(request)
+    if resp.status_code in (502, 504):           # a device or service did not answer: 503, its text intact (a proxy
+        resp.headers["X-Upstream-Status"] = str(resp.status_code)   # in front, Cloudflare, swaps a 502/504 for its own page)
+        resp.status_code = 503
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "same-origin")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")

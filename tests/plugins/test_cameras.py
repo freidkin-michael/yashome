@@ -158,7 +158,7 @@ def test_an_endless_snapshot_body_is_cut(cam, monkeypatch):
 def test_a_camera_never_redirects_the_backend_and_only_images_pass(cam, monkeypatch):
     c = TestClient(core.app)
     hdr = {"Authorization": "Bearer " + core.DASHBOARD_TOKEN}
-    for path, code in (("/redirect", 502), ("/html", 502), ("/snap", 200)):
+    for path, code in (("/redirect", 503), ("/html", 503), ("/snap", 200)):
         monkeypatch.setitem(me.CAMERAS, "t_cam", {**me.CAMERAS["t_cam"], "snapshot": cam + path})
         r = c.get("/api/camera/t_cam/snapshot", headers=hdr)
         assert r.status_code == code, path
@@ -170,7 +170,7 @@ def test_a_stream_that_only_says_multipart_somewhere_is_not_relayed(cam, monkeyp
     hdr = {"Authorization": "Bearer " + core.DASHBOARD_TOKEN}
     monkeypatch.setitem(me.CAMERAS, "t_cam", {"id": "t_cam", "stream": cam + "/evilstream"})
     r = c.get("/api/camera/t_cam/stream", headers=hdr)
-    assert r.status_code == 502 and "html" not in r.headers.get("content-type", "")
+    assert r.status_code == 503 and "html" not in r.headers.get("content-type", "")
 
 
 def test_a_relayed_stream_carries_only_jpeg_frames(cam, monkeypatch):

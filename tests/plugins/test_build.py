@@ -237,7 +237,7 @@ def test_a_cut_error_answer_or_a_stranger_json_is_a_503_502_not_a_500(monkeypatc
     local(monkeypatch, url)
     r = TestClient(core.app).post("/api/build/server/test", headers=HOUSE)
     sock.close()
-    assert r.status_code == 502 and "HTTP 500" in r.json()["detail"]
+    assert r.status_code == 503 and "HTTP 500" in r.json()["detail"]
     sock, url = _raw_server(b"HTTP/1.1 202 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n[]")
     monkeypatch.setattr(me, "TUNNEL_URL", url)
     try:
