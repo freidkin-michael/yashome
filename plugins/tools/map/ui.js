@@ -1372,6 +1372,7 @@
       if(icon){ itemSheet(data.items.find(i => i.id === icon.dataset.id)); return; }
       if(!plan() || !EDIT()) return;
       const lz = labelHit(e); if(lz){ zoneSheet(lz); return; }
+      const wh = hitWall(e); if(wh && wh.op){ openingSheet(wh.op); return; }      // a door or a window: its own card, in any mode
       spotSheet(at);
     }
     const tapMark = Object.assign(document.createElement('div'), {className: 'map-tapmark'});      // the point a popover belongs to
@@ -1380,6 +1381,11 @@
     const lastTap = {x: 0, y: 0, at: 0};
     view.addEventListener('pointerdown', e => { lastTap.x = e.clientX; lastTap.y = e.clientY; lastTap.at = Date.now(); }, true);
     const closeSheet = () => { sheet.style.display = 'none'; sheet.innerHTML = ''; tapMark.style.display = 'none'; };
+    document.addEventListener('keydown', e => {                    // Esc closes the open card (a field in it first loses its focus)
+      if(e.key !== 'Escape' || sheet.style.display === 'none' || !sheet.isConnected) return;
+      if(sheet.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){ document.activeElement.blur(); return; }
+      closeSheet();
+    });
     const finishPath = () => {                                                   // a strip drawn (or re-drawn) with its points: saved, its handle is the middle
       const P = S.pathItem;
       if(!P || P.points.length < 2) return;
@@ -1516,6 +1522,7 @@
         ${switches.length ? `<div style="margin:10px 0">${switches.map((w, i) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0"><span>${esc(switches.length > 1 ? chanLabel(w) : nameOf(it))}</span>
           <div class="toggle${w.on ? ' on' : ''}" data-ctl="${i}"></div></div>`).join('')}</div>` : ''}
         ${it.kind === 'device' && data.links.some(l => l.dev === it.dev) ? `<div class="bindcaption" style="margin:6px 0">${esc(i18n('Turns on'))}: ${data.links.filter(l => l.dev === it.dev).map(l => esc((data.items.find(i => i.id === l.load) || {}).name || '')).filter(Boolean).join(', ')}</div>` : ''}
+        ${it.kind === 'device' ? '<div data-s="does"></div>' : ''}
         ${links.map((l, i) => `<div class="bindcaption" style="margin:6px 0">${esc(i18n('Controlled by'))}: ${esc(dispName(cands.find(c => c.id === l.dev) || {id: l.dev, name: l.dev}))}${l.code ? ' / ' + esc(chanName(l.dev, l.code)) : ''}${l.seg && l.seg.length ? ' (' + (l.seg[0] + 1) + '-' + (l.seg[1] + 1) + ')' : ''}
           <button class="dlg-btn" data-unlink="${i}" style="padding:2px 8px">&times;</button></div>`).join('')}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${it.kind === 'load' ? `<button class="dlg-btn primary" data-s="link">${esc(i18n('Link'))}</button>` : (['switch', 'dimmer', 'socket'].includes(cand.category) ? `<button class="dlg-btn primary" data-s="drives">${esc(i18n('What it turns on'))}</button>` : '')}
@@ -1523,6 +1530,19 @@
             <span style="display:inline-flex"><button class="dlg-btn${it.smooth === true ? '' : ' primary'}" data-s="straight" style="border-radius:8px 0 0 8px">${esc(i18n('Straight'))}</button><button class="dlg-btn${it.smooth === true ? ' primary' : ''}" data-s="smooth" style="border-radius:0 8px 8px 0">${esc(i18n('Smooth'))}</button></span>` : `<button class="dlg-btn" data-s="move">${esc(i18n('Move'))}</button>`}</div>
         <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line)"><button class="dlg-btn" data-s="remove" style="color:#e5484d;border-color:#e5484d">${esc(i18n('Remove'))}</button></div>`);
       reveal(it.x, it.y);
+      if(it.kind === 'device' && Home.triggersOf) Home.triggersOf(it.dev).then(list => {    // a remote or a switch: what each press does, runnable
+        const box = sheet.querySelector('[data-s="does"]');
+        if(!box || !list.length) return;
+        box.innerHTML = `<div class="bindcaption" style="margin:8px 0 2px">${esc(i18n('What it does'))}</div>` + list.map((r, i) =>
+          `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0${r.enabled ? '' : ';opacity:.5'}"><span>${esc(r.text)}</span>
+            <button class="dlg-btn" data-run="${i}" title="${esc(i18n('Do it now'))}" style="padding:2px 10px">${Home.icon('play', 14)}</button></div>`).join('');
+        box.querySelectorAll('[data-run]').forEach(b => { b.onclick = async () => {
+          b.disabled = true;
+          try { await Home.runRule(list[+b.dataset.run].id); b.innerHTML = Home.icon('check', 14); }
+          catch(e){ b.textContent = '!'; b.title = e.message || String(e); }
+          setTimeout(() => { b.innerHTML = Home.icon('play', 14); b.disabled = false; }, 1200);
+        }; });
+      }).catch(() => {});
       sheet.querySelectorAll('[data-ctl]').forEach(b => { b.onclick = () => { const w = switches[+b.dataset.ctl]; b.classList.toggle('on', !w.on); Home.sendControl(w.dev, w.code, !w.on); setTimeout(() => { if(sheet.style.display !== 'none' && sheet.querySelector('[data-ctl]')) itemSheet(it); }, 900); }; });
       sheet.querySelector('[data-s="close"]').onclick = closeSheet;
       sheet.querySelectorAll('[data-unlink]').forEach(b => { b.onclick = () => { data.links.splice(+b.dataset.unlink, 1); closeSheet(); changed(); }; });
