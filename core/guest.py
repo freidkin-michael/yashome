@@ -99,12 +99,12 @@ def _guest_key_of(tok: str):
 
 
 def _is_lockish(dev_id: str) -> bool:
-    """A lock or a gate: by its category, a channel named lock/locked/gate, or anything marked sensitive."""
+    """A lock or a gate: by its category, a channel named exactly lock/locked/gate (not max_move_gate), or marked sensitive."""
     d = DEVICES.get(dev_id) or {}
     if d.get("category") in ("lock", "gate", "garage") or d.get("sensitive"):
         return True
     codes = [str(c.get("code") or "") for c in d.get("controls") or []] + list((d.get("_ctl") or {}).keys())
-    return any("lock" in c.lower() or "gate" in c.lower() for c in codes) \
+    return any(c.lower() in ("lock", "locked", "unlock", "gate", "door_lock") for c in codes) \
         or any(c.get("kind") == "lock" for c in d.get("controls") or [])
 
 

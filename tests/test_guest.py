@@ -226,3 +226,10 @@ def test_a_guest_never_reads_cameras_history_or_the_network(monkeypatch):
         assert not allowed("view", "GET", path) and not allowed("no_locks", "GET", path), path
     for path in ("/api/devices", "/api/rooms", "/api/map", "/api/weather"):
         assert allowed("view", "GET", path), path
+
+
+def test_a_radar_s_gate_setting_is_no_lock(monkeypatch):
+    import app as core_app
+    monkeypatch.setitem(core_app.DEVICES, "radar_t", {"id": "radar_t", "category": "sensor", "controls": [{"code": "max_move_gate"}, {"code": "presence"}]})
+    monkeypatch.setitem(core_app.DEVICES, "lock_t", {"id": "lock_t", "category": "switch", "controls": [{"code": "locked"}, {"code": "state"}]})
+    assert not core_app._is_lockish("radar_t") and core_app._is_lockish("lock_t")
