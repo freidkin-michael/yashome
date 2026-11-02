@@ -198,6 +198,7 @@ def _read_only(path):
     path.chmod(0o500)
 
 
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root writes into a read-only folder too")
 def test_a_read_only_backups_dir_backs_up_into_plugin_state(house, monkeypatch):
     _read_only(house / "backups")
     monkeypatch.setattr(core, "PLUGIN_STATE", house / "plugin-state")
@@ -209,6 +210,7 @@ def test_a_read_only_backups_dir_backs_up_into_plugin_state(house, monkeypatch):
     (house / "backups").chmod(0o700)
 
 
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root writes into a read-only folder too")
 def test_nowhere_to_back_up_postpones_the_migration_and_the_old_copies_stay_in_charge(house, monkeypatch):
     _read_only(house / "backups")
     _read_only(house / "plugin-state")
