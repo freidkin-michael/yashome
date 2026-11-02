@@ -181,6 +181,7 @@ class MakeEdges(Make):
         assert subprocess.run([sys.executable, str(co / "tools/backup.py"), "make"], capture_output=True).returncode == 0
 
 
+@unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root reads and writes every file: no permission to test")
 class Unreadable(Make):
     def test_unreadable_files_and_dirs_are_left_out_with_a_warning_links_stay(self):
         a = self.a
@@ -444,6 +445,7 @@ class Restore(unittest.TestCase):
         assert (s / "config/zigbee2mqtt/database.db").read_text() == "old-net"
         assert (s / "h/settings.json.pre-split-1").exists()
 
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root reads and writes every file: no permission to test")
     def test_a_half_restore_says_how_to_undo_and_leaves_no_secrets_behind(self):
         s = self.src
         out, _ = backup.make(s, s / "h", s / "backups", backup._env(s))
