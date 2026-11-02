@@ -32,19 +32,22 @@ SKIP_PLUGINS = {"webos", "cameras"}
 CHECK_JS = r"""
 (async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms)), DEBUG = !!window.__sweepDebug;
-  const vis = e => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  // the body of a closed <details> is not seen, though Chrome still lays it out (content-visibility: hidden)
+  const folded = e => { const d = e.closest('details:not([open])'); return !!d && !e.closest('summary'); };
+  const vis = e => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !folded(e); };
   const CTL = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea,button';
   function scan(where, only){
     const stx = document.getElementById('stx');
     const root = only || (document.getElementById('bd').classList.contains('show') ? document.getElementById('md')
       : stx && !stx.hidden ? stx : document.getElementById('app') || document.body);
     if(!root) return [];
+    root.querySelectorAll('details:not([open])').forEach(d => { d.open = true; });     // Advanced too: its fields are checked open
     const out = [], ctl = [...root.querySelectorAll(CTL)].filter(vis).map(e => [e, e.getBoundingClientRect()]);
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for(let n = walker.nextNode(); n; n = walker.nextNode()){
       const t = n.nodeValue.trim(), p = n.parentElement;
       const ps = p && getComputedStyle(p);                      // a label squeezed to no width is the very case: its box is not asked to be wide
-      if(t.length < 2 || !p || ps.visibility === 'hidden' || ps.display === 'none' || !p.getClientRects().length || p.closest(CTL) || p.closest('svg,option,[data-m="view"],pre,.code')) continue;
+      if(t.length < 2 || !p || ps.visibility === 'hidden' || ps.display === 'none' || !p.getClientRects().length || p.closest(CTL) || p.closest('svg,option,[data-m="view"],pre,.code') || folded(p)) continue;
       if(p.clientWidth === 0 && p.scrollWidth > 0 && ps.display !== 'inline') out.push({where, kind: 'squeezed', text: t.slice(0, 40), ctl: ''});
       const rg = document.createRange(); rg.selectNodeContents(n);
       const clip = (() => { for(let a = p; a && a !== document.body; a = a.parentElement){ const o = getComputedStyle(a).overflowY; if(o === 'auto' || o === 'scroll' || o === 'hidden') return a.getBoundingClientRect(); } return null; })();

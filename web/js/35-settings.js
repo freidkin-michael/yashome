@@ -561,8 +561,8 @@ async function renderHealth(box){
       <span class="rlabel"><span style="color:${HEALTH_COLOR[r.state]}">\u25cf</span> ${escapeHtml(t(r.title, r.args))}</span>
       <span class="rval">${escapeHtml(r.state === 'ok' && !r.detail ? i18n('fine') : t(r.detail, r.args))}</span>
       ${(() => { const hh = healthHelp(r.id || ''); const parts = [];
-          if(hh) parts.push(i18n('checks') + ': ' + i18n(hh[0]));
           const bad = r.state !== 'ok';
+          if(hh && bad) parts.push(i18n('checks') + ': ' + i18n(hh[0]));     // a fine row needs no explaining
           if(r.fix) parts.push(t(r.fix, r.args)); else if(hh && bad) parts.push(i18n('what to do') + ': ' + i18n(hh[1]));
           const btn = (to, words) => ` <button class="dlg-btn" data-hlink="${escapeHtml(to)}" style="padding:2px 10px;font-size:12px;margin-left:6px">${escapeHtml(i18n(words))}</button>`;
           const go = r.link ? btn(r.link, HEALTH_ACT[r.link.split('/')[0]] || 'Open') : hh && hh[2] && bad ? btn(hh[2], HEALTH_ACT[hh[2]] || 'Open') : '';

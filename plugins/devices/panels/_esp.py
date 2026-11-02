@@ -716,8 +716,8 @@ core.ON_MQTT_CONNECT.append(lambda _cli: _words_sent.update(txt=None))       # a
 
 def _health():
     rows = [core.health_row("panels-discover", "ok", "Panel discovery") if _arp() else
-            core.health_row("panels-discover", "bad", "Panel discovery", "the panels-discover container is silent",
-                            "It needs the host's network", link="panels", cmd="make update; docker compose logs panels-discover")]
+            core.health_row("panels-discover", "bad", "Panel discovery", "new tablets and screens are not found by themselves",
+                            "Restart the house; if it stays, the panel finder needs the computer's own network", link="panels", cmd="make update; docker compose logs panels-discover")]
     db = P._db()                       # reads paired.json again: a fixed file clears its mark first
     for path, why in list(P._BROKEN.items()):
         rows.append(core.health_row("panels-file:" + path.rsplit("/", 1)[-1], "bad", "Panels",
