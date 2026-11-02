@@ -1,0 +1,78 @@
+{
+ "sweep-tab-1": {
+  "id": "sweep-tab-1",
+  "status": "bound",
+  "panel": "hall",
+  "name": "Hall tablet with a long name",
+  "model": "SM-T580",
+  "ip": "192.0.2.50",
+  "home_pin": true,
+  "seen": 1790000000,
+  "beat": 1790000000,
+  "caps": {
+   "app": "3.28",
+   "app_code": 32,
+   "update_error": "no space left on the device",
+   "owner": true,
+   "home_pinned": true,
+   "screen": {
+    "w": 1920,
+    "h": 1200
+   },
+   "battery": 81,
+   "adb": {
+    "enabled": true,
+    "port": 5555
+   },
+   "mic": true
+  },
+  "watch": {
+   "on": true,
+   "after_min": 2,
+   "every_min": 10
+  }
+ },
+ "sweep-tab-2": {
+  "id": "sweep-tab-2",
+  "status": "bound",
+  "panel": "kitchen",
+  "name": "Kitchen",
+  "model": "Lenovo M8",
+  "ip": "192.0.2.51",
+  "home_pin": false,
+  "seen": 1790000000,
+  "beat": 1790000000,
+  "caps": {
+   "app": "3.32",
+   "app_code": 36,
+   "owner": false,
+   "screen": {
+    "w": 1280,
+    "h": 800
+   },
+   "battery": 40
+  },
+  "watch": {
+   "on": false,
+   "after_min": 5,
+   "every_min": 30
+  }
+ },
+ "sweep-tab-3": {
+  "id": "sweep-tab-3",
+  "status": "pending",
+  "name": "New tablet",
+  "model": "Galaxy Tab A8",
+  "ip": "192.0.2.52",
+  "code": "fixture",
+  "seen": 1790000000,
+  "caps": {
+   "app": "3.32",
+   "app_code": 36,
+   "screen": {
+    "w": 1920,
+    "h": 1200
+   }
+  }
+ }
+}

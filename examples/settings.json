@@ -1,0 +1,30 @@
+{
+  "_version": 1,
+  "names": {},
+  "channel_names": {},
+  "channel_dimrange": {},
+  "bindings": {},
+  "favorites": [
+    {"device": "relay_1", "code": "power", "alias": "Relay 1"}
+  ],
+  "rooms": [
+    {"id": "r1", "name": "Room 1", "devices": ["relay_1"]},
+    {"id": "r2", "name": "Room 2", "devices": ["sensor_1"]}
+  ],
+  "tab_order": {},
+  "tile_sizes": {},
+  "automations": {
+    "relay_1/power": {
+      "inching_sec": 3600,
+      "schedule": [
+        {"time": "06:00", "days": [1, 2, 3, 4, 5], "action": "on"},
+        {"time": "18:00", "days": [1, 2, 3, 4, 5, 6, 7], "action": "on"}
+      ]
+    }
+  },
+  "rules_disabled": [
+    "a|relay_1/power|sched|06:00|on",
+    "a|relay_1/power|sched|18:00|on",
+    "a|relay_1/power|inch"
+  ]
+}

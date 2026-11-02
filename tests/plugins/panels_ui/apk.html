@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><div id="box"></div><div id="modal"></div>
+<!-- panels ui.js with a stub Home: the launcher row (version, QR) and a tablet one version behind (test_panels_ui.py) -->
+<script>
+window.__errs = []; window.onerror = m => { __errs.push(m); };
+const API = {
+  '/api/panels': [{name: 'hall', title: 'Hall', w: 800, h: 480, hw: 'android'}], '/api/rooms': [], '/api/panels/hw': [],
+  '/plugins/panels/app': {code: 36, name: '3.32'}, '/api/panels/pairing': {},
+  '/api/panels/launcher': {apk: true, apk_time: 1790000000, apk_name: '3.32', apk_code: 36, busy: true, progress: 50},
+  '/api/panels/discovered': {pairing: 60, registered: [
+    {id: 'old', status: 'bound', panel: 'hall', caps: {app: '3.28', app_code: 32, update_error: 'no space'},
+     watch: {on: true, after_min: 2, every_min: 10}, watch_last: {at: 1790000000, ok: false, why: 'unreachable'}},
+    {id: 'new', status: 'bound', panel: 'hall', caps: {app: '3.32', app_code: 36},
+     watch: {on: false, after_min: 3, every_min: 15}, watch_last: {noadb: true}}]}};
+let modal = '';
+window.i18n = (k, ...a) => String(k).replace(/\{(\d)\}/g, (_, i) => a[i]);
+window.Home = {icon: () => '<svg></svg>', escapeHtml: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'), when: t => 'WHEN',
+  api: u => u in API ? Promise.resolve(JSON.parse(JSON.stringify(API[u]))) : Promise.reject(new Error('404 ' + u)),
+  refresh: () => {}, openModal: (h, id) => { modal = id; document.getElementById('modal').innerHTML = h; }, closeModal: () => {}, modalId: () => modal};
+window.HomePlugins = {addFlow: [], register: o => { window.__pn = o; }};
+window.PW = {};
+</script>
+<script src="../../../plugins/devices/panels/static/qrcode.js"></script>
+<script src="../../../plugins/devices/panels/ui.js"></script>
+<script>
+const wait = (f, n = 100) => new Promise((ok, no) => { const t = setInterval(() => { if(f()){ clearInterval(t); ok(); } else if(!--n){ clearInterval(t); no(new Error('timeout')); } }, 20); });
+(async () => {
+  const out = {};
+  try {
+    const box = document.getElementById('box');
+    await __pn.tabs[0].render(box);
+    await wait(() => document.getElementById('pn-app').textContent.includes('building'));
+    API['/api/panels/launcher'] = {apk: true, apk_time: 1790000000, apk_name: '3.33', apk_code: 37, busy: false};   // the build ends
+    await wait(() => !document.getElementById('pn-app').textContent.includes('building'), 300);
+    out.row = document.getElementById('pn-app').textContent;
+    out.qrHidden = document.getElementById('pn-app-qr').hidden;
+    document.getElementById('pn-app-qr').click();
+    await wait(() => !document.getElementById('pn-app-qrbox').hidden);
+    const img = document.getElementById('pn-app-qrimg');
+    out.qr = [img.src.startsWith('data:image/'), document.getElementById('pn-app-qrurl').textContent === location.origin + '/plugins/panels/panel.apk'];
+    document.getElementById('pn-app-qr').click();
+    out.qrToggled = document.getElementById('pn-app-qrbox').hidden;
+    document.getElementById('pn-pair').click();
+    await wait(() => document.querySelectorAll('#pn-list .row').length === 2);
+    out.tablets = [...document.querySelectorAll('#pn-list .row > .bindcaption:nth-child(2)')].map(e => e.textContent);
+    out.watch = [...document.querySelectorAll('#pn-list .pn-won')].map(t => [t.classList.contains('on'), t.closest('span').textContent.replace(/\s+/g, ' ').trim(),
+      t.closest('span').querySelector('.pn-wafter').value, t.closest('span').querySelector('.pn-wevery').value]);
+  } catch(e){ out.error = String(e); }
+  out.errors = __errs;
+  document.title = JSON.stringify(out);
+})();
+</script></body></html>

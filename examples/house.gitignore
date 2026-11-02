@@ -1,0 +1,15 @@
+# a house directory (HOUSE_DIR) kept in git: configuration only
+# what the backend writes while it runs
+/status_cache.json
+/pending_timers.json
+/pending_timers.corrupt-*.json
+settings.json.pre-split-*
+*.migrated-*
+*.tmp
+# what the plug-ins write themselves: paired keys, anti-replay counters (never in git)
+/plugin-state/
+# state an older core writes into plugin-data/, and secrets: never in git
+webos_keys.json
+nfc_counters.json
+*.env
+.env

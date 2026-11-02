@@ -1,0 +1,17 @@
+{
+ "hall": {
+  "w": 1920,
+  "h": 1200,
+  "widgets": [],
+  "title": "Hall tablet",
+  "hw": "android",
+  "device": "sweep-tab-1"
+ },
+ "kitchen-esp": {
+  "w": 800,
+  "h": 480,
+  "widgets": [],
+  "title": "Kitchen screen",
+  "hw": "waveshare7"
+ }
+}

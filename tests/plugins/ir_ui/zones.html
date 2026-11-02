@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><div id="box"><div data-ir="zones"></div></div>
+<!-- ir ui.js with a stub Home: a lamp with a fan fed by a wall switch; the title reports each step (test_ir_ui.py) -->
+<script>
+window.__errs = []; window.onerror = m => { __errs.push(m); };
+const ST = {lamp: {values: {sent_Fan: 'Fan II'}}, wall: {values: {state_left: false}}};
+const DEVS = [{id: 'lamp', name: 'Lamp', ir_appliance: true, ir_power: {device: 'wall', code: 'state_left'},
+  controls: [{code: 'f1', kind: 'ir_press', group: 'Fan', label: 'Fan I'}, {code: 'l1', kind: 'ir_press', group: 'Light', label: 'Light On'}]},
+  {id: 'wall', name: 'Switch 1'},
+  {id: 'tvk', name: 'TV', ir_appliance: true, controls: [{code: 'p', kind: 'ir_press', label: 'Power'},
+    {code: 'd1', kind: 'ir_press', group: 'Digits', part: true, label: 'Digits \u00b7 1'}, {code: 'd2', kind: 'ir_press', group: 'Digits', part: true, label: 'Digits \u00b7 2'}]},
+  {id: 'tvd', name: 'TV2', ir_appliance: true, controls: [{code: 'p', kind: 'ir_press', label: 'Power'},
+    {code: 'd1', kind: 'ir_press', group: 'Digits', label: 'Digits \u00b7 1'}, {code: 'd2', kind: 'ir_press', group: 'Digits', label: 'Digits \u00b7 2'}]}];
+window.i18n = (k, ...a) => String(k).replace(/\{(\d)\}/g, (_, i) => a[i]);
+window.Home = {escapeHtml: s => String(s), el: (t, c, h) => { const e = document.createElement(t); if(c) e.className = c; if(h) e.innerHTML = h; return e; },
+  sendControl: () => Promise.resolve(), devices: () => DEVS, state: id => ST[id], api: () => Promise.resolve({}), modalId: () => ''};
+window.HomePlugins = {register: o => { window.__ir = o; }};
+</script>
+<script src="../../../plugins/transports/ir/ui.js"></script>
+<script>
+const out = [], box = document.getElementById('box');
+const step = name => out.push(name + ': ' + [...box.querySelectorAll('.aclbl')].map(l => l.textContent).join(' | ')
+  + ' / power=' + box.querySelectorAll('.irnopower').length + ' / disabled=' + box.querySelectorAll('button:disabled').length);
+const onState = () => __ir.onState.forEach(f => f());
+__ir.modalSections[0].wire(box, DEVS[0]);
+step('off');
+ST.wall.values.state_left = true; onState();
+step('on');
+ST.lamp.values.sent_Light = 'Light On'; onState();
+step('sent');
+// a keypad that is part of the remote keeps one remote; the same group as a device makes zones
+const zones = DEVS.filter(d => d.id.startsWith('tv')).map(d => { const b = document.createElement('div'); b.innerHTML = '<div data-ir="zones"></div>'; document.body.append(b);
+  const sec = __ir.modalSections[0]; if(!sec.match(d)) return d.id + '=0';            // the zones section is not even offered
+  try { sec.wire(b, d); } catch(e){ __errs.push(String(e)); } return d.id + '=' + b.querySelectorAll('.irzone').length; });
+document.title = JSON.stringify({steps: out, zones, errors: __errs});
+</script></body></html>

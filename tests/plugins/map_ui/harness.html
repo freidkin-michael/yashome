@@ -1,0 +1,384 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#222;color:#ddd}</style></head><body>
+<div id="app" style="width:900px"></div><pre id="out"></pre>
+<script>
+const out = [], log = s => out.push(s);
+if(location.search.includes('portrait')) document.getElementById('app').style.width = '100%';          // a portrait phone: the scheme is turned
+window.onerror = (m, src, l) => log('ERROR ' + m + ' @' + l);
+window.addEventListener('unhandledrejection', e => log('REJECTED ' + (e.reason && e.reason.message || e.reason)));
+Element.prototype.setPointerCapture = () => {};
+window.i18n = s => s;
+const SQ = (x0, y0, x1, y1) => [{x: x0, y: y0}, {x: x1, y: y0}, {x: x1, y: y1}, {x: x0, y: y1}];
+let mapData = {rev: 0, rooms: [{id: 'za', name: 'Alpha', house_room: '', poly: SQ(0.55, 0.55, 0.8, 0.75)}, {id: 'zg', name: 'Gamma', house_room: '', poly: SQ(0.55, 0.8, 0.8, 0.95)}, {id: 'zn', name: 'Narrowcorridor', house_room: '', poly: SQ(0.1, 0.1, 0.13, 0.5)}], ui_v: location.search.includes('stale') ? 222 : 111, scheme: {w: 860, h: 530}, items: [], links: [],
+               load_types: ['lamp', 'socket', 'ac', 'tv', 'boiler', 'led', 'fan', 'other']};
+const puts = [];
+window.STATE = {};
+const CANDS = [{id: 'sw1', name: 'Switch 1', category: 'switch', room: 'R1', online: true, members: []}, {id: 'cl1', name: 'Thermometer', category: 'climate', room: 'R1', online: true, members: []},
+               {id: 'ac1', name: 'AC', category: 'ac', room: 'R1', online: true, members: []}];
+window.Home = {
+  escapeHtml: s => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c])),
+  api: async (url, o) => {
+    if(o && o.method === 'PUT'){ const b = JSON.parse(o.body); if(b.rev !== mapData.rev){ const e = new Error('the map changed meanwhile (revision ' + mapData.rev + ')'); e.status = 409; throw e; } puts.push(b); mapData = {...mapData, ...b, rev: mapData.rev + 1}; return {rev: mapData.rev}; }
+    if(url === '/api/map'){ const d = JSON.parse(JSON.stringify(mapData)); for(const i of d.items) if(!i.path) i.path = []; return d; }          // the house sends path: [] for what is no strip
+    if(url === '/api/map/candidates') return CANDS;
+    if(url === '/api/map/auto' && LAYERS) return [{from: 'sw1', to: 'cl1', via: 'rule', note: 'single'}, {from: 'sw1', to: 'ac1', via: 'ir', note: 'AC'}];   // the rule gets no line, the IR one a dashed line
+    if(url === '/api/wiring' && LAYERS) return {entries: [{id: 'w1', switch: {dev: 'sw1', code: 'state_left'}, target: {dev: 'ac1'}, note: ''},
+      {id: 'w0', switch: {dev: 'sw1', code: 'state_right'}, target: {load: 'l1'}, note: ''},
+      ...(ONLYWIRE ? [{id: 'w2', switch: {dev: 'sw1', code: 'state'}, target: {load: 'l2'}, note: ''}, {id: 'w3', switch: {dev: 'cl1', code: 'state'}, target: {load: 'l3'}, note: ''}] : [])], state: 'ok'};
+    if(url === '/api/map/underlay' && o && o.method === 'PATCH' && window.__failPatch) throw new Error('the house refused it');
+    if(url === '/api/map/underlay' && o && o.method === 'PATCH'){ mapData.underlay = {...mapData.underlay, ...JSON.parse(o.body)}; mapData.rev += 1; return {rev: mapData.rev, underlay: mapData.underlay}; }
+    return [];
+  },
+  authHeaders: h => h || {}, state: id => window.STATE[id],
+};
+const c = document.createElement('canvas'); c.width = 860; c.height = 530; c.getContext('2d').fillRect(0, 0, 860, 530);
+const png = new Promise(r => c.toBlob(r));
+const SCHEME = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 530"><g data-walls="1"><rect x="100" y="100" width="10" height="300"/></g><rect data-snap="1" x="600" y="40" width="200" height="300" rx="6"/></svg>';
+const LAYERS = location.search.includes('layers'), ONLYWIRE = location.search.includes('onlywire');   // a lamp only the wiring knows; a load bound to a device                // the two layers: Wires (wiring.json, the links) and IR and radio
+if(LAYERS){
+  if(location.search.includes('was-off')) localStorage.setItem('map.wires', '0'); else localStorage.removeItem('map.wires');
+  localStorage.removeItem('map.radio');
+  mapData.items = [{id: 'i1', kind: 'device', dev: 'sw1', name: '', type: '', x: 0.2, y: 0.2, room: ''}, {id: 'i2', kind: 'device', dev: 'ac1', name: '', type: '', x: 0.4, y: 0.2, room: ''},
+                   {id: 'i3', kind: 'device', dev: 'cl1', name: '', type: '', x: 0.2, y: 0.4, room: ''}, {id: 'l1', kind: 'load', dev: '', name: 'Ceiling', type: 'lamp', x: 0.4, y: 0.4, room: ''}];
+  mapData.links = [{load: 'l1', dev: 'sw1', code: 'state_right', note: '', seg: []}];
+  if(ONLYWIRE) mapData.items.push({id: 'l2', kind: 'load', dev: '', name: 'Corridor lamp', type: 'lamp', x: 0.6, y: 0.2, room: ''},
+                                  {id: 'l3', kind: 'load', dev: 'ac1', name: 'AC as a load', type: 'ac', x: 0.6, y: 0.4, room: ''});
+}
+const LABELS = location.search.includes('labels');               // a crowded room: every name moves to a free side, gets smaller or loses the room's name, none hides
+if(LABELS){
+  document.getElementById('app').style.width = '2000px';
+  mapData.rooms = [{id: 'zk', name: 'Kitchen', house_room: '', poly: SQ(0.27, 0.3, 0.39, 0.42), walls: [true, true, true, true]}];
+  mapData.items = [['k1', 'Kitchen ceiling lamp', 0.3, 0.33], ['k2', 'Kitchen wall lamp', 0.33, 0.33], ['k3', 'Kitchen fridge socket', 0.36, 0.33],
+                   ['k4', 'Kitchen kettle socket', 0.3, 0.39], ['k5', 'Kitchen hood', 0.36, 0.39]].map(([id, name, x, y]) => ({id, kind: 'load', dev: '', name, type: 'lamp', x, y, room: 'zk'}));
+}
+const RESTRICTED = location.search.includes('restricted');       // a watcher looks, the session a plug-in lets edit edits
+if(RESTRICTED){
+  window.RESTRICTED = true; window.__edit = false; window.RESTRICTED_EDIT = () => window.__edit;
+  mapData.items = [{id: 'r1', kind: 'load', dev: '', name: 'Lamp', type: 'lamp', x: 0.3, y: 0.3, room: ''}];
+}
+const NOSCHEME = location.search.includes('noscheme');            // a new house: no drawing, zones on a grid
+if(NOSCHEME) mapData.scheme_img = false;
+const UL = location.search.includes('underlay');                  // the plan of the flat is an SVG underlay, shown, half see-through
+if(UL) mapData.underlay = {file: 'underlay.svg', kind: 'svg', x: 0, y: 0, w: 860, h: 530, rot: 0, opacity: 0.5, show: true, vw: 860, vh: 530, v: 'a'};
+window.fetch = async () => NOSCHEME ? ({ok: false, status: 404, blob: () => png, text: async () => ''}) : ({ok: true, blob: () => png, text: async () => SCHEME});
+window.HomePlugins = {register(p){ window.__p = p; }};
+</script>
+<script src="display.js"></script>
+<script src="ui.js?v=111"></script>
+<script>
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const $ = (root, sel) => root.querySelector(sel);
+function ptr(view, x, y){
+  for(const t of ['pointerdown', 'pointerup']) view.dispatchEvent(new PointerEvent(t, {pointerId: 1, clientX: x, clientY: y, bubbles: true}));
+}
+// a real press: pointerdown and pointerup go to the element and bubble (the plan's own handlers see them), and a click follows only when
+// the same element is still under the pointer (a rebuilt bar loses the click, as in a browser)
+function press(el){
+  const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+  for(const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, {pointerId: 1, clientX: x, clientY: y, bubbles: true}));
+  if(el.isConnected && el.contains(document.elementFromPoint(x, y))) el.click();          // the element or a glyph inside it
+}
+(async () => {
+  const box = document.getElementById('app');
+  if(location.search.includes('readonly')){                                  // a scene: the real renderer on a copy, no taps, nothing stored
+    const calls = [], api = Home.api;
+    Home.api = async (url, o) => { calls.push(((o && o.method) || 'GET') + ' ' + url); return api(url, o); };
+    const copy = JSON.parse(JSON.stringify(mapData)), s = await MapScene.render(box, {data: copy, cands: CANDS, rooms: []});
+    s.set({items: [{id: 'x1', kind: 'load', dev: '', name: 'Scene lamp', type: 'lamp', x: 0.3, y: 0.3, room: ''}],
+           links: [{load: 'x1', dev: 'sw1', code: 'state', note: '', seg: []}]});
+    const v = $(box, '[data-m="view"]').getBoundingClientRect();
+    ptr($(box, '[data-m="view"]'), v.left + v.width / 2, v.top + v.height / 2); await sleep(1500);
+    log('scene: ' + !!s.el('x1') + ' ' + s.data().items.length + ' taps off: ' + (box.style.pointerEvents === 'none'));
+    log('scene writes: ' + JSON.stringify(calls.filter(c => !c.startsWith('GET '))) + ' house map untouched: ' + (mapData.rev === 0 && !mapData.items.some(i => i.id === 'x1')) + ' live view kept: ' + !window.MapView);
+    document.getElementById('out').textContent = out.join('\n') + '\nDONE';
+    return;
+  }
+  await __p.tabs[0].render(box); await sleep(200);
+  if(location.search.includes('idle')){                                    // real input drives the page (test_map_opening_real): a free wall where the screen shows the plan
+    const rt = location.search.includes('portrait'), st = () => $(box, '[data-m="stage"]').getBoundingClientRect();
+    window.__atNow = (fx, fy) => { const q = st(); return rt ? [q.right - fy * q.width, q.top + fx * q.height] : [q.left + q.width * fx, q.top + q.height * fy]; };
+    const v = $(box, '[data-m="view"]').getBoundingClientRect(), cy = Math.min(v.bottom, innerHeight) / 2 + Math.max(v.top, 0) / 2, cx = (v.left + v.right) / 2, q = st();
+    const fx = rt ? (cy - q.top) / q.height : (cx - q.left) / q.width, fy = rt ? (q.right - cx) / q.width : (cy - q.top) / q.height;
+    window.__wall = [+fx.toFixed(4), +(fy - 0.05).toFixed(4), +(fy + 0.05).toFixed(4)];
+    mapData.walls = [{id: 'w1', a: [__wall[0], __wall[1]], b: [__wall[0], __wall[2]]}];
+    box.innerHTML = ''; await __p.tabs[0].render(box); await sleep(200);
+    window.__map = () => mapData; log('IDLE'); document.getElementById('out').textContent = out.join('\n'); return;
+  }
+  if(RESTRICTED){
+    const view = $(box, '[data-m="view"]'), el = () => box.querySelector('[data-id="r1"]'), at = () => mapData.items[0];
+    const pe = (type, x, y, tgt, kind) => tgt.dispatchEvent(new PointerEvent(type, {pointerId: 9, pointerType: kind, clientX: x, clientY: y, bubbles: true}));
+    const drag = async (kind, hold) => {
+      const r = el().getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, x0 = at().x, n0 = puts.length;
+      pe('pointerdown', cx, cy, el(), kind); await sleep(hold);
+      for(let k = 1; k <= 10; k++){ pe('pointermove', cx + 6 * k, cy + 3 * k, view, kind); await sleep(15); }
+      pe('pointerup', cx + 60, cy + 30, view, kind); await sleep(1500);
+      return [at().x > x0 + 0.01, puts.length - n0];
+    };
+    const tools = () => ['left', 'walltool', 'optool', 'underlay'].map(k => $(box, `[data-m="${k}"]`).style.display !== 'none');
+    log('watcher: ' + JSON.stringify([await drag('mouse', 0), await drag('touch', 500), tools()]));
+    window.__edit = true; window.dispatchEvent(new Event('restricted-role')); await sleep(200);
+    log('editor: ' + JSON.stringify([await drag('mouse', 0), await drag('touch', 500), tools()]));
+    log('DONE'); document.getElementById('out').textContent = out.join('\n'); return;
+  }
+  if(LABELS){
+    await sleep(500);
+    const N = [...box.querySelectorAll('[data-id] .mn')].map(m => { const s = getComputedStyle(m);
+      return [m.closest('[data-id]').dataset.id, m.textContent, s.visibility !== 'hidden' && s.display !== 'none', m.getBoundingClientRect()]; });
+    const hit = (a, b) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
+    log('labels: big ' + $(box, '[data-m="stage"]').classList.contains('big') + ' ' + JSON.stringify(N.map(n => [n[0], n[1], n[2]]))
+        + ' overlap ' + N.some((a, i) => N.some((b, j) => j > i && a[2] && b[2] && hit(a[3], b[3])))
+        + ' title ' + box.querySelector('[data-id="k4"]').title);
+    log('DONE'); document.getElementById('out').textContent = out.join('\n'); return;
+  }
+  if(LAYERS){
+    const lines = () => { const L = [...box.querySelectorAll('svg line[data-a]')]; return [L.filter(l => !l.getAttribute('stroke-dasharray')).length, L.filter(l => l.getAttribute('stroke-dasharray')).length]; };
+    const flip = k => { const c = $(box, `input[data-m="${k}"]`); c.checked = !c.checked; c.dispatchEvent(new Event('change')); };
+    log('layers: ' + JSON.stringify([$(box, 'input[data-m="wires"]').checked, $(box, 'input[data-m="radio"]').checked, lines()]));
+    if(ONLYWIRE) log('onlywire: ' + JSON.stringify([!!box.querySelector('svg line[data-a="l2"]'), !!box.querySelector('[data-id="l3"]'),
+                                                  !!box.querySelector('svg line[data-a="i2"][data-b="i3"]')]));
+    flip('wires'); log('wires off: ' + JSON.stringify([lines(), localStorage.getItem('map.wires')]));
+    flip('radio'); log('radio off: ' + JSON.stringify([lines(), localStorage.getItem('map.radio')]));
+    flip('wires'); flip('radio'); log('both on: ' + JSON.stringify(lines()));
+    log('DONE'); document.getElementById('out').textContent = out.join('\n'); return;
+  }
+  log('banner: ' + /older map screen/.test(box.textContent));
+  log('grid: ' + /linear-gradient/.test($(box, '[data-m="stage"]').style.backgroundImage) + ' blank: ' + !$(box, '[data-m="stage"]'));
+  { const ul = $(box, 'img[data-m="ul"]'); log('underlay: ' + (ul.style.display === 'block') + ' ' + ul.style.opacity); }
+  const view = $(box, '[data-m="view"]'), sheet = $(box, '[data-m="sheet"]'), r = $(box, '[data-m="stage"]').getBoundingClientRect();
+  const rot = location.search.includes('portrait');
+  const at = (fx, fy) => rot ? [r.right - fy * r.width, r.top + fx * r.height] : [r.left + r.width * fx, r.top + r.height * fy];      // the plan where it lay at the start      // a turned plan: x runs down, y runs left
+  log('rot: ' + /rotate\(90deg\)/.test($(box, '[data-m="stage"]').style.transform));
+  ptr(view, ...at(0.1, 0.1)); await sleep(50);
+  $(sheet, '[data-s="new"]').click(); await sleep(20);
+  $(sheet, '[data-s="type"]').value = 'led'; $(sheet, '[data-s="name"]').value = 'strip 1'; $(sheet, '[data-s="ok"]').click(); await sleep(20);
+  log('mode bar: ' + $(box, '[data-m="hint"]').textContent.slice(0, 80));
+  for(const p of [[0.2, 0.3], [0.5, 0.35], [0.8, 0.2]]){ ptr(view, ...at(...p)); await sleep(20); }
+  log('svg paths while drawing: ' + box.querySelectorAll('svg path').length);
+  press($(box, '[data-b="straight"]')); press($(box, '[data-b="straight"]'));            // toggled twice: rounded again
+  press($(box, '[data-b="done"]')); await sleep(1000);
+  log('items: ' + JSON.stringify(mapData.items.map(i => [i.type, i.path && i.path.length, i.smooth, i.path && i.path.map(q => +q.y.toFixed(3))])) + ' puts: ' + puts.length);
+  log('svg paths after: ' + box.querySelectorAll('svg path').length + ', icons: ' + box.querySelectorAll('[data-id]').length);
+  // edit the path: tap the strip icon, Edit, three points again, undo one, done
+  const ic = box.querySelector('[data-id]'); const ir = ic.getBoundingClientRect();
+  ptr(view, ir.left + ir.width / 2, ir.top + ir.height / 2); await sleep(50);
+  $(sheet, '[data-s="edit"]').click(); await sleep(20);
+  for(const p of [[0.1, 0.6], [0.4, 0.7], [0.9, 0.9]]){ ptr(view, ...at(...p)); await sleep(20); }
+  press($(box, '[data-b="undo"]')); press($(box, '[data-b="done"]')); await sleep(1000);
+  log('after edit: ' + JSON.stringify(mapData.items.map(i => i.path.length)) + ' puts: ' + puts.length);
+  // one point is not a strip: Done does nothing
+  ptr(view, ...at(0.3, 0.55)); await sleep(50);
+  $(sheet, '[data-s="new"]').click(); $(sheet, '[data-s="type"]').value = 'led'; $(sheet, '[data-s="name"]').value = 'two'; $(sheet, '[data-s="ok"]').click();
+  ptr(view, ...at(0.3, 0.8)); press($(box, '[data-b="done"]')); await sleep(50);
+  log('one point: mode still ' + ($(box, '[data-b="done"]') ? 'path' : 'closed'));
+  press($(box, '[data-b="cancel"]')); await sleep(20);
+  log('after cancel: bar ' + (box.querySelector('[data-m="hint"]').style.display));
+  // another tab saved meanwhile: this tab's new lamp still gets in, on top of the other tab's item
+  mapData = {...mapData, rev: mapData.rev + 1, items: [...mapData.items, {id: 'srv1', kind: 'load', dev: '', name: 'other tab', type: 'lamp', x: 0.9, y: 0.1, room: ''}]};
+  ptr(view, ...at(0.7, 0.7)); await sleep(50);
+  $(sheet, '[data-s="new"]').click(); $(sheet, '[data-s="type"]').value = 'lamp'; $(sheet, '[data-s="name"]').value = 'mine'; $(sheet, '[data-s="ok"]').click(); await sleep(2500);
+  log('after a stale revision: ' + JSON.stringify(mapData.items.map(i => i.name).sort()));
+  // a long press (400 ms) on a lamp lifts it and a release drops it there; Esc puts it back; a long press on a strip's middle point drags that point
+  const centre = el => { const q = el.getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; };
+  const drag = async (icon, dx, dy, esc) => {
+    const [cx, cy] = centre(icon), ev = (t, x, y, tgt) => tgt.dispatchEvent(new PointerEvent(t, {pointerId: 1, clientX: x, clientY: y, bubbles: true}));
+    ev('pointerdown', cx, cy, icon); await sleep(600);
+    for(let k = 1; k <= 5; k++){ ev('pointermove', cx + dx * k / 5, cy + dy * k / 5, view); await sleep(20); }
+    if(esc) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
+    ev('pointerup', cx + dx, cy + dy, view); await sleep(1200);
+  };
+  const lamp = () => mapData.items.find(i => i.name === 'mine'), stripOf = () => mapData.items.find(i => i.path);
+  let x0 = lamp().x;
+  await drag(box.querySelector('[data-id="' + lamp().id + '"]'), 60, 20, false);
+  log('lamp lifted: ' + (lamp().x > x0 + 0.01) + ' no sheet: ' + (sheet.style.display === 'none'));
+  x0 = lamp().x;
+  await drag(box.querySelector('[data-id="' + lamp().id + '"]'), 60, 20, true);
+  log('lamp esc: ' + (Math.abs(lamp().x - x0) < 1e-9));
+  const p1 = {...stripOf().path[1]};
+  await drag(box.querySelector('[data-id="' + stripOf().id + '"]'), 0, -70, false);
+  log('strip point dragged: ' + (Math.hypot(stripOf().path[1].x - p1.x, stripOf().path[1].y - p1.y) > 0.01) + ' points: ' + stripOf().path.length);
+  // the live state: a fake feed; only the things whose view changed are repainted, the rest of the DOM stays the same nodes
+  const place = async (id, fx, fy) => {
+    view.dispatchEvent(new PointerEvent('pointerdown', {pointerId: 1, clientX: at(fx, fy)[0], clientY: at(fx, fy)[1], bubbles: true}));
+    view.dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, clientX: at(fx, fy)[0], clientY: at(fx, fy)[1], bubbles: true})); await sleep(60);
+    $(sheet, '[data-pick="' + id + '"]').click(); await sleep(60);
+  };
+  await place('sw1', 0.05, 0.95); await place('cl1', 0.15, 0.95); await place('ac1', 0.25, 0.95);
+  const ico = id => box.querySelector('[data-id="' + mapData.items.find(i => i.dev === id).id + '"]') || [...box.querySelectorAll('[data-id]')].pop();
+  const icon = dev => { const it = mapData.items.find(i => i.dev === dev) || {}; return box.querySelector('[data-id="' + it.id + '"]'); };
+  await sleep(1000);
+  window.STATE.sw1 = {online: true, values: {state_left: true, state_right: false}, last_seen: Date.now() / 1000};
+  window.STATE.cl1 = {online: true, values: {temperature: 27.31, humidity: 45.2}, last_seen: Date.now() / 1000};
+  window.STATE.ac1 = {online: true, values: {power: true, mode: 'cool', temp: 22}, last_seen: Date.now() / 1000};
+  __p.onState[0](); await sleep(50);
+  const keep = icon('sw1'), other = icon('cl1');
+  log('state badges: ' + [icon('sw1'), icon('cl1'), icon('ac1')].map(e => e.querySelector(".mb") ? e.querySelector(".mb").textContent : "-").join(' | '));
+  log('ac cool border: ' + icon('ac1').style.border.includes('74, 163, 255'));
+  window.STATE.cl1 = {online: true, values: {temperature: 27.9, humidity: 45.2}, last_seen: Date.now() / 1000};
+  __p.onState[0](); await sleep(50);
+  log('only the changed thing repainted: ' + (icon('sw1') === keep) + ' ' + (icon('cl1') !== other) + ' ' + icon('cl1').textContent.includes('28\u00b0'));
+  window.STATE.ac1 = {online: false, values: {}, last_seen: Date.now() / 1000 - 600};
+  __p.onState[0](); await sleep(50);
+  log('offline: ' + (icon('ac1').textContent.includes('!') && /no contact/.test(icon('ac1').title)));
+  // zones: drawn, named, renamed by their label, a clash refused, merged (one name = one room), deleted
+  const tapLabel = async name => { const t = [...box.querySelectorAll('svg text')].find(e => e.textContent === name); const b = t.getBoundingClientRect(); ptr(view, b.left + b.width / 2, b.top + b.height / 2); await sleep(60); };
+  log('zones: ' + JSON.stringify(mapData.rooms.map(z => z.name)));
+  await tapLabel('Alpha'); $(sheet, '[data-s="zname"]').value = 'Gamma'; $(sheet, '[data-s="rename"]').click(); await sleep(50);
+  log('clash: ' + /exists/.test($(sheet, '[data-s="msg"]').textContent));
+  $(sheet, '[data-s="zname"]').value = 'Beta'; $(sheet, '[data-s="rename"]').click(); await sleep(1100);
+  log('renamed: ' + JSON.stringify(mapData.rooms.map(z => z.name)));
+  await tapLabel('Gamma'); $(sheet, '[data-s="merge"]').click(); await sleep(30); $(sheet, '[data-pick]').click(); await sleep(1100);
+  log('merged: ' + JSON.stringify(mapData.rooms.map(z => z.name)) + ' labels: ' + [...box.querySelectorAll('svg text')].map(e => e.textContent).join(','));
+  // a narrow room: its long name runs along the long side as the screen shows it (turned in a landscape, upright in a portrait), a wide room keeps it upright
+  const lt = n => [...box.querySelectorAll('svg text')].find(e => e.textContent === n);
+  log('label turned in a narrow room: ' + (lt('Narrowcorridor').style.cssText.includes('+ -90deg') === !rot) + ' ' + !lt('Beta').style.cssText.includes('+ -90deg'));
+  // a hand shakes: a mouse drags an icon at once (4 px), a finger that slides before the press time does nothing; neither pans the map
+  const pe = (type, x, y, tgt, kind) => tgt.dispatchEvent(new PointerEvent(type, {pointerId: 7, pointerType: kind, clientX: x, clientY: y, bubbles: true}));
+  const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+  const press2 = async (kind, shake, steps, dx, wait) => {
+    const el = box.querySelector('[data-id="' + lamp().id + '"]'), [cx, cy] = centre(el), p0 = {x: lamp().x, y: lamp().y}, t0 = $(box, '[data-m="stage"]').style.transform;
+    pe('pointerdown', cx, cy, el, kind);
+    for(let k = 0; k < shake; k++){ pe('pointermove', cx + (k % 2 ? 2 : -2), cy + (k % 3 ? 1 : -1), view, kind); await sleep(30); }
+    for(let k = 1; k <= steps; k++){ pe('pointermove', cx + dx * k / steps, cy, view, kind); await sleep(15); }
+    await sleep(wait); pe('pointerup', cx + dx, cy, view, kind); await sleep(1100);
+    return [dist(p0, {x: lamp().x, y: lamp().y}) > 0.01, t0 !== $(box, '[data-m="stage"]').style.transform];
+  };
+  const m1 = await press2('mouse', 8, 10, 60, 0), t1 = await press2('touch', 0, 10, 25, 500), t2 = await press2('touch', 14, 10, 60, 0);
+  log('mouse shaky drag: moved ' + m1[0] + ' panned ' + m1[1]);
+  log('touch early slide: moved ' + t1[0] + ' panned ' + t1[1]);
+  log('touch shaky press then drag: moved ' + t2[0] + ' panned ' + t2[1]);
+  // the outline editor: a corner dragged, a corner added at a "+", one deleted by a double press, undo, cancel
+  const atNow = (fx, fy) => { const q = $(box, '[data-m="stage"]').getBoundingClientRect(); return rot ? [q.right - fy * q.width, q.top + fx * q.height] : [q.left + q.width * fx, q.top + q.height * fy]; };
+  const mo = (type, xy) => pe(type, xy[0], xy[1], view, 'mouse');
+  const za = () => mapData.rooms.find(z => z.id === 'za');
+  const editZone = async () => { await tapLabel(za().name); $(sheet, '[data-s="shape"]').click(); await sleep(30); };
+  const press1 = async xy => { mo('pointerdown', xy); await sleep(20); mo('pointerup', xy); await sleep(60); };
+  await editZone();
+  log('edit mode: ' + !!$(box, '[data-b="edone"]'));
+  const p00 = {...za().poly[0]}, v0 = atNow(p00.x, p00.y);
+  mo('pointerdown', v0); for(let k = 1; k <= 8; k++){ mo('pointermove', [v0[0] - 4 * k, v0[1] - 3 * k]); await sleep(15); } mo('pointerup', [v0[0] - 32, v0[1] - 24]); await sleep(40);
+  press($(box, '[data-b="edone"]')); await sleep(1100);
+  log('corner dragged: ' + (dist(za().poly[0], p00) > 0.02) + ' points ' + za().poly.length);
+  await editZone();
+  const q0 = za().poly[0], q1 = za().poly[1];
+  await press1(atNow((q0.x + q1.x) / 2, (q0.y + q1.y) / 2));                  // a click on the "+" of the first edge
+  press($(box, '[data-b="edone"]')); await sleep(1100);
+  log('corner added: ' + za().poly.length);
+  await editZone();
+  const q2 = za().poly[2];
+  await press1(atNow(q2.x, q2.y)); await press1(atNow(q2.x, q2.y));            // a double press on a corner
+  press($(box, '[data-b="eundo"]')); await sleep(30);
+  press($(box, '[data-b="edone"]')); await sleep(1100);
+  log('delete then undo: ' + za().poly.length);
+  await editZone();
+  await press1(atNow(za().poly[2].x, za().poly[2].y)); await press1(atNow(za().poly[2].x, za().poly[2].y));
+  press($(box, '[data-b="edone"]')); await sleep(1100);
+  log('corner deleted: ' + za().poly.length);
+  await editZone();
+  const before = JSON.stringify(za().poly), v1 = atNow(za().poly[0].x, za().poly[0].y);
+  mo('pointerdown', v1); for(let k = 1; k <= 5; k++){ mo('pointermove', [v1[0] + 6 * k, v1[1] + 6 * k]); await sleep(15); } mo('pointerup', [v1[0] + 30, v1[1] + 30]); await sleep(40);
+  press($(box, '[data-b="ecancel"]')); await sleep(60);
+  log('cancel keeps the outline: ' + (JSON.stringify(za().poly) === before) + ' mode ' + (box.querySelector('[data-b="edone"]') ? 'edit' : 'plain'));
+  // walls: a tap on an edge (not its corner, not its "+") makes it open; a point added on it keeps the mark on both halves
+  const quarter = (i, t) => { const P = za().poly, A = P[i], B = P[(i + 1) % P.length]; return atNow(A.x + (B.x - A.x) * t, A.y + (B.y - A.y) * t); };
+  await editZone(); await press1(quarter(0, 0.25)); press($(box, '[data-b="edone"]')); await sleep(1100);
+  log('walls: ' + JSON.stringify(za().walls) + ' lines ' + box.querySelectorAll('svg line[stroke-dasharray="6 5"]').length);
+  await editZone(); await press1(quarter(0, 0.5)); press($(box, '[data-b="edone"]')); await sleep(1100);
+  log('walls after a point: ' + JSON.stringify(za().walls));
+  // the Walls tool: tap, tap = a wall inside a room; a tap on it = a door there
+  if(box.querySelector('.mapbar.narrow') && !box.querySelector('.mapbar.open')){ press($(box, '[data-m="more"]')); await sleep(40); }       // a phone: the tools are behind More
+  $(box, '[data-m="walltool"]').click(); await sleep(40);
+  const w0 = atNow(0.62, 0.62), w1 = atNow(0.62, 0.72);
+  ptr(view, ...w0); await sleep(40); ptr(view, ...w1); await sleep(1100);
+  log('free walls: ' + (mapData.walls || []).length + ' lines ' + box.querySelectorAll('svg line[data-w]').length);
+  ptr(view, ...atNow(0.62, 0.67)); await sleep(60);
+  log('wall sheet: ' + !!$(sheet, '[data-s="delwall"]') + ' ' + !$(sheet, '[data-s="door"]'));
+  $(sheet, '[data-s="close"]').click(); press($(box, '[data-b="wdone"]')); await sleep(40);
+  // the Opening tool: a stroke drawn beside the wall lands on it; Window or door; a door opens to the right, the other way; a tap changes it
+  if(box.querySelector('.mapbar.narrow') && !box.querySelector('.mapbar.open')){ press($(box, '[data-m="more"]')); await sleep(40); }
+  $(box, '[data-m="optool"]').click(); await sleep(40);
+  const stroke = async (a, b) => { mo('pointerdown', a); for(let k = 1; k <= 5; k++){ mo('pointermove', [a[0] + (b[0] - a[0]) * k / 5, a[1] + (b[1] - a[1]) * k / 5]); await sleep(15); } mo('pointerup', b); await sleep(60); };
+  const off = (xy, d) => [xy[0] + d, xy[1]];
+  await stroke(off(atNow(0.62, 0.64), 6), off(atNow(0.62, 0.69), 6));
+  log('opening sheet: ' + !!$(sheet, '[data-s="kind-door"]') + ' stored ' + (mapData.openings || []).length);
+  $(sheet, '[data-s="kind-door"]').click(); await sleep(30);
+  $(sheet, '[data-s="open-right"]').click(); await sleep(30);
+  $(sheet, '[data-s="side"]').click(); await sleep(1100);
+  const op = (mapData.openings || [])[0] || {};
+  log('door: ' + JSON.stringify([op.kind, op.open, op.side, Math.abs(op.a[0] - op.b[0]) < 1e-6, Math.abs(op.a[0] - 0.62) < 0.002, op.b[1] > op.a[1]]) + ' drawn ' + box.querySelectorAll('svg [data-op] path').length);
+  $(sheet, '[data-s="close"]').click();
+  ptr(view, ...atNow(0.62, 0.665)); await sleep(60);
+  log('tap opens it: ' + !!$(sheet, '[data-s="del"]'));
+  $(sheet, '[data-s="open-slide"]').click(); await sleep(30); $(sheet, '[data-s="close"]').click();
+  await stroke(atNow(0.05, 0.05), atNow(0.1, 0.05));
+  log('far from walls: ' + /along a wall/.test($(box, '[data-m="hint"]').textContent) + ' ' + (mapData.openings || []).length);
+  press($(box, '[data-b="wundo"]')); await sleep(1100);
+  log('undo: ' + (mapData.openings || [])[0].open);
+  press($(box, '[data-b="wundo"]')); press($(box, '[data-b="wundo"]')); press($(box, '[data-b="wundo"]')); await sleep(1100);
+  log('undo all: ' + (mapData.openings || []).length);
+  press($(box, '[data-b="wdone"]')); await sleep(40);
+  if(box.querySelector('.mapbar.open')){ press($(box, '[data-m="more"]')); await sleep(40); }          // a phone: the tools fold away again
+  // the menus of the right button: an icon, a room, empty space, a corner in the editor
+  const ctx = async (xy, tgt) => { (tgt || view).dispatchEvent(new MouseEvent('contextmenu', {bubbles: true, cancelable: true, clientX: xy[0], clientY: xy[1]})); await sleep(30);
+    const m = box.querySelector('[data-m="ctx"]'); const t = m ? [...m.children].map(c => c.textContent).filter(Boolean).join('|') : ''; if(m) m.remove(); return t; };
+  log('menu icon: ' + await ctx(centre(icon('sw1')), icon('sw1')));
+  const zc = za().poly.reduce((a, p) => ({x: a.x + p.x / za().poly.length, y: a.y + p.y / za().poly.length}), {x: 0, y: 0});
+  log('menu room: ' + await ctx(atNow(zc.x, zc.y)));
+  log('menu empty: ' + await ctx(atNow(0.02, 0.5)));
+  { const q = atNow(0.02, 0.5); for(const t of ['pointerdown', 'pointerup']) view.dispatchEvent(new PointerEvent(t, {pointerId: 9, pointerType: 'mouse', button: 2, buttons: t === 'pointerdown' ? 2 : 0, clientX: q[0], clientY: q[1], bubbles: true})); await sleep(60);
+    log('right button is no tap: ' + (sheet.style.display === 'none')); }
+  await editZone();
+  log('menu corner: ' + await ctx(atNow(za().poly[1].x, za().poly[1].y)));
+  press($(box, '[data-b="ecancel"]')); await sleep(60);
+  // a switch: what it turns on - a lamp picked on the plan, and a new lamp made here
+  const L = lamp();
+  ptr(view, ...centre(icon('sw1'))); await sleep(60);
+  $(sheet, '[data-s="drives"]').click(); await sleep(30);
+  $(sheet, '[data-s="chan"]').value = 'state_right'; $(sheet, '[data-s="pick"]').click(); await sleep(30);
+  ptr(view, ...centre(box.querySelector('[data-id="' + L.id + '"]'))); await sleep(1100);
+  log('drives: ' + JSON.stringify(mapData.links.filter(l => l.dev === 'sw1').map(l => [l.load === L.id, l.code])));
+  ptr(view, ...centre(icon('sw1'))); await sleep(60);
+  log('turns on: ' + /mine/.test(sheet.textContent));
+  $(sheet, '[data-s="drives"]').click(); await sleep(30);
+  $(sheet, '[data-s="lname"]').value = 'extra'; $(sheet, '[data-s="newlamp"]').click(); await sleep(1100);
+  log('new lamp: ' + JSON.stringify(mapData.links.filter(l => l.dev === 'sw1').length) + ' ' + mapData.items.some(i => i.name === 'extra' && i.type === 'lamp'));
+  // a strip along the bottom edge of the yard (a data-snap shape, no wall): two taps near it land exactly on it
+  ptr(view, ...atNow(0.97, 0.97)); await sleep(50);
+  $(sheet, '[data-s="new"]').click(); await sleep(20);
+  $(sheet, '[data-s="type"]').value = 'led'; $(sheet, '[data-s="name"]').value = 'yard edge'; $(sheet, '[data-s="ok"]').click(); await sleep(20);
+  for(const p of [[0.72, 340 / 530 + 0.006], [0.9, 340 / 530 - 0.006]]){ ptr(view, ...atNow(...p)); await sleep(20); }
+  press($(box, '[data-b="done"]')); await sleep(1000);
+  const ye = mapData.items.find(i => i.name === 'yard edge');
+  log('strip on the yard edge: ' + JSON.stringify(ye && ye.path.map(q => +(q.y * 530).toFixed(2))));
+  // two lamps on one spot (a lamp with its fan): no zoom parts them, so a tap on their badge fans them out; a tap beside closes the fan
+  const vr = view.getBoundingClientRect(), mid = [vr.left + vr.width * 0.3, vr.top + vr.height * 0.35];             // a free spot in sight, whatever the zoom
+  for(const [n, dx] of [['twin a', 0], ['twin b', 90]]){
+    ptr(view, mid[0] + dx, mid[1]); await sleep(50);
+    $(sheet, '[data-s="new"]').click(); $(sheet, '[data-s="type"]').value = 'lamp'; $(sheet, '[data-s="name"]').value = n; $(sheet, '[data-s="ok"]').click(); await sleep(1100);
+  }
+  const tw = n => mapData.items.find(i => i.name === n), twIcon = n => box.querySelector('[data-id="' + tw(n).id + '"]');
+  { const [ax, ay] = centre(twIcon('twin a')), [bx, by] = centre(twIcon('twin b')); await drag(twIcon('twin b'), ax - bx, ay - by, false); }
+  const badge = () => [...box.querySelectorAll('[data-cluster]')].find(c => c.dataset.cluster.split(',').includes(tw('twin a').id) && c.dataset.cluster.split(',').includes(tw('twin b').id));
+  const near = Math.hypot((tw('twin a').x - tw('twin b').x) * 860, (tw('twin a').y - tw('twin b').y) * 530) < 3;
+  for(let k = 0; k < 4 && badge(); k++){ ptr(view, ...centre(badge())); await sleep(80); }
+  const fanned = ['twin a', 'twin b'].map(twIcon), d = Math.hypot(centre(fanned[0])[0] - centre(fanned[1])[0], centre(fanned[0])[1] - centre(fanned[1])[1]);
+  log('fan: ' + near + ' ' + fanned.every(e => e.style.display !== 'none' && e.dataset.fan === '1') + ' ' + (d > 20));
+  ptr(view, ...atNow(0.02, 0.5)); await sleep(80);
+  log('fan closed: ' + ['twin a', 'twin b'].every(n => !twIcon(n).dataset.fan) + ' ' + (sheet.style.display === 'none'));
+  // a room's name never lies under an icon or a badge: put two lamps (a badge) on a room's label, its name moves off them
+  const gl = () => [...box.querySelectorAll('svg text[data-z]')].find(t => t.style.display !== 'none' && t.textContent === 'Beta');
+  { const [gx, gy] = centre(gl());
+    for(const [n, dx] of [['on label a', 0], ['on label b', 90]]){ ptr(view, gx + dx + 200, gy); await sleep(50);
+      $(sheet, '[data-s="new"]').click(); $(sheet, '[data-s="type"]').value = 'lamp'; $(sheet, '[data-s="name"]').value = n; $(sheet, '[data-s="ok"]').click(); await sleep(1100); }
+    for(const n of ['on label a', 'on label b']){ const [ix, iy] = centre(twIcon(n)); await drag(twIcon(n), gx - ix, gy - iy, false); } }
+  const ov = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const shownBoxes = [...box.querySelectorAll('[data-id],[data-cluster]')].filter(e => e.offsetParent !== null || e.getClientRects().length).map(e => e.getBoundingClientRect()).filter(r => r.width);
+  log('labels clear: ' + [...box.querySelectorAll('svg text[data-z]')].filter(t => t.style.display !== 'none').every(t => !shownBoxes.some(r => ov(t.getBoundingClientRect(), r))));
+  if(UL){                                                                                  // the sheet: opacity and size are saved and drawn
+    press($(box, '[data-m="underlay"]')); await sleep(60);
+    const o = $(sheet, '[data-u="opacity"]'); o.value = 40; o.dispatchEvent(new Event('change')); await sleep(200);
+    const z = $(sheet, '[data-u="size"]'); z.value = 50; z.dispatchEvent(new Event('change')); await sleep(200);
+    const ul = $(box, 'img[data-m="ul"]');
+    log('underlay set: ' + mapData.underlay.opacity + ' ' + Math.round(mapData.underlay.w) + ' ' + Math.round(mapData.underlay.x) + ' ' + ul.style.opacity + ' ' + ul.style.width);
+  }
+  document.getElementById('out').textContent = out.join('\n') + '\nDONE';
+})().catch(e => { out.push('FAIL ' + e.message + ' ' + (e.stack || '').split('\n')[1]); document.getElementById('out').textContent = out.join('\n') + '\nDONE'; });
+</script></body></html>

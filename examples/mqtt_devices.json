@@ -1,0 +1,38 @@
+[
+  {
+    "id": "relay_1",
+    "name": "Relay 1",
+    "category": "switch",
+    "controls": [
+      {"kind": "switch", "code": "power", "label": "Power",
+       "state_topic": "relay_1/relay/state", "command_topic": "relay_1/relay/command",
+       "payload_on": "ON", "payload_off": "OFF"}
+    ]
+  },
+  {
+    "id": "sensor_1",
+    "name": "Sensor 1",
+    "category": "sensor",
+    "state_topic": "home/sensor_1/state",
+    "availability_topic": "home/sensor_1/availability",
+    "payload_online": "online",
+    "payload_offline": "offline",
+    "controls": [
+      {"kind": "sensor", "code": "temperature", "label": "Temperature", "unit": "\u00b0C", "ro": true},
+      {"kind": "sensor", "code": "humidity", "label": "Humidity", "unit": "%", "ro": true},
+      {"kind": "sensor", "code": "motion", "label": "Motion", "vtype": "bool", "ro": true}
+    ]
+  },
+  {
+    "id": "lamp_1",
+    "name": "Lamp 1",
+    "category": "switch",
+    "controls": [
+      {"kind": "switch", "code": "power", "label": "Power",
+       "state_topic": "home/lamp_1/power/state", "command_topic": "home/lamp_1/power/set",
+       "payload_on": "1", "payload_off": "0"},
+      {"kind": "bright", "code": "brightness", "label": "Brightness", "min": 0, "max": 255,
+       "state_topic": "home/lamp_1/brightness/state", "command_topic": "home/lamp_1/brightness/set"}
+    ]
+  }
+]

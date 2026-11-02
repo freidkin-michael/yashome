@@ -1,0 +1,190 @@
+[
+ {
+  "id": "relay_1",
+  "name": "Relay 1",
+  "category": "switch",
+  "controls": [
+   {
+    "kind": "switch",
+    "code": "power",
+    "label": "Power",
+    "state_topic": "relay_1/relay/state",
+    "command_topic": "relay_1/relay/command",
+    "payload_on": "ON",
+    "payload_off": "OFF"
+   }
+  ]
+ },
+ {
+  "id": "sensor_1",
+  "name": "Sensor 1",
+  "category": "sensor",
+  "state_topic": "home/sensor_1/state",
+  "availability_topic": "home/sensor_1/availability",
+  "payload_online": "online",
+  "payload_offline": "offline",
+  "controls": [
+   {
+    "kind": "sensor",
+    "code": "temperature",
+    "label": "Temperature",
+    "unit": "°C",
+    "ro": true
+   },
+   {
+    "kind": "sensor",
+    "code": "humidity",
+    "label": "Humidity",
+    "unit": "%",
+    "ro": true
+   },
+   {
+    "kind": "sensor",
+    "code": "motion",
+    "label": "Motion",
+    "vtype": "bool",
+    "ro": true
+   }
+  ]
+ },
+ {
+  "id": "lamp_1",
+  "name": "Lamp 1",
+  "category": "switch",
+  "controls": [
+   {
+    "kind": "switch",
+    "code": "power",
+    "label": "Power",
+    "state_topic": "home/lamp_1/power/state",
+    "command_topic": "home/lamp_1/power/set",
+    "payload_on": "1",
+    "payload_off": "0"
+   },
+   {
+    "kind": "bright",
+    "code": "brightness",
+    "label": "Brightness",
+    "min": 0,
+    "max": 255,
+    "state_topic": "home/lamp_1/brightness/state",
+    "command_topic": "home/lamp_1/brightness/set"
+   }
+  ]
+ },
+ {
+  "id": "relay_2",
+  "name": "Relay 2",
+  "category": "switch",
+  "controls": [
+   {
+    "kind": "switch",
+    "code": "power",
+    "label": "Power",
+    "state_topic": "home/relay_2/power/state",
+    "command_topic": "home/relay_2/power/set",
+    "payload_on": "1",
+    "payload_off": "0"
+   },
+   {
+    "kind": "setting_bool",
+    "code": "child_lock",
+    "label": "Child lock",
+    "state_topic": "home/relay_2/child_lock/state",
+    "command_topic": "home/relay_2/child_lock/set",
+    "payload_on": "1",
+    "payload_off": "0"
+   },
+   {
+    "kind": "setting_enum",
+    "code": "power_on",
+    "label": "After a power cut",
+    "range": [
+     "on",
+     "off",
+     "previous"
+    ],
+    "state_topic": "home/relay_2/power_on/state",
+    "command_topic": "home/relay_2/power_on/set"
+   }
+  ]
+ },
+ {
+  "id": "sweep_ac",
+  "name": "Sweep AC",
+  "category": "climate",
+  "controls": [
+   {
+    "kind": "switch",
+    "code": "power",
+    "label": "Power",
+    "state_topic": "sweep_ac/power/state",
+    "command_topic": "sweep_ac/power/command",
+    "payload_on": "ON",
+    "payload_off": "OFF"
+   },
+   {
+    "kind": "setting_enum",
+    "code": "temp",
+    "label": "Temperature",
+    "range": [
+     "16",
+     "17",
+     "18",
+     "19",
+     "20",
+     "21",
+     "22",
+     "23",
+     "24",
+     "25",
+     "26",
+     "27",
+     "28",
+     "29",
+     "30"
+    ],
+    "state_topic": "sweep_ac/temp/state",
+    "command_topic": "sweep_ac/temp/command"
+   },
+   {
+    "kind": "setting_enum",
+    "code": "fan",
+    "label": "Fan",
+    "range": [
+     "auto",
+     "low",
+     "med",
+     "max"
+    ],
+    "state_topic": "sweep_ac/fan/state",
+    "command_topic": "sweep_ac/fan/command"
+   },
+   {
+    "kind": "setting_enum",
+    "code": "mode",
+    "label": "Mode",
+    "range": [
+     "cool",
+     "heat",
+     "dry",
+     "fan",
+     "auto"
+    ],
+    "state_topic": "sweep_ac/mode/state",
+    "command_topic": "sweep_ac/mode/command"
+   }
+  ]
+ },
+ {
+  "id": "sweep-ir",
+  "name": "Living room IR blaster",
+  "transport": "mqtt",
+  "category": "ir",
+  "ir_blaster": "sweep-ir",
+  "availability_topic": "sweep-ir/status",
+  "payload_online": "online",
+  "payload_offline": "offline",
+  "controls": []
+ }
+]

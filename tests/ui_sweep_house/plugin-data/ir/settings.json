@@ -1,0 +1,23 @@
+{
+ "ir_blasters": [
+  {
+   "node": "sweep-ir",
+   "name": "Living room IR blaster",
+   "rx": true
+  },
+  {
+   "node": "sweep-ir-2",
+   "name": "Bedroom IR blaster",
+   "rx": false
+  }
+ ],
+ "ir_appliances": [
+  {
+   "id": "sweep_tile",
+   "name": "Living room TV",
+   "remote": "tv_remote",
+   "blaster": "sweep-ir"
+  }
+ ],
+ "ir_toggles": []
+}
