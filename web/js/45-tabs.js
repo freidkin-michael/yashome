@@ -76,9 +76,9 @@ async function openRoomSensors(rid){
           (DEVICES.find(d => d.id === x.moved.dev) || {}).name || x.moved.dev, x.moved.room))}</div>` : ''}
       ${x.silent ? `<div class="bindcaption" style="color:#ffb020">${escapeHtml(i18n('{0} has not answered since {1}', x.silent.name, x.silent.since ? hhmm(x.silent.since) : '?'))}</div>` : ''}
       <div class="picker-list">${row('auto', i18n('Auto'), auto, x.pick === 'auto')}
-      ${x.options.map(o => row(o.dev + '/' + o.code, o.name, [fmt(k, o.value), o.advanced ? i18n('module board') : '', o.outdoor ? i18n('outdoors') : ''].filter(Boolean).join(' \u00b7 '), x.pick === o.dev + '/' + o.code)).join('')}</div></section>`; };
+      ${x.options.map(o => row(o.dev + '/' + o.code, o.name, [fmt(k, o.value), o.advanced ? i18n('the module\'s own sensor') : '', o.outdoor ? i18n('outdoors') : ''].filter(Boolean).join(' \u00b7 '), x.pick === o.dev + '/' + o.code)).join('')}</div></section>`; };
   Home.openModal(`<div class="head"><button class="closebtn" onclick="closeModal()">\u00d7</button><h2>${escapeHtml(i18n('Thermometer: {0}', room.name))}</h2>
-      <div class="sub">${escapeHtml(i18n('What the room shows, Ask answers and an AC set to the room reads. Auto never takes a module\'s own board or a sensor outdoors.'))}</div></div>
+      <div class="sub">${escapeHtml(i18n('What the room shows, Ask answers and an AC set to the room reads. Auto never takes the module\'s own sensor or a sensor outdoors.'))}</div></div>
     <div class="body">${sec('temperature')}${sec('humidity')}</div>`, '__room_sensors__');
   document.getElementById('md').querySelectorAll('[data-src]').forEach(b => b.onclick = async () => {
     try { await api('/api/rooms/' + encodeURIComponent(rid) + '/sensors', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({kind: b.dataset.k, source: b.dataset.src})}); }

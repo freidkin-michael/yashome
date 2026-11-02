@@ -27,15 +27,15 @@ CASES = [   # controls (code, kind), extra fields -> kind, via
     ([("state", "switch"), ("power", "sensor")], {"transport": "z2m"}, "Smart plug with power metering", "Zigbee"),
     ([("state_l1", "switch"), ("state_l2", "switch")], {"transport": "z2m"}, "Wall switch with 2 channels", "Zigbee"),
     ([("temperature", "sensor"), ("humidity", "sensor")], {"transport": "z2m"}, "Temperature and humidity sensor", "Zigbee"),
-    ([("presence", "sensor"), ("distance", "sensor")], {"transport": "mqtt", "esphome": True}, "mmWave presence radar", "ESPHome over Wi-Fi"),
+    ([("presence", "sensor"), ("distance", "sensor")], {"transport": "mqtt", "esphome": True}, "mmWave presence radar", "Wi-Fi"),
     ([("contact", "sensor")], {"transport": "z2m"}, "Door or window contact", "Zigbee"),
     ([("action", "trigger_text")], {"transport": "z2m"}, "Wireless button", "Zigbee"),
-    ([("power", "switch")], {"transport": "mqtt", "category": "climate"}, "Air conditioner", "MQTT"),
+    ([("power", "switch")], {"transport": "mqtt", "category": "climate"}, "Air conditioner", "Wi-Fi"),
     ([("state", "switch")], {"transport": "z2m", "description": "Zigbee router"}, "Zigbee repeater", "Zigbee"),
     ([("state", "switch"), ("energy", "sensor")], {"transport": "z2m", "description": "Smart plug (EU)"},
      "Smart plug with power metering", "Zigbee"),
     ([("state", "switch")], {"transport": "z2m", "description": "Smart plug (EU)"}, "Smart plug", "Zigbee"),
-    ([("temperature", "sensor")], {"transport": "own", "category": "boiler"}, "boiler", "own"),   # a plug-in's kind: its word
+    ([("temperature", "sensor")], {"transport": "own", "category": "boiler"}, "boiler", ""),   # a plug-in's kind: its word; its way: none said
 ]
 
 

@@ -55,9 +55,8 @@ function ST_PAGES(){
 // All devices: every device with its kind, how it is connected, its room, whether it answers; a tap opens its window;
 // the house's own helpers (who is home, NFC, family, the shower) are folded apart at the end
 const stKind = d => (d.ir_appliance ? (/tv/i.test(d.ir_card || '') ? i18n('TV') : /^ac/i.test(d.ir_card || '') ? i18n('Air conditioner') : i18n('IR appliance'))
-  : d.category === 'ir' ? i18n('IR blaster') : catLabel(d.category)).replace(/^(.)(?=[a-zа-яё])/u, c => c.toLowerCase());   // i18n: Latin or Russian; a word that opens with an acronym (IR...) keeps its capitals
-const stVia = d => ({z2m: 'Zigbee', ir: i18n('IR'), tizen: 'Samsung', webos: 'LG', voice: i18n('voice satellite')})[d.transport]
-  || (d.transport === 'mqtt' ? (d.esphome ? 'Wi-Fi (ESPHome)' : 'MQTT') : d.transport || '');
+  : d.category === 'ir' ? i18n('IR blaster') : deviceKind(d)).replace(/^(.)(?=[a-zа-яё])/u, c => c.toLowerCase());   // i18n: Latin or Russian; a word that opens with an acronym (IR...) keeps its capitals
+const stVia = d => deviceVia(d);
 function stDevices(box, quiet){
   const sc = el('section'); box.append(sc);
   if(quiet) sc.dataset.stab = 'main';
@@ -96,8 +95,8 @@ function stForgotten(box, quiet){
       return i18n(ST_LEFTOVER[k] || k);
     };
     const words = ps => [...new Set(ps.map(what))].join(' \u00b7 ');
-    sc.innerHTML = `<div class="bindcaption" style="margin-bottom:8px">${escapeHtml(i18n('Devices that are gone but still have a name, a room or a place stored. Forget removes all of it; a rule that names one stays until you change it. The watchdog forgets them by itself after the days set on its page.'))}</div>`
-      + (items.length ? items.map(f => `<div class="row" style="flex-wrap:wrap"><span class="rlabel">${escapeHtml(f.name)}${f.name !== f.id ? ` <span class="bindcaption">${escapeHtml(f.id)}</span>` : ''}<br>
+    sc.innerHTML = `<div class="bindcaption" style="margin-bottom:8px">${escapeHtml(i18n('Devices that are gone but still keep a name, a room or a place here. Forget clears it.'))}</div>`
+      + (items.length ? items.map(f => `<div class="row" style="flex-wrap:wrap"><span class="rlabel">${escapeHtml(f.name)}<br>
         <span class="bindcaption">${escapeHtml([words(f.data), f.kept.length ? i18n('Still named by: {0}', [...new Set(f.kept.map(what))].join(', ')) : '', f.data.length ? '' : i18n('Nothing to forget: only a rule or a panel names it. Change that and it is gone.')].filter(Boolean).join(' \u00b7 '))}</span></span>
         <span class="rval">${f.data.length ? `<button class="dlg-btn" data-fg="${escapeHtml(f.id)}">${escapeHtml(i18n('Forget'))}</button>`
           : `<button class="dlg-btn" data-fo="${f.kept.some(p => p.startsWith('panel')) && !f.kept.some(p => !p.startsWith('panel')) ? 'panels' : 'rules'}">${escapeHtml(i18n(f.kept.some(p => !p.startsWith('panel')) ? 'Open the rules' : 'Open the panels'))}</button>`}</span></div>`).join('')
@@ -124,7 +123,7 @@ function stPluginMeta(id){
 }
 function stPluginRow(id, sw){
   const m = stPluginMeta(id), info = PLUGIN_INFO[id];
-  const state = m.off ? i18n('off') : m.failed ? i18n('did not load') : m.uiFailed ? i18n('ui.js failed to load') : (m.version ? m.version + ' \u00b7 ' : '') + i18n('loaded');
+  const state = m.off ? i18n('off') : stPluginTrouble(m) ? i18n('does not work: {0}', stPluginTrouble(m)) : i18n('on');
   const d = el('div');
   d.innerHTML = `<div class="row"><span class="rlabel">${sw || ''}${escapeHtml(i18n(m.label))}${info ? `<br><span class="bindcaption">${escapeHtml(i18n(info[1]))}</span>` : ''}</span>
       <span class="rval" style="${m.failed || m.uiFailed ? 'color:var(--bad)' : m.off ? 'color:var(--dim)' : ''}">${escapeHtml(state)}</span></div>
@@ -133,11 +132,13 @@ function stPluginRow(id, sw){
   det.addEventListener('toggle', () => { if(det.open && !det.dataset.done){ det.dataset.done = '1'; stAbout(m, det.querySelector('div')); } });
   return d;
 }
+// why a plug-in does not work, in words: it did not start (the reason is in the house's log), or its screen part did not load
+const stPluginTrouble = m => m.failed ? i18n('it did not start; the house log says why') : m.uiFailed ? i18n('its screen part did not load; reload the page') : '';
 async function stAbout(m, box){
-  const st = m.off ? i18n('switched off') : m.failed ? i18n('did not load') + (typeof m.failed === 'string' ? ': ' + m.failed : '') : m.uiFailed ? i18n('ui.js failed to load') : i18n('loaded');
   const row = (k, v) => `<div class="row"><span class="rlabel">${escapeHtml(i18n(k))}</span><span class="rval">${escapeHtml(v)}</span></div>`;
-  box.innerHTML = `<section>${row('Name', i18n(m.label || m.name))}${row('Version', m.version || '\u2014')}${row('Status', st)}${row('Folder', (m.group ? m.group + '/' : '') + m.id)}
-    ${(m.requires || []).length ? row('Needs', m.requires.join(', ')) : ''}<h3>${escapeHtml(i18n('Health'))}</h3><div class="stx-health"></div></section>`;
+  const tech = row('Folder', (m.group ? m.group + '/' : '') + m.id) + ((m.requires || []).length ? row('Needs', m.requires.join(', ')) : '')
+    + (typeof m.failed === 'string' ? `<pre style="white-space:pre-wrap;font-size:12px">${escapeHtml(m.failed)}</pre>` : '');
+  box.innerHTML = `<section>${m.version ? row('Version', m.version) : ''}${advancedHTML(tech)}<h3>${escapeHtml(i18n('Health'))}</h3><div class="stx-health"></div></section>`;
   const hb = box.querySelector('.stx-health');
   if(!stHere({needs: ['GET /api/health/report']})){ hb.previousElementSibling.remove(); hb.remove(); return; }     // restricted: no health page here
   const r = await fetch('/api/health/report', {headers: authHeaders()}).catch(() => null);
@@ -278,7 +279,7 @@ function stRenderCore(cur, box, tab, quiet){
         <div class="row"><span class="rlabel">${i18n('Show code')}<br><span class="bindcaption">${i18n('A 6-digit code, good once for 5 minutes: type it on the sign-in card of the other screen (same network). Only for your own devices.')}</span></span>
           <button class="dlg-btn primary" id="st-signin">${i18n('Show code')}</button></div><div id="st-signin-out"></div>
       </section>`,
-    backups: `<section><div class="bindcaption" style="margin-bottom:8px">${i18n('Back up now makes an archive of the house\'s settings and data; the nightly ones are kept on this computer in backups/. Download keeps a copy elsewhere.')}</div><div id="st-backups"></div></section>`,
+    backups: `<section><div class="bindcaption" style="margin-bottom:8px">${i18n('Back up now makes one at once. Download keeps a copy on another disk too.')}</div><div id="st-backups"></div></section>`,
     plugins: `<section><h3 id="st-h-plugins">${i18n('Plug-ins')}</h3><div class="bindcaption" style="margin-bottom:8px">${i18n('Tick what should run, then Apply (the dashboard restarts). Each plug-in\'s keys are on its own page.')}</div>
         <div id="st-helper"></div>
       </section>
@@ -466,18 +467,22 @@ async function renderHelper(box, upd){
   box.querySelector('#hl-apply').onclick = () => helperJob('apply', out);
   if(!upd) return;
   const g = st.git || {};
-  upd.innerHTML = `<div class="row"><span class="rlabel">${escapeHtml(i18n('This version'))}</span>
-      <span class="rval">${escapeHtml([g.tag, g.branch || '?', String(g.commit || '').slice(0, 7)].filter(Boolean).join(' \u00b7 '))}</span></div>
+  const news = stNews(g.changelog);
+  const tech = [['Branch', g.branch], ['Commit', String(g.commit || '').slice(0, 7)]].filter(x => x[1])
+    .map(([k, v]) => `<div class="row"><span class="rlabel">${escapeHtml(i18n(k))}</span><span class="rval">${escapeHtml(v)}</span></div>`).join('')
+    + ((g.incoming || []).length ? `<pre style="white-space:pre-wrap;max-height:200px;overflow:auto;font-size:12px">${escapeHtml(g.incoming.join('\n'))}</pre>` : '');
+  upd.innerHTML = `<div class="row"><span class="rlabel">${escapeHtml(i18n('Version'))}</span>
+      <span class="rval">${escapeHtml(g.tag || i18n('not known'))}</span></div>
     ${g.fetch_error ? `<div class="bindcaption" data-up="failed" style="color:var(--bad)">${escapeHtml(i18n('Could not check for updates: {0}', i18n(g.fetch_reason || 'git could not reach the repository')))}</div>
       <details><summary class="bindcaption" style="cursor:pointer">${escapeHtml(i18n('More'))}</summary><pre style="white-space:pre-wrap;font-size:12px">${escapeHtml(g.fetch_error)}</pre></details>`
-      : `<div class="bindcaption" data-up="checked">${escapeHtml(g.behind ? i18n('{0} new commits upstream.', g.behind) : i18n('Up to date.'))}</div>`}
-    ${(g.changelog || []).length ? `<pre style="white-space:pre-wrap;max-height:240px;overflow:auto">${escapeHtml(g.changelog.join('\n'))}</pre>` : ''}
+      : `<div class="bindcaption" data-up="checked">${escapeHtml(g.behind ? i18n('An update is available.') + (news.length ? ' ' + i18n('What is new:') : '') : i18n('Up to date.'))}</div>`}
+    ${g.behind && news.length ? `<ul class="stx-news">${news.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>` : ''}
     <div class="row" style="gap:8px">
       <button class="dlg-btn primary" id="up-go" ${g.behind && !g.dirty && !g.worktree ? '' : 'disabled'}>${escapeHtml(i18n('Update (a backup first)'))}</button>
       <button class="dlg-btn" id="up-back" ${st.previous && !g.worktree ? '' : 'disabled'}>${escapeHtml(i18n('Roll back'))}</button></div>
-    ${g.dirty ? `<div class="bindcaption">${escapeHtml(i18n('The checkout has local changes: update it by hand.'))}</div>` : ''}
-    <div class="bindcaption">${escapeHtml(i18n('Roll back returns the code to the version before the last update; the house files stay - restore a backup for those.'))}</div>
-    <div class="bindcaption" id="up-out"></div>`;
+    ${g.dirty ? `<div class="bindcaption">${escapeHtml(i18n('This copy of the house was changed by hand: it is updated by hand too.'))}</div>` : ''}
+    <div class="bindcaption">${escapeHtml(i18n('Roll back returns to the version before the last update; your settings stay as they are (a backup brings those back).'))}</div>
+    <div class="bindcaption" id="up-out"></div>${advancedHTML(tech)}`;
   const uo = upd.querySelector('#up-out');
   upd.querySelector('#up-go').onclick = () => helperJob('update', uo);
   upd.querySelector('#up-back').onclick = () => helperJob('rollback', uo);
@@ -489,7 +494,18 @@ async function helperJob(kind, out){
     helperWatch(out);
   } catch(e){ out.textContent = e.message || e; }
 }
+// what an update brings: the CHANGELOG lines it adds, one item per "- " line (its wrapped lines joined), at most 12
+function stNews(lines){
+  const out = [];
+  for(const ln of lines || []){
+    if(/^\s*[-*] /.test(ln)) out.push(ln.replace(/^\s*[-*] /, '').trim());
+    else if(out.length && /^\s+\S/.test(ln)) out[out.length - 1] += ' ' + ln.trim();
+  }
+  return out.slice(0, 12);
+}
 // the job restarts the dashboard itself: polls ride over that gap, then the page reloads
+const STX_JOB = {running: '{0}: working\u2026', done: '{0}: done', error: '{0}: did not work, look at its log under Advanced'};
+const STX_JOB_KIND = {update: 'Update', rollback: 'Roll back', apply: 'Apply', restart: 'Restart', restore: 'Restore'};
 async function helperWatch(out){
   let fails = 0;
   for(;;){
@@ -498,33 +514,37 @@ async function helperWatch(out){
     try { j = (await api('/api/helper/jobs/current')).job; fails = 0; }
     catch(e){ if(++fails > 60){ out.textContent = i18n('The dashboard did not come back: check on the host.'); return; } continue; }
     if(!j) return;
-    out.innerHTML = `<div>${escapeHtml(i18n('{0}: {1}', j.kind, i18n(j.state)))}</div>
-      <pre style="white-space:pre-wrap;max-height:200px;overflow:auto">${escapeHtml((j.log || []).slice(-20).join('\n'))}</pre>`;
+    const keep = out.querySelector('details.adv'), open = keep && keep.open;      // the log stays open while it is read
+    out.innerHTML = `<div>${escapeHtml(i18n(STX_JOB[j.state] || j.state, i18n(STX_JOB_KIND[j.kind] || j.kind)))}</div>
+      ${advancedHTML(`<pre style="white-space:pre-wrap;max-height:200px;overflow:auto">${escapeHtml((j.log || []).slice(-20).join('\n'))}</pre>`)}`;
+    if(open) out.querySelector('details.adv').open = true;
     if(j.state !== 'running'){ if(j.state === 'done') setTimeout(() => location.reload(), 3000); return; }
   }
 }
 
 // Settings -> Health: every check of the core and the plug-ins in plain words, worst first, a fix per row
 const HEALTH_COLOR = {ok: 'var(--ok)', warn: 'var(--on)', bad: 'var(--bad)'};
-// what a health row checks and what to do when it is red, by the row's id (a prefix before ":" or "-")
+// what a health row checks and what to do when it is red, by the row's id (a prefix before ":" or "-"):
+// [what it checks, what to do in words, the settings page that does it, a command for whoever runs the computer (under More)]
 const HEALTH_HELP = {
-  broker: ['the MQTT broker every device talks through', 'start the stack: make update, or look at docker compose ps'],
-  clock: ['the server\'s time and time zone; schedules depend on them', 'fix the computer\'s clock or its time zone'],
-  disk: ['free space on the computer\'s disk', 'free some space: old backups, unused docker images'],
-  backup: ['the age of the last nightly backup', 'Settings -> Backups -> Back up now; days in red mean the nightly job fails'],
-  build: ['the server that compiles panel firmware and the apps', 'Settings -> Computers and servers -> Servers'],
-  family: ['the bridge to the Yash! phones: pushes and who is home', 'check the family-bridge container and Firebase'],
-  'panels-discover': ['the helper that finds new panels on the network', 'make update restarts it'],
-  panel: ['this panel reports every few minutes while it is on', 'is the tablet on, with the panel app running?'],
-  presence: ['the host piece that watches the phones on the Wi-Fi', 'systemctl status phone-presence on the host'],
-  provision: ['rescue of ESP devices that lost the Wi-Fi', 'optional: a relay node or the host helper (the plug-in\'s README)'],
-  switchbot: ['the Bluetooth bridge to the lock', 'systemctl status switchbot-lock@<id> on the bridge\'s host'],
-  weather: ['the weather feed for panels and rules', 'the place in Settings -> Weather and internet access'],
-  zigbee: ['zigbee2mqtt and the coordinator stick', 'docker compose logs zigbee2mqtt; the stick must be plugged in'],
-  schedules: ['timed rules that fired while their device was away', 'check the device and the rule\'s time'],
-  plugin: ['a plug-in that failed to load', 'its error is in the server log'],
-  settings: ['the house\'s settings file', 'settings.json is damaged: restore it from a backup'],
+  broker: ['the message hub every device talks through', 'Restart the house. If it stays red, the house\'s computer needs a look.', 'restart', 'docker compose ps'],
+  clock: ['the computer\'s time and time zone; schedules depend on them', 'Set the right time and time zone on the house\'s computer.'],
+  disk: ['free space on the computer\'s disk', 'Free some space: delete old backups or files you do not need.', 'backups', 'docker image prune'],
+  backup: ['the age of the last nightly backup', 'Make a backup now. If the nightly one keeps failing, the house log says why.', 'backups'],
+  build: ['the server that builds the firmware of panels and the apps', 'Check the build server on its page.', 'computers'],
+  family: ['the link to the Yash! phones: messages and who is home', 'Restart the house. If it stays red, check the Family page.', 'restart', 'docker compose logs family-bridge'],
+  'panels-discover': ['the helper that finds new panels on the network', 'Restart the house.', 'restart'],
+  panel: ['this panel reports every few minutes while it is on', 'Check that the tablet is on and the panel app is open.'],
+  presence: ['the helper on the computer that sees the phones on the Wi-Fi', 'Restart the house\'s computer. If it stays red, the helper there needs a look.', '', 'systemctl status phone-presence'],
+  provision: ['rescue of ESP devices that lost the Wi-Fi', 'Nothing to do unless you want it: it is optional.'],
+  switchbot: ['the Bluetooth bridge to the lock', 'Check that the computer near the door is on.', '', 'systemctl status switchbot-lock@<id>'],
+  weather: ['the weather feed for panels and rules', 'Check the place on the Weather page and the internet.', 'weather'],
+  zigbee: ['the Zigbee network and its stick', 'Check that the Zigbee stick is plugged in, then restart the house.', 'restart', 'docker compose logs zigbee2mqtt'],
+  schedules: ['timed rules that fired while their device was away', 'Check that the device is on and that the rule\'s time is right.', 'rules'],
+  plugin: ['a plug-in that failed to load', 'Restart the house. If it stays red, the house log says why.', 'restart'],
+  settings: ['the house\'s settings file', 'Restore the last good backup.', 'backups'],
 };
+const HEALTH_ACT = {restart: 'Restart the house', backups: 'Open Backups', computers: 'Open Computers and servers', weather: 'Open Weather', rules: 'Open the rules'};
 function healthHelp(rid){
   const key = Object.keys(HEALTH_HELP).find(k => rid === k || rid.startsWith(k + ':') || rid.startsWith(k + '-'));
   return key ? HEALTH_HELP[key] : null;
@@ -534,40 +554,26 @@ async function renderHealth(box){
   box.innerHTML = `<div class="bindcaption">${escapeHtml(i18n('Checking\u2026'))}</div>`;
   const r = await fetch('/api/health/report', {headers: authHeaders()}).catch(() => null);
   if(r && r.status === 403){ box.closest('section').remove(); return; }    // a phone's or a panel's token
-  if(!r || !r.ok){ healthDot(''); box.innerHTML = `<div class="bindcaption">${escapeHtml(i18n(r && r.status === 401 ? 'Signed out.' : 'No answer from the house.'))}</div>`; return; }
+  if(!r || !r.ok){ box.innerHTML = `<div class="bindcaption">${escapeHtml(i18n(r && r.status === 401 ? 'Signed out.' : 'No answer from the house.'))}</div>`; return; }
   const h = await r.json();
-  healthDot(h.worst);
   const t = (s, args) => s ? i18n(s, ...(args || [])) : '';
   box.innerHTML = h.rows.map(r => `<div class="row" style="flex-wrap:wrap">
       <span class="rlabel"><span style="color:${HEALTH_COLOR[r.state]}">\u25cf</span> ${escapeHtml(t(r.title, r.args))}</span>
       <span class="rval">${escapeHtml(r.state === 'ok' && !r.detail ? i18n('fine') : t(r.detail, r.args))}</span>
       ${(() => { const hh = healthHelp(r.id || ''); const parts = [];
           if(hh) parts.push(i18n('checks') + ': ' + i18n(hh[0]));
-          if(r.fix) parts.push(t(r.fix, r.args)); else if(hh && r.state !== 'ok') parts.push(i18n('what to do') + ': ' + i18n(hh[1]));
-          const go = r.link ? ` <button class="dlg-btn" data-hlink="${escapeHtml(r.link)}" style="padding:2px 10px;font-size:12px;margin-left:6px">${escapeHtml(i18n('Open'))}</button>` : '';
+          const bad = r.state !== 'ok';
+          if(r.fix) parts.push(t(r.fix, r.args)); else if(hh && bad) parts.push(i18n('what to do') + ': ' + i18n(hh[1]));
+          const btn = (to, words) => ` <button class="dlg-btn" data-hlink="${escapeHtml(to)}" style="padding:2px 10px;font-size:12px;margin-left:6px">${escapeHtml(i18n(words))}</button>`;
+          const go = r.link ? btn(r.link, HEALTH_ACT[r.link.split('/')[0]] || 'Open') : hh && hh[2] && bad ? btn(hh[2], HEALTH_ACT[hh[2]] || 'Open') : '';
           return parts.length || go ? `<div class="bindcaption" style="flex-basis:100%">${escapeHtml(parts.join(' \u00b7 '))}${go}</div>` : ''; })()}
-      ${r.cmd ? `<details style="flex-basis:100%"><summary class="bindcaption" style="cursor:pointer">${escapeHtml(i18n('More'))}</summary><code style="white-space:pre-wrap;font-size:12px">${escapeHtml(r.cmd.replace(/\{(\d+)\}/g, (m, i) => (r.args || [])[i] ?? m))}</code></details>` : ''}</div>`).join('')
+      ${(() => { const hh = healthHelp(r.id || ''), cmd = r.cmd || (hh && r.state !== 'ok' && hh[3]) || '';      // commands: only folded, for whoever runs the computer
+          return cmd ? `<details style="flex-basis:100%"><summary class="bindcaption" style="cursor:pointer">${escapeHtml(i18n('More'))}</summary><code style="white-space:pre-wrap;font-size:12px">${escapeHtml(cmd.replace(/\{(\d+)\}/g, (m, i) => (r.args || [])[i] ?? m))}</code></details>` : ''; })()}</div>`).join('')
     + `<div class="row"><button class="dlg-btn" id="hl-again">${escapeHtml(i18n('Check again'))}</button></div>`;
   box.querySelector('#hl-again').onclick = () => renderHealth(box);
   box.querySelectorAll('[data-hlink]').forEach(b => b.onclick = () => openSettings(...b.dataset.hlink.split('/')));
 }
-// a dot on the gear when something needs a look; checked at start and every 10 minutes
-function healthDot(worst){
-  const g = document.getElementById('gearbtn');
-  if(g) g.style.boxShadow = worst === 'bad' ? 'inset 0 0 0 2px var(--bad)' : worst === 'warn' ? 'inset 0 0 0 2px var(--on)' : '';
-}
-// no token prompt from here; a 401/403 stops the poll (signed out, or not the house token)
-let _healthPolls = true, _healthAt = 0;
-async function healthPoll(){
-  if(!_healthPolls || !TOKEN || document.hidden || Date.now() - _healthAt < 30000) return;   // one at a time, 30 s apart; none before sign-in
-  _healthAt = Date.now();
-  const r = await fetch('/api/health/report', {headers: authHeaders()}).catch(() => null);
-  if(r && (r.status === 401 || r.status === 403)){ _healthPolls = false; healthDot(''); return; }
-  healthDot(r && r.ok ? (await r.json()).worst : '');
-}
-setTimeout(healthPoll, 5000);
-setInterval(healthPoll, 600000);
-document.addEventListener('visibilitychange', () => { if(!document.hidden) healthPoll(); });
+// the header's Health button (the watchdog plug-in) is the one sign that something needs a look: the gear has none of its own
 
 // Settings -> Backups: one every night (the backend), here its age, "back up now" and the downloads
 async function renderBackups(box){
@@ -591,9 +597,9 @@ async function renderBackups(box){
     <div class="row" style="gap:6px"><button class="dlg-btn" id="bk-file">${i18n('Restore from a file')}</button>
       <input type="file" id="bk-pick" accept=".gz,.tgz,application/gzip" hidden></div>
     <div class="bindcaption" id="bk-out"></div>
-    <div class="bindcaption">${escapeHtml(b.nightly ? i18n('Every night at {0}; the last {1} stay in backups/ of this computer. Keep a copy on another disk too.', b.at, b.keep)
-      : i18n('No nightly backup (BACKUP_AT={0}).', b.at))}</div>
-    <div class="bindcaption">${escapeHtml(i18n('A backup holds the house settings, the .env secrets, the Zigbee network and your own plug-ins; not the logs.'))}</div>`;
+    <div class="bindcaption">${escapeHtml(b.nightly ? i18n('Every night at {0}, {1} copies kept on this computer.', b.at, b.keep)
+      : i18n('No nightly backup is set up: make one now and then with Back up now.'))}</div>
+    <div class="bindcaption">${escapeHtml(i18n('A backup holds the house settings, its passwords, the Zigbee network and your own plug-ins; not the logs.'))}</div>`;
   box.querySelector('#bk-now').onclick = async ev => {
     ev.target.disabled = true;
     try { await api('/api/backups', {method: 'POST'}); } catch(e){ alert(e.message || e); }

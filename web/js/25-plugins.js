@@ -16,7 +16,8 @@ const HomePlugins = {
     if(!host) return;
     host.innerHTML = '';
     if(!a || typeof a.open !== 'function') return;
-    host.innerHTML = `<form class="askbar" role="search"><button type="submit" class="dlg-btn askbtn" title="${escapeHtml(i18n('Ask the house'))}">${icon('chat', 18)}<span class="btn-text">${escapeHtml(i18n('Ask'))}</span></button>
+    // one entry: the field (Enter asks); a phone has no room for it, so there its button opens the field
+    host.innerHTML = `<form class="askbar" role="search"><button type="submit" class="dlg-btn askbtn" title="${escapeHtml(i18n('Ask the house'))}" aria-label="${escapeHtml(i18n('Ask the house'))}">${icon('chat', 18)}</button>
       <input class="pillfield" type="search" enterkeyhint="send" autocomplete="off" placeholder="${escapeHtml(i18n('Ask the house\u2026'))}" aria-label="${escapeHtml(i18n('Ask the house'))}"></form>`;
     const f = host.querySelector('form'), inp = host.querySelector('input');
     const phone = () => matchMedia('(max-width:640px)').matches;
@@ -97,8 +98,13 @@ function fmtWhen(ms){                                   // today "at 15:55", yes
   if(ago === 1) return i18n('yesterday at {0}', t);
   return i18n('{0} at {1}', d.toLocaleDateString(LOCALE, {day: '2-digit', month: '2-digit', ...(d.getFullYear() === now.getFullYear() ? {} : {year: 'numeric'})}), t);
 }
+// a rare setting a family seldom needs: folded under "Advanced", closed until opened; nothing to fold -> nothing
+function advancedHTML(html){
+  return html ? `<details class="adv"><summary>${escapeHtml(i18n('Advanced'))}</summary><div class="advbody">${html}</div></details>` : '';
+}
 const Home = {
   api: (path, opts) => api(path, opts),
+  advanced: html => advancedHTML(html),    // HTML of rare settings folded under "Advanced" (closed), as the core's own pages do
   escapeHtml: s => escapeHtml(s), el: (tag, cls, html) => el(tag, cls, html),
   i18n, i18nPlural,
   // opts.onClose runs once when the modal closes (Escape, backdrop, x, Home.closeModal) or another modal replaces it

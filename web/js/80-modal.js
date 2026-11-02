@@ -84,13 +84,13 @@ function buildModal(){
         </div>
         <input type="range" id="m_br_${escapeHtml(b.code)}" min="0" max="100" value="0"
                data-code="${escapeHtml(b.code)}" data-min="${escapeHtml(String(b.min))}" data-max="${escapeHtml(String(b.max))}" data-act="bright">
-        <div class="dimwin"${isLight ? '' : ' hidden'}>
+        ${isLight ? advancedHTML(`<div class="dimwin">
           <span>${i18n('Limits: min')}</span>
           <input type="number" min="0" max="100" id="m_dmin_${escapeHtml(b.code)}" data-code="${escapeHtml(b.code)}" data-act="dimwin" value="${dimFloor(b)}">
           <span>${i18n('max')}</span>
           <input type="number" min="0" max="100" id="m_dmax_${escapeHtml(b.code)}" data-code="${escapeHtml(b.code)}" data-act="dimwin" value="${dimCeil(b)}">
           <span style="opacity:.6">${i18n('% (0/100 = no limits)')}</span>
-        </div>` : '';
+        </div>`) : ''}` : '';
     return `<div class="chgroup">${head}${bright}</div>`;
   };
   const sectSwitches = (chanPairs.length || loneBrights.length) ? `
@@ -113,15 +113,16 @@ function buildModal(){
     <section><h3 data-h="readings">${i18n('Readings')}</h3>${
       sensList.map(s=>`
         <div class="row${s.advanced?' adv':''}">
-          <span class="rlabel" title="${escapeHtml(s.code)}">${escapeHtml(s.label||s.code)}</span>
+          <span class="rlabel">${escapeHtml(s.label||s.code)}</span>
           <span class="rval"><b id="m_sn_${escapeHtml(s.code)}">\u2014</b> ${escapeHtml(unitOf(s))}</span>
         </div>`).join('')
     }</section>` : '';
 
   const settings = [...C.set_bool, ...C.set_enum, ...C.set_int].filter(s => !hidden.has(s.code));
-  // Order: primary first, advanced after (visible, just faded).
-  settings.sort((a,b)=> (a.advanced?1:0)-(b.advanced?1:0));
-  const sectSet = settings.length ? `<section><h3 data-h="settings">${i18n('Settings')}</h3>${settings_html(d, settings)}</section>` : '';
+  // a Zigbee device's own settings (power-on state, switch type...) and those marked advanced are technical: folded
+  const rare = s => !!s.advanced || d.transport === 'z2m';
+  const setMain = settings.filter(s => !rare(s)), setRare = settings.filter(rare);
+  const sectSet = settings.length ? `<section><h3 data-h="settings">${i18n('Settings')}</h3>${settings_html(d, setMain)}${advancedHTML(settings_html(d, setRare))}</section>` : '';
 
   // Schedule/inching and binding editors moved out of the modal -- all rule
   // creation/editing now lives in the unified "Automations" tab (the modal
@@ -134,36 +135,32 @@ function buildModal(){
       <div class="evlog" id="m_evlog">${i18n('\u2014 no events \u2014')}</div>
     </section>` : '';
 
+  const model = [d.vendor, d.model].filter(Boolean).join(' ');
   md.innerHTML = `
     <div class="head">
       <button class="closebtn" onclick="closeModal()">\u00d7</button>
       <button class="okbtn" id="m_modal_ok" onclick="modalOk()" title="${i18n('Save changes and close')}" hidden>OK</button>
       <h2 id="m_name"><span id="m_name_txt">${escapeHtml(d.name)}</span> <button class="renbtn" id="m_ren_dev"
           title="${i18n('Rename')}">${PEN_SVG}</button></h2>
-      <div class="sub">${escapeHtml(catLabel(d.category))}${roomNameOf(d.id) ? ' \u00b7 ' + escapeHtml(roomNameOf(d.id)) : ''}
-           <span id="m_online"></span></div>
+      <div class="sub">${d.virtual ? '' : escapeHtml(deviceKind(d))}<span id="m_online"></span></div>
       ${whatIsHTML(d)}
     </div>
     <div class="body">
       <section${d.virtual ? ' hidden' : ''}>
         <div class="row"><span class="rlabel">${i18n('Room')}</span>
-          <select id="m_room" ${ROOM_LOCKED.includes(d.id) ? `disabled title="${i18n('from the map')}"` : ''}><option value="">${i18n('No room')}</option>${ROOMS.map(r =>
-            `<option value="${escapeHtml(r.id)}"${(r.devices||[]).includes(d.id) ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}</select></div>
-        ${ROOM_LOCKED.includes(d.id) ? `<div class="row" id="m_room_lock"><span class="bindcaption" style="margin:0;flex:1">${escapeHtml(i18n('The map sets the room: its icon is in the zone "{0}"', roomNameOf(d.id) || '\u2014'))}</span>
-          <button class="dlg-btn" id="m_room_map">${i18n('Show on the map')}</button></div>` : ''}
+          <span class="rval" id="m_room_box"><select id="m_room" ${ROOM_LOCKED.includes(d.id) ? `disabled title="${i18n('The map sets the room')}"` : ''}><option value="">${i18n('No room')}</option>${ROOMS.map(r =>
+            `<option value="${escapeHtml(r.id)}"${(r.devices||[]).includes(d.id) ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}</select>
+          ${ROOM_LOCKED.includes(d.id) ? `<button class="dlg-btn" id="m_room_map">${i18n('Show on the map')}</button>` : ''}</span></div>
         <div class="row"><span class="rlabel">${i18n('Favourite')}</span><button class="dlg-btn" id="m_fav"></button></div>
       </section>
       ${sectSwitches}${sectBright}${sectPlugins}${sectSensors}${sectSet}${sectEvents}
       <section><h3 data-h="rules">${i18n('Used in automations')}</h3>
         <div id="m_rules" style="font-size:13px;color:var(--dim)">\u2026</div></section>
-      <section><details data-h="details"><summary>${i18n('Details')}</summary>
-        <div class="row"><span class="rlabel">${i18n('Connection')}</span><span class="rval">${escapeHtml(d.transport||'\u2014')}</span></div>
-        <div class="row"><span class="rlabel">${i18n('Model')}</span><span class="rval">${escapeHtml(d.model||'\u2014')}</span></div>
-        ${d.ip ? `<div class="row"><span class="rlabel">${i18n('Address')}</span><span class="rval">${escapeHtml(d.ip)}</span></div>` : ''}
-        <div class="row"><span class="rlabel">${i18n('Id')}</span><span class="rval">${escapeHtml(d.id)}</span></div>
-        ${diagList.map(s => `<div class="row"><span class="rlabel" title="${escapeHtml(s.code)}">${escapeHtml(s.label || s.code)}${s.note ? `<br><span class="bindcaption">${escapeHtml(i18n(s.note))}</span>` : ''}</span>
+      ${model || diagList.length ? `<section><details data-h="details"><summary>${i18n('Details')}</summary>
+        ${model ? `<div class="row"><span class="rlabel">${i18n('Model')}</span><span class="rval">${escapeHtml(model)}</span></div>` : ''}
+        ${diagList.map(s => `<div class="row"><span class="rlabel">${escapeHtml(s.label || s.code)}${s.note ? `<br><span class="bindcaption">${escapeHtml(i18n(s.note))}</span>` : ''}</span>
           <span class="rval"><b id="m_sn_${escapeHtml(s.code)}">\u2014</b> ${escapeHtml(unitOf(s))}</span></div>`).join('')}
-        <div class="bindcaption" style="margin-top:8px">${i18n('Raw state')}</div><pre class="raw" id="m_raw">\u2014</pre></details></section>
+        </details></section>` : ''}
     </div>`;
 
   const vp = md.querySelector('[data-vpage]');
@@ -298,14 +295,13 @@ function deviceKind(d){
   if(has('power') && has('energy')) return i18n('Energy meter');
   return catLabel(d.category);
 }
-function deviceVia(d){
+function deviceVia(d){                                               // how it is connected, in the words a family knows
   if(d.transport === 'tizen') return 'Samsung';
   if(d.transport === 'webos') return 'LG';
-  if(d.transport === 'voice') return '';      // its kind says it already
-  if(d.transport === 'z2m') return i18n('Zigbee');
-  if(d.ir_appliance || d.transport === 'ir'){ const b = d.ir_via || d.ir_blaster; return b ? i18n('infrared via {0}', (BY_ID[b] || {}).name || b) : i18n('infrared'); }
-  if(d.transport === 'mqtt') return d.esphome ? i18n('ESPHome over Wi-Fi') : 'MQTT';
-  return d.transport || '';
+  if(d.transport === 'z2m') return 'Zigbee';
+  if(d.ir_appliance || d.transport === 'ir') return i18n('IR');
+  if(d.transport === 'mqtt') return 'Wi-Fi';
+  return '';                                                         // a voice satellite, a plug-in's own way: its kind says it
 }
 const VIRTUAL_PAGE = {person: 'family', presence: 'family', tag: 'nfc'};
 function virtualWhat(d){                                            // what a virtual device is, in words, with its state now
@@ -320,9 +316,7 @@ function virtualWhat(d){                                            // what a vi
 function whatIsHTML(d){
   if(d.virtual) return `<div class="whatis" id="m_what"><b>${escapeHtml(virtualWhat(d))}</b>
     <button class="dlg-btn" data-vpage="${escapeHtml(VIRTUAL_PAGE[d.virtual] || 'devices')}" style="margin-left:8px;padding:2px 10px;font-size:12px">${escapeHtml(i18n('Open'))}</button><div class="wrule" id="m_what_rule"></div></div>`;
-  const model = [d.vendor, d.model].filter(Boolean).join(' ') + (d.description ? (d.vendor || d.model ? ' · ' : '') + i18n(d.description) : '');   // a plug-in's words are translated
-  return `<div class="whatis" id="m_what"><b>${escapeHtml(deviceKind(d))}</b>${deviceVia(d) ? ' · ' + escapeHtml(deviceVia(d)) : ''}`
-    + (model ? `<div class="wmodel">${escapeHtml(model)}</div>` : '') + `<div class="wrule" id="m_what_rule"></div></div>`;
+  return `<div class="whatis" id="m_what"><div class="wrule" id="m_what_rule"></div></div>`;     // filled when a rule uses it
 }
 const ROLE_LABELS = {trigger:i18n('trigger'), condition:i18n('condition'), action:i18n('action')};
 async function loadDeviceRules(devId){
@@ -396,6 +390,14 @@ function gestureLabel(g){
   return i18n('Button ') + m[1] + (m[2] === 'single' ? '' : ' ' + (GESTURE_LABELS[m[2]] || m[2]));
 }
 
+// a press in the log in words: a known gesture, a numbered button's, a plug-in's own word; anything else is a "press"
+function pressWord(v){
+  const g = String(v == null ? '' : v);
+  if(GESTURE_LABELS[g]) return GESTURE_LABELS[g];
+  if(/^\d+_./.test(g)) return gestureLabel(g);
+  const t = i18n('gesture:' + g);
+  return t === 'gesture:' + g ? i18n('press') : t;
+}
 function sensorBindControls(d, C){
   return C.sensors.filter(s => s.code!=='battery' && s.code!=='linkquality');
 }
@@ -412,9 +414,8 @@ async function loadEventsLog(id){
     box.innerHTML = items.slice().reverse().map(ev => {
       const dt = new Date(ev.ts*1000);
       const time = dt.toTimeString().slice(0,8);
-      const gloss = GESTURE_LABELS[ev.value] || ev.value;
       const fired = ev.fired ? ` <span class="vchip" style="background:#1d4d3a">${icon('play', 12)} ${escapeHtml(ev.fired)}</span>` : '';
-      return `<div class="ev">${time} \u2014 <b>${escapeHtml(ev.code)}</b><span class="vchip">${escapeHtml(String(gloss))}</span>${fired}</div>`;
+      return `<div class="ev">${time} \u2014 <span class="vchip">${escapeHtml(pressWord(ev.value))}</span>${fired}</div>`;
     }).join('');
   }catch(e){
     if(!gone()) box.innerHTML = `<span style="color:var(--bad)">${i18n('Error:')} ${escapeHtml(e.message)}</span>`;
@@ -450,11 +451,11 @@ function updateModal(){
       e.tabIndex = life === 'offline' ? -1 : 0;
     }
   }
-  if(onEl) onEl.innerHTML = life === 'live'
-    ? `<span style="color:var(--ok)">\u25cf ${i18n('online')}</span>`
+  if(onEl && !d.virtual) onEl.innerHTML = '\u00b7 ' + (life === 'live'
+    ? `<span style="color:var(--ok)">${i18n('online')}</span>`
     : life === 'waiting'
-    ? `<span style="color:var(--dim)">\u25cf ${i18n('waiting for report')}</span>`
-    : `<span style="color:var(--bad)">\u25cf ${st.offline_since ? i18n('offline since') + ' ' + hhmm(st.offline_since) : i18n('offline')}</span>`;
+    ? `<span style="color:var(--dim)">${i18n('waiting for report')}</span>`
+    : `<span style="color:var(--bad)">${st.offline_since ? i18n('offline since') + ' ' + hhmm(st.offline_since) : i18n('offline')}</span>`);
 
   for(const ctl of d.controls){
     const val = v[ctl.code];
@@ -491,11 +492,15 @@ function updateModal(){
       if(inp && document.activeElement !== inp && val!=null) inp.value = val;
     }
   }
-  const raw = document.getElementById('m_raw');
-  if(raw) raw.textContent = JSON.stringify(st.raw||{}, null, 2);
   for(const x of _modalSects) if(x.s.update && document.body.contains(x.box)) HomePlugins.safe(x.s.update, x.box, d, st);
 }
 
+// an option of a device setting in words: "enum:<value>" in the dictionary, else the value with spaces
+const ENUM_EN = {previous: 'as before', toggle: 'switch over'};
+function enumWord(opt){
+  const t = i18n('enum:' + opt);
+  return t !== 'enum:' + opt ? t : ENUM_EN[opt] || String(opt).replace(/_/g, ' ');
+}
 function settings_html(d, list){
   let h='';
   for(const s of list){
@@ -509,7 +514,7 @@ function settings_html(d, list){
       h += `<div class="row${adv}"><span class="rlabel">${escapeHtml(s.label)}</span></div>
             <div class="enum${adv?' adv':''}">${
               s.range.map(opt=>`<button data-code="${escapeHtml(s.code)}" data-value="${escapeHtml(opt)}" data-act="set_enum">${
-                escapeHtml((s.labels||{})[opt]||opt)
+                escapeHtml((s.labels||{})[opt] || enumWord(opt))
               }</button>`).join('')
             }</div>`;
     } else if(s.kind==='setting_int'){

@@ -157,11 +157,11 @@ def _core_health() -> list:
     rows = []
     cli = _mqtt_client
     rows.append(health_row("broker", "ok", "Broker") if cli is not None and cli.is_connected() else
-                health_row("broker", "bad", "Broker", "not connected", "Is the mosquitto container running?",
+                health_row("broker", "bad", "Broker", "not connected", "Devices cannot be reached: restart the house", link="restart",
                            cmd="make update; docker compose logs mosquitto"))
     if "settings" in _load_failed:
-        rows.append(health_row("settings", "bad", "Settings", "settings.json cannot be read",
-                               "Fix the file or put back a backup, then restart", link="backups", cmd="make restore FILE=backups/<name>"))
+        rows.append(health_row("settings", "bad", "Settings", "the settings file cannot be read",
+                               "Restore the last good backup", link="backups", cmd="make restore FILE=backups/<name>"))
     for pid, err in sorted(_PLUGIN_ERRORS.items()):
         rows.append(health_row(f"plugin:{pid}", "bad", "Plug-in {0}", "did not load: {1}",
                                "The rooms of the house need it: put it back" if pid in pluginlib.REQUIRED else
@@ -173,7 +173,7 @@ def _core_health() -> list:
         rows.append(health_row("clock", "ok", "Clock", "{0}, time zone {1}", "", (time.strftime("%H:%M"), tz)))
     elif last is not None or _clock_last["error"]:
         rows.append(health_row("clock", "bad", "Clock", "not sent for {0} min: {1}",
-                               "The backend log shows why", (round((time.time() - last) / 60) if last else "-", _clock_last["error"] or "-"),
+                               "Restart the house; the house log says why", (round((time.time() - last) / 60) if last else "-", _clock_last["error"] or "-"),
                                cmd="docker compose logs home; docker compose restart home"))
     try:
         free = shutil.disk_usage(HOUSE).free
@@ -182,7 +182,7 @@ def _core_health() -> list:
     if free is not None:
         gb = round(free / 1e9, 1)
         rows.append(health_row("disk", "ok" if free > 1e9 else "warn" if free > 2e8 else "bad", "Disk",
-                               "{0} GB free", "" if free > 1e9 else "Free some space: old backups, docker images", (gb,),
+                               "{0} GB free", "" if free > 1e9 else "Free some space: delete old backups or files you do not need", (gb,),
                                link="" if free > 1e9 else "backups", cmd="" if free > 1e9 else "docker image prune"))
     items = [b for b in backup.listing(BACKUP_DIR) if "-light" not in b["name"]]
     age = time.time() - items[0]["ts"] if items else None
@@ -195,7 +195,7 @@ def _core_health() -> list:
         how = ("{0} min ago", max(1, round(age / 60))) if age < 3600 else ("{0} h ago", round(age / 3600)) if age < 86400 \
             else ("{0} days old", int(age // 86400))
         rows.append(health_row("backup", "ok" if age < 2 * 86400 else "warn", "Backup", how[0],
-                               "" if age < 2 * 86400 else "Back up now; BACKUP_AT in .env sets a nightly one", (how[1],),
+                               "" if age < 2 * 86400 else "Back up now; the nightly backup did not run, its time is on the Backups page", (how[1],),
                                link="" if age < 2 * 86400 else "backups"))
     day = time.time() - 86400
     _missed_sched[:] = [m for m in _missed_sched if m[2] > day]
@@ -215,7 +215,7 @@ def _core_health() -> list:
     for name, (when, why) in sorted(_TASK_DEATHS.items()):
         if time.time() - when < 3600:              # a task that died lately: it is started again by itself
             rows.append(health_row(f"task:{name}", "warn", "Background task {0}", "died {1} min ago: {2}",
-                                   "It restarts by itself; see the backend log", (name, int((time.time() - when) // 60), why[:120])))
+                                   "It starts again by itself; nothing to do", (name, int((time.time() - when) // 60), why[:120])))
     return rows
 
 

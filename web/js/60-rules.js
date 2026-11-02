@@ -20,7 +20,7 @@ function ruleTitle(r){
       const pa = HomePlugins.ruleAction(t.type);
       return `${who}${g.startsWith('=') ? ' ' : ': '}${g} \u2192 ${(pa && pa.title && HomePlugins.safe(pa.title, t)) || pluginThenTitle(t)}`;
     }
-    return `${who}${g.startsWith('=') ? ' ' : ': '}${g} \u2192 ${t.device_name} ${ACT_LABELS[t.action] || t.action}` + (t.for ? ` ${i18n('for')} ${t.for}${i18n('s')}` : '');
+    return `${who}${g.startsWith('=') ? ' ' : ': '}${g} \u2192 ${t.device_name} ${ACT_LABELS[t.action] || t.action}` + (t.for ? ` ${i18n('for')} ${durWords(t.for)}` : '');
   }
   if(r.kind === 'schedule'){
     const tm = (w.times && w.times[0]) || {}, days = tm.days || [];
@@ -55,16 +55,25 @@ function keyReadings(d, sensors){
   return list.slice(0, pair ? 2 : 1);
 }
 function isDiag(d, s){ return !!(s.advanced || DIAG_CODE.test(s.code || '') || (s.code === 'button' && d && (d.controls || []).some(c => c.code === 'wifi_signal' || c.code === 'uptime'))); }   // an ESP node's boot button
+// a rule's time in words: whole minutes when it is minutes, else seconds
+function durWords(sec){
+  const n = Number(sec) || 0;
+  return n >= 60 && n % 60 === 0 ? i18n('{0} min', n / 60) : n >= 60 ? i18n('{0} min', Math.round(n / 6) / 10) : i18n('{0} s', n);
+}
 function fmtUptime(sec){
   const m = Math.floor(Number(sec) / 60), h = Math.floor(m / 60), dd = Math.floor(h / 24);
   return dd ? i18n('{0} d {1} h', dd, h % 24) : h ? i18n('{0} h {1} min', h, m % 60) : i18n('{0} min', m);
 }
 function unitOf(s){ if(s.code === 'uptime') return ''; const u = i18n(s.unit === 'C' ? '\u00b0C' : s.unit || UNIT_BY_CODE[String(s.code || '').toLowerCase()] || ''); return u && !/^[%\u00b0]/.test(u) ? '\u202f' + u : u; }
+// a yes/no reading in the words of its sensor: [when true, when false] (a contact is true when the door is closed)
+const BOOL_WORDS = {contact: ['closed', 'open'], occupancy: ['someone', 'nobody'], presence: ['someone', 'nobody'],
+  water_leak: ['leak', 'dry'], smoke: ['smoke', 'clear'], gas: ['gas', 'clear'], carbon_monoxide: ['gas', 'clear'],
+  vibration: ['shaking', 'still'], tamper: ['opened', 'whole'], battery_low: ['low', 'fine']};
 function fmtReading(val, dev, code){
   if(val == null) return '\u2014';
   const climate = YDisp.reading(code, val, dev + '/' + code);       // a temperature or a humidity: as every screen shows it
   if(climate) return climate;
-  if(typeof val === 'boolean') return val ? i18n('yes') : i18n('no');
+  if(typeof val === 'boolean'){ const w = BOOL_WORDS[code]; return i18n(w ? w[val ? 0 : 1] : val ? 'yes' : 'no'); }
   const n = typeof val === 'number' ? val : (typeof val === 'string' && val.trim() !== '' && isFinite(+val) ? +val : null);
   if(n === null) return typeof val === 'string' ? i18n(val) : String(val);
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
@@ -84,8 +93,8 @@ function effCat(d){
   if(cs.some(c => c.kind === 'sensor' || c.kind === 'sensor_text')) return 'sensor';
   return cat;
 }
-const CAT_EN = {switch: 'switch', sensor: 'sensor', button: 'button', indicator: 'indicator', other: 'other', climate: 'climate', tv: 'TV',
-                media: 'media', ir: 'IR remote', camera: 'camera'};      // English has no table of its own (and restricted mode drops the tables)
+const CAT_EN = {switch: 'switch', sensor: 'sensor', button: 'button', indicator: 'indicator light', other: 'device', climate: 'air conditioner', tv: 'TV',
+                media: 'media player', ir: 'IR remote', camera: 'camera'};      // English has no table of its own (and restricted mode drops the tables)
 function catLabel(c){ if(!c) return ''; const t = i18n('category:' + c); return t.startsWith('category:') ? CAT_EN[c] || i18n('device') : t; }
 function whenGesture(g, dev){
   if(dev && isNfc(dev)) return g;                 // a tag's name is its own word, never a gesture's ("lock" stays "lock")
@@ -124,7 +133,7 @@ function thenChip(t){
   }
   let act = t.after!=null ? `${i18n('off after')} ${t.after}${i18n('s')}`
           : (ACT_LABELS[t.action]||t.action);
-  if(t.for) act += ` ${i18n('for')} ${t.for}${i18n('s')}`;
+  if(t.for) act += ` ${i18n('for')} ${durWords(t.for)}`;
   return `${escapeHtml(t.device_name)} ${escapeHtml(act)}`;
 }
 function ruleFlowHtml(r){
@@ -373,8 +382,10 @@ function rbTriggerFields(type, rule){
         <select id="rb-scode"></select></div>
       <div class="rb-row"><label>${i18n('When')}</label>
         <select id="rb-sedge"></select>
-        <input id="rb-sthr" type="number" step="any" placeholder="${i18n('limit')}" style="width:90px;display:none">
-        <input id="rb-shyst" type="number" step="any" placeholder="${i18n('hyst.')}" style="width:80px;display:none"></div>`;
+        <input id="rb-sthr" type="number" step="any" placeholder="${i18n('limit')}" style="width:90px;display:none"></div>
+      <div id="rb-shyst-box" style="display:none">${advancedHTML(`<div class="rb-row"><label>${i18n('Margin')}</label>
+        <input id="rb-shyst" type="number" step="any" min="0" style="width:80px"></div>
+        <div class="bindcaption">${i18n('How far back past the limit the reading must go before the rule can fire again; empty: the house picks it.')}</div>`)}</div>`;
     const dsel = document.getElementById('rb-sdev');
     const rebuildCode = ()=>{
       const d = BY_ID[dsel.value]; const C = d?controlsOf(d):{};
@@ -393,7 +404,7 @@ function rbTriggerFields(type, rule){
       document.getElementById('rb-sedge').innerHTML = optsHtml(edges, w?w.gesture:'');
       const showThr = numeric;
       document.getElementById('rb-sthr').style.display = showThr?'':'none';
-      document.getElementById('rb-shyst').style.display = showThr?'':'none';
+      document.getElementById('rb-shyst-box').style.display = showThr?'':'none';
       if(w && w.threshold!=null) document.getElementById('rb-sthr').value = w.threshold;
       if(w && w.hyst!=null) document.getElementById('rb-shyst').value = w.hyst;
     };
@@ -431,15 +442,15 @@ function rbActionFields(type, rule){
   const acts = (type==='time') ? [['on',i18n('On')],['off',i18n('Off')]] : ACTIONS;
   const forHtml = (type==='time') ? '' : `
     <div class="rb-row"><label>${i18n('Duration')}</label>
-      <input id="rb-for" type="number" min="0" placeholder="${i18n('0 = permanently')}"
-             style="width:130px" value="${t&&t.for?t.for:''}"> ${i18n('sec')}
-      <select id="rb-retrig" style="display:none">
-        <option value="restart">${i18n('restart')}</option>
+      <input id="rb-for" type="number" min="0" step="any" placeholder="${i18n('empty: stays so')}"
+             style="width:130px" value="${t&&t.for?+(t.for / 60).toFixed(3):''}"> ${i18n('min')}
+      <select id="rb-retrig" style="display:none" title="${i18n('When it is triggered again meanwhile')}">
+        <option value="restart">${i18n('start again')}</option>
         <option value="extend">${i18n('extend')}</option>
-        <option value="ignore">${i18n('ignore')}</option>
+        <option value="ignore">${i18n('leave as is')}</option>
       </select></div>
     <div class="bindcaption" id="rb-forcap" style="display:none">
-      ${i18n('turns on and reverts after N seconds (a repeated trigger follows the rule)')}</div>`;
+      ${i18n('It goes back after this time. Triggered again meanwhile: the time starts again, gets longer, or is left as is.')}</div>`;
   // plug-in targets (a phone to ring, a greeting ...) instead of a device, for button/sensor rules
   const pacts = (type==='button'||type==='nfc'||type==='sensor')
     ? HomePlugins.ruleActions.filter(a => !a.visible || HomePlugins.safe(a.visible)) : [];
@@ -591,7 +602,7 @@ async function rbSave(editRule){
         if(!tgt||!tcode) throw new Error(i18n('pick the target device'));
         body = {target:tgt, code:tcode, action, conditions: rbReadConds()};
         const forEl = document.getElementById('rb-for');
-        const forv = forEl ? +(forEl.value||0) : 0;
+        const forv = forEl ? Math.round(+(forEl.value||0) * 60) : 0;     // minutes on the screen, seconds in the rule
         if(forv>0 && (action==='on'||action==='off')){
           body.for_sec = forv;
           body.retrigger = document.getElementById('rb-retrig').value;

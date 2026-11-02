@@ -1,6 +1,6 @@
-"""Ask the house in the header (the sweep's house, a real page): Ask and a pill field (Search's class) right of the logo;
+"""Ask the house in the header (the sweep's house, a real page): one entry, a pill field (Search's class) right of the logo;
 Enter hands the text to the plug-in that answers (voice) and clears it; a provider's examples drop under the empty
-field and a click sends one; on a phone Ask first opens the field full width under the header."""
+field and a click sends one; a phone has the Ask button instead, which first opens the field full width under the header."""
 import asyncio
 import json
 import pathlib
@@ -15,7 +15,7 @@ SPY = """(() => { window.__asked = []; const a = HomePlugins.ask[0]; window.__re
   a.examples = () => ['Is anyone home?', 'Which lights are on?']; return '{}'; })()"""
 STATE = """JSON.stringify((() => { const v = e => !!e && e.getClientRects().length > 0, s = document.getElementById('askslot');
   const inp = s.querySelector('input'), b = s.querySelector('.askbtn'), logo = document.getElementById('brandtitle').getBoundingClientRect();
-  return {field: v(inp), button: v(b), right: b.getBoundingClientRect().left >= logo.right - 1, asked: window.__asked || [], value: inp.value,
+  return {field: v(inp), button: v(b), right: (v(b) ? b : inp).getBoundingClientRect().left >= logo.right - 1, asked: window.__asked || [], value: inp.value,
           pill: inp.classList.contains('pillfield') && getComputedStyle(inp).borderRadius === getComputedStyle(document.getElementById('navsearch')).borderRadius,
           wide: Math.round(inp.getBoundingClientRect().width), drop: [...s.querySelectorAll('.askdrop button')].map(x => x.textContent),
           modal: Home.modalId ? Home.modalId() : null}; })())"""
@@ -68,7 +68,7 @@ async def _run(ws_url: str, url: str, safe: bool = False) -> dict:
         await asyncio.sleep(0.3)
         out["phone_sent"] = await ev(STATE)
         await call("Emulation.setDeviceMetricsOverride", width=1280, height=800, deviceScaleFactor=1, mobile=False)
-        await ev("(() => { HomePlugins.ask[0].open = window.__realAsk; document.querySelector('#askslot .askbtn').click(); return '{}'; })()")
+        await ev("(() => { HomePlugins.ask[0].open = window.__realAsk; document.querySelector('#askslot form').requestSubmit(); return '{}'; })()")
         await asyncio.sleep(1.5)
         out["real"] = await ev(STATE)
     return out
@@ -81,7 +81,7 @@ def test_ask_the_house_sits_in_the_header(monkeypatch):
     monkeypatch.setattr(ui_sweep, "_cdp", _run)
     r = ui_sweep.sweep()
     w, d = r["wide"], r["drop"]
-    assert w["field"] and w["button"] and w["right"] and w["pill"] and w["asked"] == ["Is anyone home?"] and w["value"] == "", r
+    assert w["field"] and not w["button"] and w["right"] and w["pill"] and w["asked"] == ["Is anyone home?"] and w["value"] == "", r
     assert d["drop"] == ["Is anyone home?", "Which lights are on?"] and r["picked"]["asked"][-1] == "Is anyone home?", r
     p, o, s = r["phone"], r["phone_open"], r["phone_sent"]
     assert p["button"] and not p["field"] and o["field"] and o["wide"] >= 320 and len(o["asked"]) == 2, r

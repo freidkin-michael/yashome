@@ -1,4 +1,4 @@
-"""A device whose room the map sets says so under the grey Room field, with the zone's name, and "Show on the map"
+"""A device whose room the map sets has a grey Room field that says so and "Show on the map" beside it, which
 opens the map tab with that device to focus (the sweep's house, a real page; every device is made map-set)."""
 import asyncio
 import json
@@ -22,7 +22,7 @@ PROBE = """(async () => {
   const d = Home.devices()[0]; if(!d) return '{}';
   Home.openDevice(d.id);
   const b = await wait('#m_room_map'); if(!b) return JSON.stringify({id: d.id, button: false});
-  const out = {id: d.id, button: true, line: document.getElementById('m_room_lock').textContent.trim(),
+  const out = {id: d.id, button: true, line: document.getElementById('m_room').title.trim(), same: document.getElementById('m_room').closest('.row') === b.closest('.row'),
                grey: document.getElementById('m_room').disabled, room: Home.roomOf ? (Home.roomOf(d.id) || '') : ''};
   b.click();
   await new Promise(r => setTimeout(r, 400));
@@ -62,5 +62,5 @@ def test_a_map_set_room_names_its_zone_and_opens_the_map_at_the_device(monkeypat
     monkeypatch.setattr(ui_sweep, "_cdp", _run)
     r = ui_sweep.sweep()
     assert r.get("button") and r["grey"], r
-    assert '"' in r["line"] or "\u00ab" in r["line"], r                       # the zone's name in quotes (a dash when none)
+    assert r["line"] and r["same"], r                                         # the grey field says why; the button in the Room row
     assert r["focus"] in (r["id"], None) and r["tab"] == "p:map" and not r["modal"], r   # None: the map took it already

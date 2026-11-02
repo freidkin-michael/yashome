@@ -20,18 +20,20 @@
   header{padding:14px 18px 6px;display:flex;align-items:center;justify-content:space-between;
          flex-wrap:wrap;row-gap:8px}
   header h1{font-size:28px;margin:0;font-weight:650;letter-spacing:-.3px}
-  #conn{font-size:13px;color:var(--dim)} #conn.live{color:var(--ok)}
+  /* the link to the house: said only while it is lost (or not made yet); a live link is the normal state, nothing to show */
+  #conn{font-size:13px;color:var(--bad)} #conn.live{display:none}
   .conngroup{display:flex;gap:10px;align-items:center;flex-wrap:wrap;row-gap:6px}
   .plugslot{display:inline-flex;gap:8px;align-items:center} .plugslot:empty{display:none}
   /* Ask the house: its button, then a pill field as Search's; a phone opens the field full width under the header */
   .askbar{position:relative;display:flex;align-items:center;gap:8px}
   .askbar .pillfield{width:clamp(150px,18vw,260px)}
+  .askbar .askbtn{display:none}            /* the field is the one entry; a phone shows the button instead (below) */
   .askdrop{position:absolute;left:0;top:calc(100% + 6px);z-index:var(--z-pop);min-width:100%;background:var(--card);border:1px solid var(--line);border-radius:14px;
     box-shadow:0 10px 30px rgba(0,0,0,.5);padding:6px;display:flex;flex-direction:column}
   .askdrop button{background:none;border:0;color:var(--txt);font:inherit;font-size:14px;text-align:left;padding:8px 10px;border-radius:10px;cursor:pointer;white-space:nowrap}
   .askdrop button:hover,.askdrop button:focus-visible{background:var(--card2)}
   @media (max-width:640px){
-    .askbar .pillfield{display:none}
+    .askbar .pillfield{display:none} .askbar .askbtn{display:inline-flex}
     .askbar.open .pillfield{display:block;position:fixed;left:10px;right:10px;top:var(--askt,64px);width:auto;z-index:var(--z-pop)}
     .askbar.open .askdrop{position:fixed;left:10px;right:10px;top:calc(var(--askt,64px) + 46px)}
   }
@@ -51,8 +53,7 @@
     header .dlg-btn{padding:0 12px}
     .conngroup{gap:8px}
     /* the connection state as a dot: the word does not fit a phone header */
-    #conn{font-size:0;width:10px;height:10px;border-radius:50%;background:var(--dim);flex:none}
-    #conn.live{background:var(--ok)}
+    #conn{font-size:0;width:10px;height:10px;border-radius:50%;background:var(--bad);flex:none}
   }
   .askbd{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:var(--z-dialog);display:flex;align-items:center;justify-content:center;padding:16px}
   .askcard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
@@ -250,6 +251,7 @@
   .card.waiting .name, .card.offline .name{-webkit-line-clamp:3} .card.waiting .name::after, .card.offline .name::after{display:block;margin-top:2px}
   .whatis{margin-top:8px;font-size:13px;line-height:1.4;color:var(--dim)} .whatis b{color:var(--txt);font-weight:600}
   .whatis .wmodel,.whatis .wrule{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .whatis .wrule:empty{display:none}
+  .whatis:not(:has(b)):has(.wrule:empty){display:none}     /* nothing to say yet: no empty gap under the name */
   .modal.devoff [data-act="toggle"], .modal.devoff [data-act="set_bool"], .modal.devoff [data-act="bright"],
   .modal.devoff [data-act="set_enum"], .modal.devoff [data-act="set_int"]{pointer-events:none;opacity:.45}
   .card:focus-visible, .dotwrap:focus-visible, .dimpill:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -529,7 +531,7 @@
   /* example questions: two equal columns, one on a phone, the text from the left */
   .askex{display:grid;grid-template-columns:1fr 1fr;gap:8px} .askex > button{width:100%;text-align:left;white-space:normal}
   @media (max-width:640px){ .askex{grid-template-columns:1fr} }
-  .modal .sub{color:var(--dim);font-size:13px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .modal .sub{color:var(--dim);font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   .modal section{padding:18px 0;border-top:1px solid var(--line)}
   .modal section:first-of-type{padding-top:14px;border-top:0}   /* the head already has its line */
   .modal h3{font-size:12px;color:var(--dim);text-transform:uppercase;
@@ -598,6 +600,10 @@
   details summary::before{content:"";display:inline-block;width:6px;height:6px;margin:0 10px 2px 2px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
   details[open] summary::before{transform:rotate(45deg)}
   details summary::-webkit-details-marker{display:none}
+  /* Advanced: rare settings, folded (advancedHTML / Home.advanced) */
+  details.adv{margin-top:6px} details.adv > summary{font-size:13px;padding:6px 0}
+  details.adv > .advbody{padding:2px 0 6px}
+  .stx-news{margin:4px 0 8px;padding-left:18px;font-size:13px;color:var(--dim);max-height:240px;overflow:auto} .stx-news li{margin:2px 0}
 
   .st-back{margin-bottom:10px}
   #install-btn{display:none}   /* the install lives in Settings -> This device; the button only keeps the browser prompt */

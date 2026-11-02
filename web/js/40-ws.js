@@ -16,7 +16,7 @@ function connectWS(){
   let opened = false;
   const retry = ()=>{
     clearInterval(_wsWatch);
-    $('#conn').textContent=i18n('reconnecting\u2026'); $('#conn').classList.remove('live');
+    $('#conn').textContent=i18n('No connection, reconnecting'); $('#conn').title = i18n('What you see may be old until the link comes back.'); $('#conn').classList.remove('live');
     // Refused before it ever opened: ask the API why. A 401 brings up the token prompt. If the
     // API answers, a restart would explain one or two misses; three in a row with a healthy API
     // mean the socket itself is refused -- an Origin the backend does not accept.
@@ -24,7 +24,8 @@ function connectWS(){
       _wsRefused++;
       api('/api/health').then(()=>{
         if(_wsRefused < 3) return;
-        $('#conn').textContent = i18n('refused: see DASHBOARD_ORIGINS'); $('#conn').title = i18n('The live connection was refused although the token is valid: the page is opened under an address the backend does not accept (reverse proxy?). Set DASHBOARD_ORIGINS in .env.');
+        $('#conn').textContent = i18n('No connection: the house does not accept this address'); $('#conn').title = i18n('Open the dashboard by the house\'s usual address. A new address is allowed where the house is installed.');
+        console.warn('live link refused: add this origin to DASHBOARD_ORIGINS in .env');
       }).catch(()=>{});
     }
     const wait = _wsDelay + Math.random() * 500;
@@ -33,7 +34,7 @@ function connectWS(){
   };
   ws.onopen  = ()=>{
     opened = true; _wsRefused = 0;
-    $('#conn').textContent=i18n('online'); $('#conn').title = i18n('online'); $('#conn').classList.add('live');
+    $('#conn').textContent = ''; $('#conn').title = ''; $('#conn').classList.add('live');   // a live link is the normal state: nothing shown
     _wsDelay = 1000; _wsLast = Date.now();
     clearInterval(_wsWatch);
     _wsWatch = setInterval(()=>{
