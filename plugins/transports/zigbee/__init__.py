@@ -65,7 +65,39 @@ _SENSOR_LABELS = {
     "vibration":   ("Vibration", ""),
     "tamper":      ("Tamper", ""),
     "presence":    ("Presence", ""),
+    "pressure":    ("Pressure", ""),
+    "co2":         ("CO2", ""),
+    "voc":         ("Air quality", ""),
+    "pm25":        ("Fine dust", ""),
+    "soil_moisture": ("Soil moisture", ""),
+    "power":       ("Power", ""),
+    "energy":      ("Energy", ""),
+    "voltage":     ("Voltage", ""),
+    "current":     ("Current", ""),
+    "battery_low": ("Battery low", ""),
+    "carbon_monoxide": ("Carbon monoxide", ""),
+    "rain":        ("Rain", ""),
 }
+
+# the name a new device gets from what it is (its exposes), not its model code: the first match wins
+_KIND_TYPES = (("light", "Light"), ("cover", "Curtain"), ("climate", "Thermostat"), ("lock", "Lock"), ("fan", "Fan"),
+               ("switch", "Switch"))
+_KIND_PROPS = (("action", "Wireless button"), ("smoke", "Smoke sensor"), ("water_leak", "Leak sensor"),
+               ("contact", "Door sensor"), ("occupancy", "Motion sensor"), ("presence", "Presence sensor"),
+               ("vibration", "Vibration sensor"), ("temperature", "Thermometer"), ("illuminance", "Light sensor"))
+
+
+def kind_name(exposes) -> str:
+    """'Light', 'Wireless button', 'Door sensor'... from a z2m definition's exposes; '' when nothing is known."""
+    types = {e.get("type") for e in exposes or []}
+    props = {e.get("property") for e in exposes or []}
+    for t, name in _KIND_TYPES:
+        if t in types:
+            return name
+    for p, name in _KIND_PROPS:
+        if p in props:
+            return name
+    return "Sensor" if props - {None, "linkquality", "battery"} else ""
 
 
 def _cli():
@@ -511,6 +543,7 @@ def _on_join_event(data):
             "model": defn.get("model") or cur.get("model"),
             "vendor": defn.get("vendor") or cur.get("vendor"),
             "description": defn.get("description") or cur.get("description"),
+            "kind": kind_name(defn.get("exposes")) or cur.get("kind") or "",
         })
         if cur.get("interview") != "done":
             cur["interview"] = interview
@@ -694,6 +727,7 @@ def pair_status():
                 "ieee": ieee, "friendly_name": fn,
                 "model": info.get("model"), "vendor": info.get("vendor"),
                 "description": info.get("description"),
+                "kind": info.get("kind") or "",
                 "interview": info.get("interview"),
                 "registered": bool(reg),
                 "name": (reg or {}).get("name", fn),
@@ -720,7 +754,8 @@ def pair_add(body: PairAdd):
     done = wait_devices(lambda: want in core.DEVICES and (want == cur or cur not in core.DEVICES))
     dev = core.DEVICES.get(want)
     if not done or not dev or dev.get("transport") != TRANSPORT:
-        raise HTTPException(504 if want != cur else 500, f"device '{want}' did not register -- check z2m / interview")
+        log.warning(f"[z2m] '{want}' did not register (rename or interview)")
+        raise HTTPException(504 if want != cur else 500, "The device did not show up: wait a minute and press again, or pair it again closer to the gateway")
     with _pairing_lock:
         if body.ieee in _pairing_found:
             _pairing_found[body.ieee]["friendly_name"] = want

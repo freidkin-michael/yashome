@@ -1,13 +1,10 @@
 {
   "ru": {
     "Touchmouse": "Тачмаус",
-    "A phone or a wall panel moves the pointer of a TV box or a computer. Each one needs the receiver running (see the plug-in README).": "Телефон или настенная панель двигают курсор ТВ-приставки или компьютера. На каждом должен работать приёмник (см. README плагина).",
-    "Add a receiver": "Добавить приёмник",
     "id, latin letters: tv-box": "id латиницей: tv-box",
     "name": "имя",
     "address: 192.0.2.30": "адрес: 192.0.2.30",
     "a device": "устройство",
-    "No receivers yet.": "Приёмников пока нет.",
     "A phone as the touchpad of a TV box or a computer": "Телефон как тачпад ТВ-приставки или компьютера",
     "Latin letters: the receiver's id in the house.": "Латинские буквы: id приёмника в доме.",
     "What a phone or a panel shows for this receiver.": "Как приёмник называется на телефоне или панели.",
@@ -21,6 +18,11 @@
     "Address": "Адрес",
     "Id": "Id",
     "Add": "Добавить",
-    "found in the network": "найден в сети"
+    "found in the network": "найден в сети",
+    "A phone or a wall panel moves the pointer of a TV box or a computer. The ones the house found are listed here.": "Телефон или настенная панель двигают курсор ТВ-приставки или компьютера. Найденные домом приёмники перечислены здесь.",
+    "Advanced": "Дополнительно",
+    "Add a receiver by hand: one the house did not find by itself.": "Добавить приёмник вручную: тот, который дом не нашёл сам.",
+    "added by hand": "добавлен вручную",
+    "Nothing found yet: start the receiver on the TV box or the computer (the plug-in guide says how), then open this window again.": "Пока ничего не найдено: запустите приёмник на ТВ-приставке или компьютере (как - сказано в описании плагина), затем откройте это окно снова."
   }
 }

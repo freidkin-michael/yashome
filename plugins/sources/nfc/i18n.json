@@ -26,7 +26,6 @@
   "Off": "Выкл",
   "{name}: the command did not go out": "{name}: команда не ушла",
   "NFC tags": "NFC-метки",
-  "The card keys are not set (NFC_SDM_META_KEY and NFC_SDM_FILE_KEY in .env): no tap is accepted.": "Ключи карт не заданы (NFC_SDM_META_KEY и NFC_SDM_FILE_KEY в .env): ни одно касание не принимается.",
   "A new tag was tapped": "Приложили новую метку",
   "Its name": "Её имя",
   "Add": "Добавить",
@@ -57,6 +56,7 @@
   "A tap starts:": "Касание запускает:",
   "The tag {0} is on the list": "Метка {0} добавлена в список",
   "it is added as \"{0}\", {1} s left": "она добавится как «{0}», осталось {1} с",
-  "No tags yet: press \"+ Add a tag\" and hold the tag to a phone.": "Меток пока нет: нажми «+ Добавить метку» и приложи метку к телефону."
+  "No tags yet: press \"+ Add a tag\" and hold the tag to a phone.": "Меток пока нет: нажми «+ Добавить метку» и приложи метку к телефону.",
+  "Tags do not work yet: the house has no tag keys. Whoever looks after the house sets them (NFC_SDM_META_KEY and NFC_SDM_FILE_KEY in the .env file).": "Метки пока не работают: у дома нет ключей меток. Их задаёт тот, кто обслуживает дом (NFC_SDM_META_KEY и NFC_SDM_FILE_KEY в файле .env)."
  }
 }
