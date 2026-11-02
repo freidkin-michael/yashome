@@ -526,6 +526,8 @@
   .modal h2{margin:0 0 6px;font-size:24px;font-weight:650;letter-spacing:-.3px}
   /* every dialog: no corner x, a footer with the primary button at the bottom right (frameDialog), as wide as its content */
   #md .closebtn, #md .okbtn, #md [data-x="close"], #md [data-w="close"], #md [data-a="close"]{display:none!important}
+  /* a plug-in's dialog puts its content straight into the frame: that content scrolls, the footer stays in sight */
+  #md > :not(.head):not(.body):not(.mfoot){flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
   .modal .mfoot{flex:none;display:flex;justify-content:flex-end;gap:8px;padding:12px 22px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
   .modal .mfoot .dlg-btn{min-width:96px;min-height:44px}
   .modal select{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:12px;min-height:44px;padding:0 12px;font:inherit;font-size:15px;max-width:100%}
