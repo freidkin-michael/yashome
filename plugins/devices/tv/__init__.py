@@ -6,6 +6,8 @@ The remote's keys are the control kind "tv_key" (one stateless control per key, 
 a TV plug-in (webos, tizen) lists the keys its TV takes over the network with key_controls() and gets a press as
 code "key_<name>" through its own transport. The window's remote sends a key over the network when the TV has it,
 else through the TV's IR remote; the TV itself is the webos or the tizen plug-in."""
+import re
+
 from fastapi import HTTPException
 
 import app as core
@@ -35,3 +37,45 @@ def _press(cfg: dict, ctl: dict, val):
 
 
 core.CONTROL_KINDS["tv_key"] = _press
+
+
+_MEDIA_SLOT = {"play": "play", "pause": "pause", "stop": "stop", "rewind": "rew", "fast_forward": "ff"}
+_IR_ALIAS = {"power_on": "on", "poweron": "on", "power_off": "off", "poweroff": "off"}
+
+
+def remote(d: dict, devices: dict) -> list:
+    """A TV's one remote, the same for every make (the dashboard's tv/ui.js and the app's screen): its network keys, its
+    player keys, then the keys of its IR remote the network does not have. [{slot, dev, code, value?, label}]: slot is the
+    place on the remote (KEYS, the player's, an IR key's own), "" = a chip; a press sends value (default true) to dev/code."""
+    ctl = d.get("controls") or []
+    has = {c.get("code") for c in ctl}
+    out, taken = [], set()
+    for c in ctl:
+        if c.get("kind") == "tv_key" and c.get("key") and c["key"] not in taken:
+            taken.add(c["key"])
+            out.append({"slot": c["key"], "dev": d["id"], "code": c["code"], "label": c.get("label") or c["key"]})
+    media = next((c for c in ctl if c.get("code") == "media" and isinstance(c.get("range"), list)), None)
+    for v in (media or {}).get("range") or []:
+        s = _MEDIA_SLOT.get(v)
+        if s and s not in taken:
+            taken.add(s)
+            out.append({"slot": s, "dev": d["id"], "code": "media", "value": v, "label": v})
+    if "mute" in has:
+        taken.add("mute")                                  # its switch is on the card
+    net = bool(taken)
+    own = [(d["id"], c) for c in ctl if c.get("kind") == "ir_press"]
+    hosted = [(a["id"], c) for a in devices.values() if a.get("ir_appliance") and a.get("ir_card") == d["id"]
+              for c in a.get("controls") or [] if c.get("kind") == "ir_press"]
+    for dev, c in own + hosted:
+        k = c.get("icon") if c.get("icon") in _MEDIA_SLOT.values() or c.get("icon") in KEYS else None
+        k = k or _IR_ALIAS.get(str(c.get("code", "")).removeprefix("ir_"), str(c.get("code", "")).removeprefix("ir_"))
+        if k in taken or ("power" in has and (k in ("power", "on", "off") or c.get("icon") in ("power", "on", "off"))):
+            continue                                       # the network has it; power is the card's switch
+        if "input" in has and re.search(r"hdmi|source|input", f"{c.get('code')} {c.get('button') or ''}", re.I):
+            continue                                       # the inputs are the card's list
+        if net and k not in KEYS and k not in _MEDIA_SLOT.values():
+            continue                                       # a network TV: no stray chips of its IR remote
+        taken.add(k)
+        out.append({"slot": k if k in KEYS or k in _MEDIA_SLOT.values() else "", "dev": dev, "code": c["code"],
+                    "label": c.get("label") or c["code"]})
+    return out

@@ -35,6 +35,8 @@ from starlette.concurrency import run_in_threadpool
 
 import app as core
 
+from . import _ui
+
 PLUGIN = {"name": "Family phones", "version": "2.3.0", "icon": "people"}
 
 DB = core.plugin_state_file("family", "family_devices.json")
@@ -126,6 +128,17 @@ def _token_check(tok: str, method: str, path: str) -> bool:
 
 
 core.TOKEN_CHECKS.append(_token_check)
+
+
+def _key_refusal(tok: str, method: str, path: str):
+    """A known phone on a route outside its rights: 403 (not for it), not 401 (its key is fine), so the web screen of a
+    restricted phone does not take a list it may not read for being signed out."""
+    if tok.startswith(PREFIX) and _uid_of(tok) is not None:
+        return "not for this phone"
+    return None
+
+
+core.KEY_REFUSALS.append(_key_refusal)
 
 
 def _token_of(headers, query=None) -> str:
@@ -668,9 +681,11 @@ core.app.add_api_route("/plugins/family/yash.apk", family_apk, methods=["GET", "
 core.open_route(family_apk)
 
 
-_OPEN_FOR_RESTRICTED = {("GET", "/api/health"), ("GET", "/api/family/me"), ("GET", "/api/family/me/app"), ("PUT", "/api/family/me/screen"),
+_OPEN_FOR_RESTRICTED = {("GET", "/api/health"), ("GET", "/api/family/me"), ("GET", "/api/family/me/ui"), ("GET", "/api/family/me/app"), ("PUT", "/api/family/me/screen"),
                         ("PUT", "/api/family/me/widgets"), ("GET", "/api/family/me/pull"), ("POST", "/api/family/me/report")}
-_FILTERED = {"/api/devices", "/api/rooms", "/api/favorites"}
+_FILTERED = {"/api/devices", "/api/rooms", "/api/favorites", "/api/tab_order", "/api/tile_sizes", "/api/rooms/locked"}
+# what the dashboard needs to start on a restricted phone (the web screen): nothing of other devices in them
+_OPEN_FOR_RESTRICTED |= {("GET", "/api/plugins")}
 _OPEN_WS = {("WS", "/ws"), ("WS", "/api/family/live")}
 _DEV_PATH = re.compile(r"^/api/devices/([^/]+)/(status|control)$")
 
@@ -697,6 +712,12 @@ def _trim(path: str, data, rights: dict):
         return [d for d in data if d.get("id") in rights]
     if path == "/api/favorites":
         return [f for f in data if f.get("device") in rights]
+    if path == "/api/tab_order" and isinstance(data, dict):        # {tab: [device ...]}
+        return {t: [x for x in ids if x in rights] for t, ids in data.items() if isinstance(ids, list)}
+    if path == "/api/tile_sizes" and isinstance(data, dict):       # {tab: {device: size}}
+        return {t: {k: v for k, v in m.items() if k in rights} for t, m in data.items() if isinstance(m, dict)}
+    if path == "/api/rooms/locked" and isinstance(data, dict):
+        return {**data, "devices": [x for x in data.get("devices", []) if x in rights]}
     if path == "/api/rooms":
         rooms = [{**r, "devices": [x for x in r.get("devices", []) if x in rights]} for r in data]
         return [r for r in rooms if r["devices"]]
@@ -828,6 +849,15 @@ async def family_me(request: Request):
     if uid is None:
         raise HTTPException(404, "not a family phone")
     return {**_screen_get(uid), "admin": _is_admin(uid)}
+
+
+@core.app.get("/api/family/me/ui")
+def family_me_ui(request: Request, lang: str = ""):
+    """The app's screen for this phone (its token): tabs, cards, items, in the app's language (_ui.py)."""
+    uid = _caller(request)
+    if uid is None:
+        raise HTTPException(404, "not a family phone")
+    return _ui.screen(_rights(uid), _screen_get(uid).get("items") or [], lang)
 
 
 @core.app.get("/api/family/me/app")

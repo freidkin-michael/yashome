@@ -67,7 +67,6 @@
     <string name="lock_none">no lock found</string>
     <string name="lock_sent_lock">Locking&#x2026;</string>
     <string name="lock_sent_unlock">Unlocking&#x2026;</string>
-    <string name="lock_widget_desc">The house lock: state and one tap</string>
     <string name="remote_whole">The whole remote</string>
     <string name="ac_whole">The whole AC card</string>
     <string name="ac_is_on">Switched on</string>
@@ -180,4 +179,10 @@
     <string name="guest_flood_title">Too many entry requests</string>
     <string name="guest_flood_text">Requests are paused until %1$s. Nobody got in.</string>
     <string name="guest_text_many">%1$d browsers ask to come in - latest code %2$s</string>
+    <string name="mouse_rew">Rewind</string>
+    <string name="mouse_playpause">Play/Pause</string>
+    <string name="mouse_ff">Fast forward</string>
+    <string name="mouse_voldown">Volume down</string>
+    <string name="mouse_mute">Mute</string>
+    <string name="mouse_volup">Volume up</string>
 </resources>

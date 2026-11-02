@@ -20,7 +20,8 @@ import org.json.JSONObject
  * (power row, 3x3 d-pad, volume, channels, media, colours, the rest as chips), icons from IR_ICON.
  */
 object Remote {
-    data class Key(val code: String, val label: String)
+    /** slot: the place the house names for it ("" = a chip); null = found from its code and label (an IR key). */
+    data class Key(val code: String, val label: String, val slot: String? = null)
 
     private var names: Map<String, String>? = null
 
@@ -43,11 +44,18 @@ object Remote {
 
     /** Slot id of a button: by its id (ir_<id>, a TV's key_<id>) when we have an icon for it, else by its label. */
     fun key(ctx: Context, b: Key): String {
+        b.slot?.let { return it }
         if (b.code.startsWith(MEDIA_PREFIX)) return MEDIA_SLOT[b.code.removePrefix(MEDIA_PREFIX)] ?: ""
         val id = b.code.removePrefix("ir_").removePrefix("key_")
         if (icon(ctx, id) != 0 || id == "power" || Regex("^d\\d$").matches(id)) return id
         val l = b.label.trim().lowercase()
         return names(ctx)[l] ?: if (Regex("^\\d$").matches(l)) "d$l" else ""
+    }
+
+    /** A key's words on one line: the type shrinks to fit the key (down to 9sp), what still does not fit ends in "...". */
+    fun oneLine(t: TextView) {
+        t.isSingleLine = true; t.maxLines = 1; t.ellipsize = android.text.TextUtils.TruncateAt.END
+        t.setAutoSizeTextTypeUniformWithConfiguration(9, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
     }
 
     private fun dropped(k: String) = Regex("^d\\d$").matches(k) || k == "del"
@@ -99,7 +107,7 @@ object Remote {
             setPadding(dp(ctx, 12), dp(ctx, 12), dp(ctx, 12), dp(ctx, 12))
             if (power) setColorFilter(Color.WHITE)
         } else Button(ctx, null, android.R.attr.borderlessButtonStyle).apply {
-            text = b.label; isAllCaps = false; setTextColor(if (power) Color.WHITE else ctx.getColor(R.color.brand_text))
+            text = b.label; isAllCaps = false; oneLine(this); setPadding(dp(ctx, 4), 0, dp(ctx, 4), 0); setTextColor(if (power) Color.WHITE else ctx.getColor(R.color.brand_text))
         }
         v.background = keyBg(ctx, power)
         v.contentDescription = b.label
@@ -115,7 +123,7 @@ object Remote {
                 pair.forEach { b ->
                     val res = icon(ctx, key(ctx, b))
                     addView(Button(ctx, null, android.R.attr.borderlessButtonStyle).apply {
-                        text = b.label; isAllCaps = false; setTextColor(ctx.getColor(R.color.brand_text))
+                        text = b.label; isAllCaps = false; isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END; setTextColor(ctx.getColor(R.color.brand_text))
                         if (res != 0) { setCompoundDrawablesRelativeWithIntrinsicBounds(res, 0, 0, 0); compoundDrawablePadding = dp(ctx, 8) }
                         background = keyBg(ctx, false)
                         setOnClickListener { press(b.code, it) }

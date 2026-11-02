@@ -53,14 +53,8 @@
             </intent-filter>
         </activity>
 
-        <!-- The lock outside the app: home-screen widget, its tap host, and the quick-settings tile -->
-        <receiver android:name=".LockWidget" android:exported="false" android:label="@string/lock_title">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/lock_widget_info" />
-        </receiver>
-        <!-- 1x1 channel widget: switch, lock, dimmer or AC; name and icon set when the widget is placed -->
+        <!-- The only home-screen widget, 1x1: switch, lock, dimmer or AC; name and icon set when it is placed
+             (a lock channel taps through LockActionActivity; the lock's quick-settings tile is LockTileService) -->
         <receiver android:name=".DeviceWidget" android:exported="false" android:label="@string/device_widget_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

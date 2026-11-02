@@ -55,7 +55,7 @@ class DeviceWidget : AppWidgetProvider() {
             "lamp" to (R.drawable.wi_lamp_on to R.drawable.wi_lamp_off),
             "plug" to (R.drawable.wi_plug_on to R.drawable.wi_plug_off),
             "fan" to (R.drawable.wi_fan_on to R.drawable.wi_fan_off),
-            "ac" to (R.drawable.ac_on to R.drawable.ac_off),
+            "ac" to (R.drawable.wi_ac_on to R.drawable.wi_ac_off),
             "lock" to (R.drawable.ic_lock_closed to R.drawable.ic_lock_open),
             "door" to (R.drawable.wi_door_open to R.drawable.wi_door_closed),
             "gate" to (R.drawable.wi_gate_open to R.drawable.wi_gate_closed),
@@ -67,12 +67,12 @@ class DeviceWidget : AppWidgetProvider() {
         // pairs are (active, idle); a locked lock shows these closed
         private val OPENISH = setOf("door", "gate", "garage")
         // drawn in the dashboard's dark text colour: tinted white on the widget
-        val TINTED = setOf(R.drawable.ac_on, R.drawable.ac_off, R.drawable.ac_fan, R.drawable.ac_auto)
+        val TINTED = setOf(R.drawable.ac_fan, R.drawable.ac_auto)
         private val MODES = mapOf("cool" to R.drawable.ac_cool, "heat" to R.drawable.ac_heat,
             "dry" to R.drawable.ac_dry, "fan" to R.drawable.ac_fan, "auto" to R.drawable.ac_auto)
         private val HINTS = listOf(listOf("lamp", "light") to "lamp", listOf("boiler", "heater") to "boiler",
             listOf("tv") to "tv", listOf("fan") to "fan", listOf("plug", "socket") to "plug", listOf("gate") to "gate",
-            listOf("garage") to "garage", listOf("door") to "door", listOf("water", "valve", "tap") to "water")
+            listOf("garage") to "garage", listOf("conditioner", "aircon") to "ac", listOf("door") to "door", listOf("water", "valve", "tap") to "water")
 
         fun defaultIcon(kind: String, label: String): String = when (kind) {
             KIND_LOCK -> "lock"; KIND_DIMMER -> "lamp"; KIND_AC -> "ac"
@@ -194,7 +194,7 @@ class DeviceWidget : AppWidgetProvider() {
             val on = if (live) onOf(pk, v) else null
             val key = pk.icon.ifEmpty { defaultIcon(pk.kind, pk.label) }
             val icon = if (pk.kind == KIND_AC && key == "ac")
-                (if (on == false) R.drawable.ac_off else MODES[v.optString(pk.mode)] ?: R.drawable.ac_on)
+                (if (on == false) R.drawable.wi_ac_off else MODES[v.optString(pk.mode)] ?: R.drawable.wi_ac_on)
             else iconRes(key, pk.kind, on ?: (pk.kind == KIND_LOCK))
             val bg = when {
                 on == null -> R.drawable.widget_bg_off
@@ -311,7 +311,6 @@ class DeviceWidget : AppWidgetProvider() {
         fun watched(ctx: Context): JSONArray {
             val seen = LinkedHashSet<Pair<String, String>>()
             for (id in ids(ctx)) { val pk = pick(ctx, id) ?: continue; pk.codes().forEach { seen += pk.dev to it } }
-            Lock.cachedDev(ctx)?.let { dev -> seen += dev to (ctx.getSharedPreferences("yash", Context.MODE_PRIVATE).getString("lock_code", "locked") ?: "locked") }   // the lock widget
             return JSONArray().apply { seen.forEach { (d, c) -> put(JSONObject().put("dev", d).put("code", c)) } }
         }
     }

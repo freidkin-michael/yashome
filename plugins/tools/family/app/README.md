@@ -10,7 +10,7 @@ both with the house's key; the Family page offers the APK.
 |---|---|
 | `build.sh` | builds `app-release.apk` with the house's key and copies it to `plugin-state/family/yash.apk` (or the directory given) |
 | `app/build.gradle.kts` | the app; Firebase only when `app/google-services.json` is there |
-| `app/src/main/java/com/yash/home/` | `SetupActivity` (pairing, test ring, language), `DashboardActivity`, `RingService` (the alarm), `LiveService` (the house link without Firebase), `Link` (pulls and reports; no service, no heartbeat), `PushService` (Firebase pushes), `Cloud` and `SyncWorker` (Firebase side), `HomeApi` (the house's REST and sockets), `NetInfo` (the network report), `AppUpdate` / `UpdateReceiver` (self-update), widgets (`DeviceWidget`, `DeviceWidgetConfig`, `LockWidget`, `WidgetState`), the lock tile (`LockTileService`, `LockActionActivity`), `MouseActivity` (the touchpad; its receivers come from the touchmouse plug-in), `AskActivity` (typed questions and push-to-talk, the voice plug-in), `GuestNotice` and `GuestActivity` (entry requests: the notification and the Allow / Deny screen), `NfcWriteActivity` (writing a door card: the phone carries the house's commands to the card), `DoorTapActivity` (an NFC door card tapped on the phone) |
+| `app/src/main/java/com/yash/home/` | `SetupActivity` (pairing, test ring, language), `DashboardActivity`, `RingService` (the alarm), `LiveService` (the house link without Firebase), `Link` (pulls and reports; no service, no heartbeat), `PushService` (Firebase pushes), `Cloud` and `SyncWorker` (Firebase side), `HomeApi` (the house's REST and sockets), `NetInfo` (the network report), `AppUpdate` / `UpdateReceiver` (self-update), widgets (`DeviceWidget`, `DeviceWidgetConfig`, `WidgetState`), the lock tile (`LockTileService`, `LockActionActivity`), `MouseActivity` (the touchpad; its receivers come from the touchmouse plug-in), `AskActivity` (typed questions and push-to-talk, the voice plug-in), `GuestNotice` and `GuestActivity` (entry requests: the notification and the Allow / Deny screen), `NfcWriteActivity` (writing a door card: the phone carries the house's commands to the card), `DoorTapActivity` (an NFC door card tapped on the phone) |
 | `tools/` | `svg2vd.py`, `ir_icons_to_vd.py`: icons to Android vector drawables |
 
 ## Two ways a ring reaches the phone
@@ -51,17 +51,16 @@ moved to a new phone: pair the new phone by a new QR.
 
 ## Widgets
 
-- **Channel** (`DeviceWidget`, 1x1): one channel per widget, a short name and an icon picked when
+- **Channel** (`DeviceWidget`, 1x1, the only widget; the house lock is a channel with the lock icon): one channel per widget, a short name and an icon picked when
   it is placed (lamp, plug, fan, AC, lock, door, gate, boiler, TV, water, garage, power).
   - switch: a tap flips it (shown at once, then confirmed by the house);
   - lock: open/closed picture; a tap locks at once, unlocking asks first (`LockActionActivity`);
   - dimmer: top third brighter, bottom third dimmer (the house steps a tenth, `"up"`/`"down"`),
     middle on/off of its paired switch; shows the percent. The pair is the house's rule: the switch on
     the same gang (`state_l2` for `brightness_l2`, `state` for `brightness`), else none;
-  - air conditioner (a `mode` setting plus a power switch): the icon is the current mode, a tap
+  - air conditioner (a `mode` setting plus a power switch): the AC icon (a split unit) shows the current mode while on, a tap
     switches power.
   Offline or unknown = a dimmed icon.
-- **Lock** (`LockWidget`): the house lock (a switch with payload LOCKED, found once) as a widget.
 
 Fresh state: the app tells the house which channels its widgets show,
 `PUT /api/family/me/widgets {"items":[{"dev":"...","code":"..."}]}` (when a widget is placed or

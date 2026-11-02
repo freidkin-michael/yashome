@@ -57,11 +57,11 @@ def test_a_phone_sees_and_switches_only_its_rights(phones):
     c = TestClient(core.app)
     ids = {d["id"] for d in c.get("/api/devices", headers=_phone(PHONE)).json()}
     assert ids == {phones["seen"], phones["ctl"]}
-    assert c.get(f"/api/devices/{phones['hidden']}/status", headers=_phone(PHONE)).status_code == 401
+    assert c.get(f"/api/devices/{phones['hidden']}/status", headers=_phone(PHONE)).status_code == 403
     r = c.post(f"/api/devices/{phones['seen']}/control", headers=_phone(PHONE), json={"code": "x", "value": 1})
-    assert r.status_code == 401
+    assert r.status_code == 403                  # a known phone outside its rights: not for it (401 = its key is wrong)
     for path in ("/api/settings", "/openapi.json", "/docs", f"/api/devices/{phones['seen']}/rules"):
-        assert c.get(path, headers=_phone(PHONE)).status_code == 401, path
+        assert c.get(path, headers=_phone(PHONE)).status_code == 403, path
     r = c.get("/api/devices", headers=_phone(PHONE))
     assert "content-security-policy" in {k.lower() for k in r.headers}
     assert c.get("/api/family/me", headers=_phone(PHONE)).json()["uid"] == "kid"
@@ -71,9 +71,9 @@ def test_a_phone_sees_and_switches_only_its_rights(phones):
 def test_only_the_dashboard_pairs_revokes_rings_and_sets_rights(phones, monkeypatch):
     c = TestClient(core.app)
     for path in ("/api/family/revoke", "/api/family/ring"):
-        assert c.post(path, headers=_phone(FULL), json={"name": "kid"}).status_code == 401      # set-up: no use_route
+        assert c.post(path, headers=_phone(FULL), json={"name": "kid"}).status_code == 403      # set-up: no use_route
     assert c.get("/api/family", headers=_phone(FULL)).status_code == 403                         # a GET: the route refuses itself
-    assert c.put("/api/family/kid/rights", headers=_phone(FULL), json={"full": True}).status_code == 401
+    assert c.put("/api/family/kid/rights", headers=_phone(FULL), json={"full": True}).status_code == 403
     monkeypatch.setattr(me, "server_url", lambda: "")
     assert c.post("/api/family/pair", headers=HOUSE, json={"name": "new1"}).status_code == 503
     monkeypatch.setattr(me, "server_url", lambda: "https://house.example")
@@ -487,7 +487,7 @@ def test_the_family_app_is_built_with_the_house_key_made_once(phones, monkeypatc
     for f in ("app.keystore", "app.keystore.pass", "yash.apk"):
         (st_dir / f).unlink(missing_ok=True)
     c = TestClient(core.app)
-    assert c.post("/api/family/app/build", headers=_phone(FULL)).status_code == 401
+    assert c.post("/api/family/app/build", headers=_phone(FULL)).status_code == 403
     assert c.get("/api/family/app/build", headers=_phone(FULL)).status_code == 403
     assert c.post("/api/family/app/build", headers=HOUSE).json()["new_key"] is True
     st = _settle(c, "/api/family/app/build", "done")
@@ -770,7 +770,7 @@ def test_delete_takes_the_rules_that_ring_it_and_a_firebase_only_row(phones, mon
     src = sorted(core.DEVICES)[0]
     assert c.put(f"/api/bindings/{src}/probe/single", headers=HOUSE, json={"target": "kid", "action": "ring"}).status_code == 200
     assert c.put(f"/api/bindings/{src}/probe/double", headers=HOUSE, json={"target": "adult", "action": "ring"}).status_code == 200
-    assert c.post("/api/family/revoke", headers=_phone(FULL), json={"name": "kid"}).status_code == 401
+    assert c.post("/api/family/revoke", headers=_phone(FULL), json={"name": "kid"}).status_code == 403
     monkeypatch.setattr(core, "TOKEN_CHECKS", core.TOKEN_CHECKS + [lambda tok, m, path: tok == "another-key"])
     assert c.post("/api/family/revoke", headers=_phone("another-key"), json={"name": "kid"}).status_code == 403
     assert c.post("/api/family/revoke", headers=HOUSE, json={"name": "kid"}).json() == {"ok": True, "rules": 1}
@@ -958,7 +958,7 @@ def test_only_the_dashboard_updates_and_only_an_older_phone_gets_the_command(pho
     me._versions.clear()
     me._versions.update(kid=30, adult=31)
     c = TestClient(core.app)
-    assert c.post("/api/family/update", headers=_phone(FULL), json={}).status_code == 401
+    assert c.post("/api/family/update", headers=_phone(FULL), json={}).status_code == 403
     r = c.post("/api/family/update", headers=HOUSE, json={}).json()
     assert r["sent"] == ["kid"] and r["skipped"] == ["adult"] and r["code"] == 31
     uid, msg = sent[0]
@@ -1024,11 +1024,11 @@ def test_ask_the_house_and_push_to_talk_are_for_the_house_and_full_access_phones
     c = TestClient(core.app)
     for path, body in (("/api/voice/ask", {"text": "light"}), ("/api/voice/ask/confirm", {"token": "t", "yes": False}),
                        ("/api/voice/chat", {"text": "hi"}), ("/api/voice/tts", {"text": "hi"}), ("/api/voice/say", {"text": "hi", "target": "x"})):
-        assert c.post(path, headers=_phone(PHONE), json=body).status_code == 401, path          # rights of one device: refused by the core
+        assert c.post(path, headers=_phone(PHONE), json=body).status_code == 403, path          # rights of one device: refused by the core
     assert c.post("/api/voice/ask", headers=_phone(FULL), json={"text": "light"}).status_code == 200
     assert c.post("/api/voice/ask", headers=HOUSE, json={"text": "light"}).status_code == 200
-    assert c.post("/api/voice/say", headers=_phone(FULL), json={"text": "hi", "target": "x"}).status_code == 401   # the speakers: the house only (no use_route)
-    assert c.post("/api/voice/ptt?sat=x", headers=_phone(PHONE), content=b"\x00\x00").status_code == 401
+    assert c.post("/api/voice/say", headers=_phone(FULL), json={"text": "hi", "target": "x"}).status_code == 403   # the speakers: the house only (no use_route)
+    assert c.post("/api/voice/ptt?sat=x", headers=_phone(PHONE), content=b"\x00\x00").status_code == 403
 
 
 def test_every_report_of_the_app_is_announced_for_the_voice_card(monkeypatch, people):
@@ -1255,7 +1255,7 @@ def test_a_full_phone_uses_the_house_but_does_not_set_it_up(phones):
                          ("PUT", "/api/map"), ("POST", "/api/resync"), ("PUT", "/api/wiring"), ("WS", "/plugins/zigbee/ui/api")):
         assert not me._allowed(None, method, path), (method, path)
     # the same through the core: refused before the route runs, the house token goes on
-    assert c.post("/api/panels/pairing", headers=_phone(FULL), json={"minutes": 1}).status_code == 401
+    assert c.post("/api/panels/pairing", headers=_phone(FULL), json={"minutes": 1}).status_code == 403
     assert c.post("/api/panels/pairing", headers=HOUSE, json={"off": True}).status_code == 200
     assert c.post(f"/api/devices/{dev}/control", headers=_phone(FULL), json={"code": "nope", "value": True}).status_code != 401
 
@@ -1385,3 +1385,49 @@ def test_a_card_write_goes_to_administrators_only_live_first_else_queued_and_tic
     assert me._pending_cmds["adult"] == [{"cmd": "guest", "id": "g"}, {"cmd": "nfc_write", "sid": "s3"}] and "kid" not in me._pending_cmds
     assert tickles == [("adult", True)] * 2
     assert me._nfc_write_notify in core.NFC_WRITE
+
+
+def test_what_a_restricted_phone_s_dashboard_may_read(phones, monkeypatch):
+    c = TestClient(core.app)
+    seen, hidden = phones["seen"], phones["hidden"]
+    assert c.get("/api/plugins", headers=_phone(PHONE)).status_code == 200
+    for path in ("/api/tab_order", "/api/tile_sizes", "/api/rooms/locked"):
+        r = c.get(path, headers=_phone(PHONE))
+        assert r.status_code == 200, path
+        assert hidden not in json.dumps(r.json()), path
+    assert me._trim("/api/tab_order", {"fav": [hidden, seen]}, {seen: "view"}) == {"fav": [seen]}
+    assert me._trim("/api/tile_sizes", {"fav": {hidden: {"w": 2}, seen: {"w": 1}}}, {seen: "view"}) == {"fav": {seen: {"w": 1}}}
+    assert me._trim("/api/rooms/locked", {"devices": [hidden, seen], "rooms": ["r1"]}, {seen: "view"}) == {"devices": [seen], "rooms": ["r1"]}
+    assert c.get("/api/rules", headers=_phone(PHONE)).status_code == 403                 # rules name other devices: not for it
+    assert c.get("/api/rules", headers=_phone("yfd_unknown")).status_code == 401         # an unknown key: signed out
+
+
+def test_the_app_s_screen_is_made_by_the_house_for_the_phone_s_token(phones, monkeypatch):
+    c = TestClient(core.app)
+    seen, ctl, hidden = phones["seen"], phones["ctl"], phones["hidden"]
+    assert c.get("/api/family/me/ui", headers=_phone("yfd_unknown")).status_code == 401
+    full = c.get("/api/family/me/ui", headers=_phone(FULL)).json()
+    kid = c.get("/api/family/me/ui?lang=ru", headers=_phone(PHONE)).json()
+    assert full["v"] == kid["v"] == 1 and kid["lang"] == "ru"
+    ids = lambda scr: {x["id"] for t in scr["tabs"] for x in t["cards"]}
+    assert ids(kid) <= {seen, ctl} and hidden not in ids(kid) and hidden in ids(full)       # its rights, no more
+    every = {x["id"]: x for t in kid["tabs"] for x in t["cards"]}
+    assert all(i.get("ro") for i in every.get(seen, {}).get("items", []))               # view only: the items say so
+    assert not any(i.get("ro") for i in every.get(ctl, {}).get("items", []))
+    assert next(t for t in kid["tabs"] if t["id"] == "all")["title"] == "Все устройства"   # the app's language  # i18n
+    assert c.get("/api/family/me/ui?lang=../x", headers=_phone(PHONE)).json()["lang"] == core.house_lang()
+    ui = sys.modules["yashome_plugins.family._ui"]
+    d = {"id": "t1", "category": "tv", "controls": [
+        {"kind": "switch", "code": "power", "label": "Power"}, {"kind": "bright", "code": "volume", "label": "Volume", "min": 0, "max": 100},
+        {"kind": "setting_enum", "code": "temp", "label": "Temperature", "range": [str(x) for x in range(16, 31)]},
+        {"kind": "setting_enum", "code": "media", "label": "Media", "range": ["play", "pause"]},
+        {"kind": "switch", "code": "x", "label": "-"},
+        {"kind": "tv_key", "code": "key_ok", "key": "ok", "label": "OK"},
+        {"kind": "ir_press", "code": "ir_power_on", "label": "On", "part": "ir"},
+        {"kind": "ir_press", "code": "ir_tools", "label": "Tools", "part": "ir"}]}
+    items = ui._items(d, "en")
+    assert [i["t"] for i in items] == ["switch", "slider", "slider", "remote"]               # the hidden channel and the media go
+    assert items[2]["values"][0] == "16" and items[1]["pct"] is True
+    assert [(k["slot"], k["code"], k.get("value")) for k in items[3]["keys"]] == \
+        [("ok", "key_ok", None), ("play", "media", "play"), ("pause", "media", "pause")]    # IR power and stray IR chips stay off
+    assert ui.slot("ir_power_on") == "on" and ui.slot("ir_x", "up") == "up" and ui.slot("ir_tools") == ""

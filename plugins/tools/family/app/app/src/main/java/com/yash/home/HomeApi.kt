@@ -118,6 +118,8 @@ object HomeApi {
         catch (e: ApiError) { if (e.code == 404) null else throw e }
 
     /** This phone's own screen (plugins/family); null when the server does not know us as a family phone. */
+    /** The screen the house makes for this phone, in the app's language. */
+    fun ui(ctx: Context, lang: String) = JSONObject(call(req(ctx, "/api/family/me/ui?lang=" + java.net.URLEncoder.encode(lang, "UTF-8")).build()))
     fun me(ctx: Context): JSONObject? = try { JSONObject(call(req(ctx, "/api/family/me").build())) }
         catch (e: ApiError) { if (e.code == 404) null else throw e }
 

@@ -1,12 +1,11 @@
 package com.yash.home
 
-import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.service.quicksettings.TileService
 import org.json.JSONObject
 
-/** The house lock for the widget and the quick tile: found once (a switch with payload LOCKED), then cached. */
+/** The house lock for the quick tile: found once (a switch with payload LOCKED), then cached. */
 object Lock {
     data class Target(val dev: String, val code: String, val name: String)
     data class State(val locked: Boolean?, val door: String?, val online: Boolean)
@@ -51,9 +50,6 @@ object Lock {
     /** Ask the widgets and the tile to redraw after any change we made. */
     fun refreshSurfaces(ctx: Context) {
         markStale(ctx, false)                               // a draw that fails again sets it
-        val am = AppWidgetManager.getInstance(ctx)
-        val ids = am.getAppWidgetIds(ComponentName(ctx, LockWidget::class.java))
-        if (ids.isNotEmpty()) LockWidget.update(ctx, am, ids)
         DeviceWidget.refreshAll(ctx)
         TileService.requestListeningState(ctx, ComponentName(ctx, LockTileService::class.java))
     }

@@ -1,7 +1,5 @@
 package com.yash.home
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import org.json.JSONObject
 
@@ -24,11 +22,6 @@ object WidgetState {
             val upd = values.optJSONObject(pk.dev) ?: continue
             if (DeviceWidget.merge(app, id, pk, upd)) DeviceWidget.draw(app, id)
         }
-        val lock = Lock.cachedDev(app) ?: return
-        if (!values.has(lock)) return
-        val am = AppWidgetManager.getInstance(app)
-        val ids = am.getAppWidgetIds(ComponentName(app, LockWidget::class.java))
-        if (ids.isNotEmpty()) LockWidget.update(app, am, ids)
     }
 
     /** PUT the watched channels to the house; a failure is fine, the periodic update stays.
