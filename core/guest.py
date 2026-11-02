@@ -1,4 +1,4 @@
-# The core: a browser without the front door's login asks to come in; a signed-in screen allows it.
+# The core: a browser without the front door's login asks to come in; an administrator allows it.
 # A part of app.py, run by it in its own namespace in the order of app.CORE_PARTS: the names of the
 # other parts and the imports of app.py are at hand here as they were in one file.
 
@@ -199,9 +199,10 @@ def _guest_ws_trim(websocket, payload):
 WS_FILTERS.append(_guest_ws_trim)
 
 
-def _not_a_guest(request: Request):
-    if request_token(request.headers).startswith(GUEST_PREFIX):
-        raise HTTPException(403, "a guest may not do this")
+def _admin_only(request: Request):
+    """Who answers, lists and revokes guests: an administrator (the house token, an administrator's phone), never a guest key."""
+    if not is_admin_request(request):
+        raise HTTPException(403, "only an administrator of the house may let guests in")
 
 
 @app.get("/guest")
@@ -227,6 +228,11 @@ def guest_request(request: Request):
                             "state": "pending", "token": "", "hours": 0}
     log.warning(f"[guest] a browser asks to come in: code {code}, {ua}, from {ip}")
     _emit({"kind": "guest_request", "device": "", "id": rid, "code": code, "ua": ua, "source": "guest"})
+    for fn in list(GUEST_NOTIFY):                 # the family phones hear of it (no secret goes along)
+        try:
+            fn({"id": rid, "code": code, "ua": ua})
+        except Exception:                         # noqa: BLE001  one hook never stops the request
+            log.exception("[guest] a GUEST_NOTIFY hook failed")
     _bump()
     return {"id": rid, "secret": secret, "code": code}
 
@@ -252,7 +258,7 @@ open_route(guest_request_state)
 
 @app.get("/api/guest")
 def guest_list(request: Request):
-    _not_a_guest(request)
+    _admin_only(request)
     now = time.time()
     with _guest_lock:
         _guest_sweep(now)
@@ -283,7 +289,7 @@ def _guest_pending(rid: str) -> dict:
 @use_route
 @app.post("/api/guest/{rid}/allow")
 def guest_allow(rid: str, body: GuestAllowBody, request: Request):
-    _not_a_guest(request)
+    _admin_only(request)
     if body.hours not in GUEST_HOURS:
         raise HTTPException(400, "hours: 1, 2, 8 or 24")
     if body.scope not in GUEST_SCOPES:
@@ -305,7 +311,7 @@ def guest_allow(rid: str, body: GuestAllowBody, request: Request):
 @use_route
 @app.post("/api/guest/{rid}/deny")
 def guest_deny(rid: str, request: Request):
-    _not_a_guest(request)
+    _admin_only(request)
     with _guest_lock:
         r = _guest_pending(rid)
         r["state"] = "denied"
@@ -317,7 +323,7 @@ def guest_deny(rid: str, request: Request):
 @use_route
 @app.delete("/api/guest/keys/{gid}")
 def guest_revoke(gid: str, request: Request):
-    _not_a_guest(request)
+    _admin_only(request)
     with _guest_lock:
         k = _guest_keys.pop(gid, None)
         if k is None:

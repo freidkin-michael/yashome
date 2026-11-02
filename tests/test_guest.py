@@ -172,15 +172,31 @@ class Guest(unittest.TestCase):
         self.assertEqual(self.c.delete(f"/api/guest/keys/{gid}", headers=bearer(tok)).status_code, 403)
         self.assertEqual(self.poll(req).json(), {"state": "pending"})
 
-    def test_a_full_access_key_may_approve(self):
-        keep = list(app.TOKEN_CHECKS)
-        app.TOKEN_CHECKS.append(lambda tok, m, p: tok == "yfd_phone" and app.is_use_route(m, p))
+    def test_only_an_administrator_key_may_approve(self):
+        keep, admins = list(app.TOKEN_CHECKS), list(app.ADMIN_CHECKS)
+        app.TOKEN_CHECKS.append(lambda tok, m, p: tok in ("yfd_phone", "yfd_admin") and app.is_use_route(m, p))
+        app.ADMIN_CHECKS[:] = [lambda r: 1 / 0, lambda r: app.request_token(r.headers) == "yfd_admin"]
         try:
             req = self.ask()
-            r = self.c.post(f"/api/guest/{req['id']}/allow", json={}, headers=bearer("yfd_phone"))
+            r = self.c.post(f"/api/guest/{req['id']}/allow", json={}, headers=bearer("yfd_phone"))      # full access is not enough
+            self.assertEqual(r.status_code, 403, r.text)
+            self.assertIn("administrator", r.json()["detail"])
+            self.assertEqual(self.c.get("/api/guest", headers=bearer("yfd_phone")).status_code, 403)
+            r = self.c.post(f"/api/guest/{req['id']}/allow", json={}, headers=bearer("yfd_admin"))
             self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(self.c.delete(f"/api/guest/keys/{r.json()['gid']}", headers=bearer("yfd_admin")).status_code, 200)
         finally:
-            app.TOKEN_CHECKS[:] = keep
+            app.TOKEN_CHECKS[:], app.ADMIN_CHECKS[:] = keep, admins
+
+    def test_is_admin_request_the_house_token_or_an_admin_check_never_a_guest_key(self):
+        saved = list(app.ADMIN_CHECKS)
+        app.ADMIN_CHECKS[:] = [lambda r: app.request_token(r.headers) in ("yfd_admin", "yg_never")]
+        req = lambda tok: type("R", (), {"headers": bearer(tok)})()            # noqa: E731
+        try:
+            self.assertTrue(app.is_admin_request(req(HOUSE)) and app.is_admin_request(req("yfd_admin")))
+            self.assertFalse(app.is_admin_request(req("yg_never")) or app.is_admin_request(req("nope")))
+        finally:
+            app.ADMIN_CHECKS[:] = saved
 
     def test_rate_limits(self):
         for _ in range(5):
@@ -212,6 +228,17 @@ class Guest(unittest.TestCase):
         tok = self.key("view")
         with self.c.websocket_connect("/ws?token=" + tok) as ws:
             self.assertNotIn("_meta", json.loads(ws.receive_text()))
+
+    def test_the_notify_hooks_hear_a_request_without_its_secret_and_a_failing_one_stops_nothing(self):
+        heard = []
+        saved = list(app.GUEST_NOTIFY)
+        app.GUEST_NOTIFY[:] = [lambda r: 1 / 0, heard.append]
+        try:
+            req = self.ask()
+        finally:
+            app.GUEST_NOTIFY[:] = saved
+        self.assertEqual(heard, [{"id": req["id"], "code": req["code"], "ua": "Chrome on Windows"}])
+        self.assertNotIn(req["secret"], json.dumps(heard))
 
 
 if __name__ == "__main__":

@@ -68,9 +68,12 @@
         </receiver>
         <receiver android:name=".UpdateReceiver" android:exported="false" />
         <activity android:name=".MouseActivity" android:exported="false" />
-        <activity android:name=".FilmsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <!-- A browser asks to come in: allow or deny (from the entry-request notification) -->
+        <activity android:name=".GuestActivity"
+                  android:exported="false"
+                  android:excludeFromRecents="true"
+                  android:taskAffinity="" />
         <activity android:name=".AskActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".RecordActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".DeviceWidgetConfig" android:exported="true" android:theme="@style/Theme.Yash">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />

@@ -113,19 +113,14 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, 6, 1, R.string.rec_title).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         menu.add(0, 5, 0, R.string.ask_title).setIcon(android.R.drawable.ic_btn_speak_now).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         menu.add(0, 4, 0, R.string.mouse_title).setIcon(R.drawable.ic_mouse).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        menu.add(0, 7, 0, R.string.films_title).setIcon(android.R.drawable.ic_media_play).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         menu.add(0, 1, 0, R.string.refresh)
         menu.add(0, 2, 1, R.string.settings)
         return true
     }
 
-    private var recAvail = false                       // the house has the recognizer service that keeps voice samples
-
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        menu.findItem(6)?.isVisible = recAvail
         menu.removeItem(3)
         if (meKnown) menu.add(0, 3, 0, if (editing) R.string.edit_done else R.string.edit_screen)
             .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
@@ -136,16 +131,13 @@ class DashboardActivity : AppCompatActivity() {
         1 -> { load(); true }
         2 -> { startActivity(Intent(this, SetupActivity::class.java)); true }
         4 -> { startActivity(Intent(this, MouseActivity::class.java)); true }
-        7 -> { startActivity(Intent(this, FilmsActivity::class.java)); true }
         5 -> { startActivity(Intent(this, AskActivity::class.java)); true }
-        6 -> { startActivity(Intent(this, RecordActivity::class.java)); true }
         3 -> { editing = !editing; invalidateOptionsMenu(); render(); true }
         else -> super.onOptionsItemSelected(item)
     }
 
     private fun load() {
         setStatus(getString(R.string.connecting))
-        io.execute { val a = HomeApi.recordAvailable(this); if (a != recAvail) { recAvail = a; runOnUiThread { invalidateOptionsMenu() } } }
         io.execute {
             try {
                 val devs = HomeApi.devices(this)

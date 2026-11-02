@@ -131,9 +131,15 @@ async function load(){
   });
 }
 
-// a member: its name, at home or away (and when it was seen), an update; what can be done with it
+// a member's level in words: administrator, full access, or limited to its devices
+function memberLevel(p){
+  if(!p.server) return '';
+  return p.admin ? i18n('administrator') : p.full ? i18n('full access') : i18n('limited: {0} devices', p.devices_n || 0);
+}
+
+// a member: its name, its level, at home or away (and when it was seen), an update; what can be done with it
 function memberRow(p){
-  const st = [i18n(p.home === true ? 'at home' : p.home === false ? 'away' : 'not known yet'), p.home_ts ? i18n('seen {0}', when(p.home_ts)) : '',
+  const st = [memberLevel(p), i18n(p.home === true ? 'at home' : p.home === false ? 'away' : 'not known yet'), p.home_ts ? i18n('seen {0}', when(p.home_ts)) : '',
               p.update ? i18n('update available') : '',
               p.state !== 'active' ? i18n(p.state) : ''].filter(Boolean).join(' \u00b7 ');
   return `<div class="row" data-member="${esc(p.uid)}" style="flex-wrap:wrap"><span class="rlabel" style="display:flex;gap:10px;align-items:center">${dotOf(p)}<span><b>${esc(p.name || p.uid)}</b><br><span class="bindcaption">${esc(st)}</span></span></span>
@@ -237,13 +243,48 @@ async function pair(again){
   }
 }
 
-// Rights per name: full access, or per device hidden / view / control (checked on the server)
+// Rights per name: a level (administrator, full access, limited) and, limited, per device hidden / view / control (checked on the server)
+const LOCK_CODES = ['lock', 'locked', 'unlock', 'gate', 'door_lock'];
+// a lock or a gate, as the core judges one device: its category, a lock channel, or marked sensitive
+function isLockish(d){
+  return ['lock', 'gate', 'garage'].includes(d.category) || !!d.sensitive ||
+    (d.controls || []).some(c => LOCK_CODES.includes(String(c.code || '').toLowerCase()) || c.kind === 'lock');
+}
+// the house's machinery, not something a person switches: Zigbee repeaters and coordinators, speakers and microphones
+function isService(d){
+  return d.category === 'voice' || /router|repeater|coordinator/i.test(String(d.model || '') + ' ' + String(d.description || ''));
+}
+function rightsSummary(vals){
+  const n = v => vals.filter(x => x === v).length;
+  const parts = [n('control') ? i18n('control: {0}', n('control')) : '', n('view') ? i18n('view: {0}', n('view')) : ''].filter(Boolean);
+  return parts.length ? parts.join(', ') : i18n('all hidden');
+}
+
 async function openRights(uid){
   let r;
   try { r = await Home.api('/api/family/' + encodeURIComponent(uid) + '/rights'); }
   catch(e){ alert(e.message||e); return; }
   const devs = (Home.devices()||[]).filter(d => !d.unsupported).slice().sort((a,b) => String(a.name).localeCompare(String(b.name)));
+  const locks = devs.filter(isLockish);
+  const rooms = {}, other = [];
+  for(const d of devs){
+    if(isLockish(d)) continue;
+    const room = Home.roomOf ? Home.roomOf(d.id) : '';
+    if(!room || isService(d)) other.push(d); else (rooms[room] = rooms[room] || []).push(d);
+  }
   const opt = (v, cur, label) => `<option value="${v}"${cur===v?' selected':''}>${label}</option>`;
+  const sel = (attr, cur) => `<select ${attr}>${opt('', cur, i18n('hidden'))}${opt('view', cur, i18n('view'))}${opt('control', cur, i18n('control'))}</select>`;
+  const row = d => `<div class="row" data-row data-name="${esc(String(d.name || d.id).toLowerCase())}"><span class="rlabel">${esc(d.name || d.id)}</span>${
+    sel(`data-dev="${esc(d.id)}"${isLockish(d) ? ' data-lock' : ''}`, r.devices[d.id] || '')}</div>`;
+  const group = (key, name, list) => `<div class="fr-group" data-group="${esc(key)}">
+      <div class="row" style="gap:8px"><button class="dlg-btn" data-open="${esc(key)}" aria-expanded="false">\u25b8 ${esc(name)}</button>
+        <span class="bindcaption" data-sum style="flex:1"></span><select data-room="${esc(key)}" title="${esc(i18n('Whole room'))}"><option value="mixed" disabled>${esc(i18n('mixed'))}</option>${
+          opt('', '', i18n('hidden'))}${opt('view', '', i18n('view'))}${opt('control', '', i18n('control'))}</select></div>
+      <div data-items hidden style="padding-left:14px">${list.map(row).join('')}</div></div>`;
+  const level = r.admin ? 'admin' : r.full ? 'full' : 'limited';
+  const card = (v, title, text) => `<label class="row fr-card" data-card="${v}" style="cursor:pointer;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:6px 0">
+      <input type="radio" name="fr-level" data-level="${v}"${v === level ? ' checked' : ''}> <span class="rlabel"><b>${esc(i18n(title))}</b><br><span class="bindcaption">${esc(i18n(text))}</span></span></label>`;
+  const roomNames = Object.keys(rooms).sort((a, b) => a.localeCompare(b));
   Home.openModal(`
     <div class="head">
       <button class="closebtn" onclick="Home.closeModal()">\u00d7</button>
@@ -251,28 +292,74 @@ async function openRights(uid){
       <div class="sub">${i18n('What this phone sees and may switch. Hidden devices do not reach the phone at all.')}</div>
     </div>
     <div class="body"><section>
-      <label class="row"><input type="checkbox" id="fr-full" ${r.full?'checked':''}> <span class="rlabel">${i18n('Full access')}</span></label>
-      <div id="fr-list" style="${r.full?'opacity:.4;pointer-events:none':''}">
-        <div class="row" style="gap:6px">
-          <button data-all="">${i18n('all hidden')}</button><button data-all="view">${i18n('all view')}</button><button data-all="control">${i18n('all control')}</button>
-        </div>
-        ${devs.map(d => `<div class="row"><span class="rlabel">${esc(d.name)}</span>
-          <select data-dev="${esc(d.id)}">${opt('', r.devices[d.id]||'', i18n('hidden'))}${opt('view', r.devices[d.id]||'', i18n('view'))}${opt('control', r.devices[d.id]||'', i18n('control'))}</select></div>`).join('')}
+      <div role="radiogroup">
+        ${card('admin', 'Administrator', 'Everything, plus guests and writing cards')}
+        ${card('full', 'Full access', 'Uses everything')}
+        ${card('limited', 'Limited', 'Only what is chosen below')}
+      </div>
+      <div id="fr-everything" class="bindcaption" style="margin:8px 0">${esc(i18n('Sees and switches everything'))}</div>
+      <div id="fr-list">
+        ${devs.length > 15 ? `<input id="fr-search" type="search" placeholder="${esc(i18n('Search devices'))}" style="width:100%;margin:6px 0">` : ''}
+        ${locks.length ? `<div id="fr-locks"><div class="row"><span class="rlabel"><b>${esc(i18n('Locks and the gate'))}</b></span></div>${locks.map(row).join('')}</div>` : ''}
+        ${roomNames.map(n => group('room:' + n, n, rooms[n])).join('')}
+        ${other.length ? group('other', i18n('Other'), other) : ''}
       </div>
       <button class="primary" id="fr-save" style="margin-top:10px">${i18n('Save')}</button>
       <div id="fr-out" class="bindcaption"></div>
     </section></div>`, MID + 'rights');
   const md = document.getElementById('md');
-  md.querySelector('#fr-full').onchange = e => {
-    const l = md.querySelector('#fr-list'); l.style.opacity = e.target.checked ? .4 : 1; l.style.pointerEvents = e.target.checked ? 'none' : '';
+  const chosen = () => (md.querySelector('[data-level]:checked') || {}).dataset.level || 'limited';
+  const showLevel = () => {
+    const lim = chosen() === 'limited';
+    md.querySelector('#fr-list').hidden = !lim;
+    md.querySelector('#fr-everything').hidden = lim;
+    md.querySelectorAll('.fr-card').forEach(c => c.style.borderColor = c.dataset.card === chosen() ? 'var(--accent)' : '');
   };
-  md.querySelectorAll('[data-all]').forEach(b => b.onclick = () => md.querySelectorAll('[data-dev]').forEach(s => s.value = b.dataset.all));
+  md.querySelectorAll('[data-level]').forEach(i => i.onchange = showLevel);
+  // a room's line: its summary and its selector ("mixed" when its devices differ)
+  const sync = g => {
+    const vals = [...g.querySelectorAll('[data-dev]')].map(s => s.value);
+    g.querySelector('[data-sum]').textContent = rightsSummary(vals);
+    const room = g.querySelector('[data-room]');
+    room.value = vals.every(v => v === vals[0]) ? (vals[0] || '') : 'mixed';
+  };
+  const toggle = (g, open) => {
+    g.querySelector('[data-items]').hidden = !open;
+    const b = g.querySelector('[data-open]');
+    b.setAttribute('aria-expanded', String(open));
+    b.textContent = (open ? '\u25be ' : '\u25b8 ') + b.textContent.slice(2);
+  };
+  md.querySelectorAll('.fr-group').forEach(g => {
+    sync(g);
+    g.querySelector('[data-open]').onclick = () => toggle(g, g.querySelector('[data-items]').hidden);
+    g.querySelector('[data-room]').onchange = e => { g.querySelectorAll('[data-dev]').forEach(s => s.value = e.target.value); sync(g); };
+  });
+  md.querySelectorAll('[data-dev]').forEach(s => {
+    s.dataset.prev = s.value;
+    s.onchange = () => {
+      const name = s.closest('[data-row]').querySelector('.rlabel').textContent;
+      if(s.dataset.lock !== undefined && s.value === 'control' && !confirm(i18n('This phone will be able to open {0}. Sure?', name))) s.value = s.dataset.prev;
+      s.dataset.prev = s.value;
+      const g = s.closest('.fr-group'); if(g) sync(g);
+    };
+  });
+  const search = md.querySelector('#fr-search');
+  if(search) search.oninput = () => {
+    const q = search.value.trim().toLowerCase();
+    md.querySelectorAll('[data-row]').forEach(x => x.hidden = !!q && !x.dataset.name.includes(q));
+    md.querySelectorAll('.fr-group').forEach(g => {
+      const hit = [...g.querySelectorAll('[data-row]')].some(x => !x.hidden);
+      g.hidden = !!q && !hit;
+      toggle(g, !!q && hit);
+    });
+  };
+  showLevel();
   md.querySelector('#fr-save').onclick = async () => {
-    const devices = {};
+    const devices = {}, lvl = chosen();
     md.querySelectorAll('[data-dev]').forEach(s => { if (s.value) devices[s.dataset.dev] = s.value; });
     try {
       await Home.api('/api/family/' + encodeURIComponent(uid) + '/rights', {method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({full: md.querySelector('#fr-full').checked, devices})});
+        body: JSON.stringify({admin: lvl === 'admin', full: lvl !== 'limited', devices})});
       Home.closeModal(); load();
     } catch(e){ md.querySelector('#fr-out').textContent = e.message||e; }
   };
@@ -331,8 +418,13 @@ HomePlugins.register({
     {id: 'family.ring', screen: 'family-phone', screenName: 'Family phone', sel: '[data-ring]', title: 'Ring', text: 'Rings the phone now, to find it.'},
     {id: 'family.stop', screen: 'family-phone', screenName: 'Family phone', sel: '[data-stop]', title: 'Stop', text: 'Stops its ringing.'},
     {id: 'family.revoke', screen: 'family-phone', screenName: 'Family phone', sel: '[data-revoke]', title: 'Delete', text: 'After a question its token, its widgets and the rules that ring it go; it can be paired again.'},
-    {id: 'family.rfull', screen: 'family-rights', screenName: 'Rights', sel: '#fr-full', at: 'label', title: 'Full access', text: 'Every device, seen and switched; the list below does not count then.'},
-    {id: 'family.rall', screen: 'family-rights', screenName: 'Rights', sel: '[data-all]', title: 'All at once', text: 'Sets every device below to hidden, view or control; Save keeps it.'},
+    {id: 'family.radmin', screen: 'family-rights', screenName: 'Rights', sel: '[data-level="admin"]', at: 'label', title: 'Administrator', text: 'Full access plus: writes NFC cards and lets guests in (only an administrator\'s phone is asked when a browser wants to come in).'},
+    {id: 'family.rfull', screen: 'family-rights', screenName: 'Rights', sel: '[data-level="full"]', at: 'label', title: 'Full access', text: 'Every device, seen and switched; no list to choose from.'},
+    {id: 'family.rlimited', screen: 'family-rights', screenName: 'Rights', sel: '[data-level="limited"]', at: 'label', title: 'Limited', text: 'Only the devices chosen below, room by room; everything else stays hidden.'},
+    {id: 'family.rsearch', screen: 'family-rights', screenName: 'Rights', sel: '#fr-search', title: 'Search', text: 'Finds a device by its name; the rooms that hold it open.'},
+    {id: 'family.rlocks', screen: 'family-rights', screenName: 'Rights', sel: '#fr-locks', title: 'Locks and the gate', text: 'Kept apart and hidden unless you choose otherwise; Control asks first, the phone could then open it.'},
+    {id: 'family.rroom', screen: 'family-rights', screenName: 'Rights', sel: '[data-room]', title: 'Whole room', text: 'Sets every device of the room to hidden, view or control; open the room to change one device.'},
+    {id: 'family.ropen', screen: 'family-rights', screenName: 'Rights', sel: '[data-open]', title: 'A room', text: 'Opens the room: its devices one by one; closed, the line sums them up.'},
     {id: 'family.rdev', screen: 'family-rights', screenName: 'Rights', sel: '#fr-list [data-dev]', title: 'Per device', text: 'Hidden: it never reaches the phone. View: seen, not switched. Control: seen and switched.'},
     {id: 'family.rsave', screen: 'family-rights', screenName: 'Rights', sel: '#fr-save', title: 'Save', text: 'Saves the rights; the server checks them on every command of the phone.'},
     {id: 'family.rbphone', screen: 'rule-builder', screenName: 'Rule builder', sel: '#rb-fam-phone', title: 'Phone', text: 'The family phone the rule rings.'},

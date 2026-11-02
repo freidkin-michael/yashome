@@ -221,6 +221,9 @@ async def family_list(request: Request):
         p["app"] = _versions.get(p["uid"])
         p["update"] = _needs_update(p["uid"], meta)
         p["presence"] = (d or {}).get("presence") or ""
+        r = (d or {}).get("rights")
+        p["admin"], p["full"] = d is not None and r is None and d.get("admin") is True, d is not None and r is None
+        p["devices_n"] = len(r) if isinstance(r, dict) else 0
     return phones
 
 
@@ -676,6 +679,19 @@ def _rights(uid):
     return _load().get(uid, {}).get("rights") if uid else None
 
 
+def _is_admin(uid) -> bool:
+    """An administrator: marked so and with full access (a new QR with fewer rights leaves the mark without effect)."""
+    d = _load().get(uid) if uid else None
+    return bool(d and d.get("sha256") and d.get("admin") is True and d.get("rights") is None)
+
+
+def _admin_check(request) -> bool:
+    return _is_admin(_caller(request))
+
+
+core.ADMIN_CHECKS.append(_admin_check)
+
+
 def _trim(path: str, data, rights: dict):
     if path == "/api/devices":
         return [d for d in data if d.get("id") in rights]
@@ -742,6 +758,7 @@ core.WS_FILTERS.append(_ws_trim)
 
 class RightsBody(core.Body):
     full: bool
+    admin: bool = False           # full access plus: writes NFC cards and lets guests in (forces full)
     devices: dict[str, str] = {}
 
 
@@ -752,7 +769,7 @@ async def family_rights_get(uid: str, request: Request):
     if d is None:
         raise HTTPException(404, "unknown phone")
     r = d.get("rights")
-    return {"uid": uid, "name": d.get("name", uid), "full": r is None, "devices": r or {}}
+    return {"uid": uid, "name": d.get("name", uid), "full": r is None, "admin": r is None and d.get("admin") is True, "devices": r or {}}
 
 
 @core.app.put("/api/family/{uid}/rights")
@@ -764,13 +781,16 @@ def family_rights_put(uid: str, body: RightsBody, request: Request):
         data = dict(_load())
         if uid not in data:
             raise HTTPException(404, "unknown phone")
-        entry = {k: v for k, v in data[uid].items() if k != "rights"}
-        if not body.full:
+        full = body.full or body.admin
+        entry = {k: v for k, v in data[uid].items() if k not in ("rights", "admin")}
+        if body.admin:
+            entry["admin"] = True
+        if not full:
             entry["rights"] = devs
         data[uid] = entry
         _save(data)
-    core.log.warning(f"[family] rights {uid}: {'full' if body.full else f'{len(devs)} device(s)'}")
-    return {"uid": uid, "full": body.full, "devices": devs if not body.full else {}}
+    core.log.warning(f"[family] rights {uid}: {'administrator' if body.admin else 'full' if full else f'{len(devs)} device(s)'}")
+    return {"uid": uid, "full": full, "admin": body.admin, "devices": devs if not full else {}}
 
 
 class ScreenItem(core.Body):
@@ -807,7 +827,7 @@ async def family_me(request: Request):
     uid = _caller(request)
     if uid is None:
         raise HTTPException(404, "not a family phone")
-    return _screen_get(uid)
+    return {**_screen_get(uid), "admin": _is_admin(uid)}
 
 
 @core.app.get("/api/family/me/app")
@@ -1208,6 +1228,35 @@ def _send_update(uid: str, meta) -> bool:
             return False
     _update_sent[uid] = time.time()
     return True
+
+
+GUEST_CMDS_MAX = 5              # entry requests one phone keeps waiting for its next pull
+
+
+def _guest_send(req: dict) -> None:
+    """A browser asks to come in: every administrator's phone hears it (no other may allow it). The live link first;
+    without one it waits for the next pull and the phone is tickled. Only {id, code, browser}: no secret, and none via Google."""
+    cmd = {"cmd": "guest", "id": str(req.get("id") or ""), "code": str(req.get("code") or ""), "ua": str(req.get("ua") or "")}
+    for uid in list(_load()):
+        if not _is_admin(uid):
+            continue
+        try:
+            if _send_live(uid, cmd):
+                continue
+            q = _pending_cmds.get(uid, [])
+            guests = [c for c in q if c.get("cmd") == "guest" and c.get("id") != cmd["id"]] + [cmd]
+            _pending_cmds[uid] = [c for c in q if c.get("cmd") != "guest"] + guests[-GUEST_CMDS_MAX:]
+            if CLOUD:
+                _tickle(uid, high=True)
+        except Exception as e:                           # noqa: BLE001  one phone never stops the others
+            core.log.warning(f"[family] entry request to {uid}: {type(e).__name__}: {e}")
+
+
+def _guest_notify(req: dict) -> None:
+    threading.Thread(target=_guest_send, args=(dict(req),), daemon=True, name="family-guest").start()
+
+
+core.GUEST_NOTIFY.append(_guest_notify)
 
 
 _seen_warned: dict = {}

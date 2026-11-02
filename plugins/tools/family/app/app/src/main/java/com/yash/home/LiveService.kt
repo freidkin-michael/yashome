@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
 /** Keeps /api/family/live open while the phone reaches the house (its network or a
  *  VPN); a ring or a stop comes down it, the ack goes up; every minute it also says which gateway its
  *  Wi-Fi has and its own version ({"gw": ..., "v": ...}), so the house knows the phone is on its Wi-Fi
- *  even through a VPN; an "update" command fetches the newer APK (AppUpdate). Reconnects with a growing pause, at once
+ *  even through a VPN; an "update" command fetches the newer APK (AppUpdate), a "guest" one shows an entry request (GuestNotice). Reconnects with a growing pause, at once
  *  when a network comes up. Runs only for a house WITHOUT a Firebase sign-in (see enabled): with Firebase the push and the pull do it. */
 class LiveService : Service() {
     companion object {
@@ -62,7 +62,6 @@ class LiveService : Service() {
     private val report = object : Runnable {
         override fun run() {
             if (Lock.stale(this@LiveService)) Lock.refreshSurfaces(this@LiveService)
-            if (RecQueue.pending(this@LiveService) > 0 && ws != null) Thread { RecQueue.flush(this@LiveService) }.start()
             val w = ws
             if (w != null) Thread { w.send(NetInfo.report(this@LiveService).toString()) }.start()     // the name read may wait: not on the main thread
             main.postDelayed(this, 60_000L)
@@ -109,7 +108,6 @@ class LiveService : Service() {
                 main.post { pauseMs = 5_000L; main.removeCallbacks(report); report.run() }
                 Prefs.logEvent(this@LiveService, "live: connected")
                 WidgetState.publish(this@LiveService)
-                Thread { RecQueue.flush(this@LiveService) }.start()      // wake-phrase samples recorded while the house was out of reach
                 Lock.refreshSurfaces(this@LiveService)           // the house may have restarted: widgets that said "no connection" read it again
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -124,6 +122,7 @@ class LiveService : Service() {
                     }
                     "stop" -> RingService.stop(this@LiveService)
                     "update" -> AppUpdate.start(this@LiveService, j)
+                    "guest" -> GuestNotice.show(this@LiveService, j)
                     "state" -> j.optJSONObject("values")?.let { WidgetState.apply(this@LiveService, it, j.optLong("t", 0L)) }
                 }
             }

@@ -171,7 +171,7 @@ COVERED = {"panels": (r"(?:pn|pe)-[a-z][a-z-]*", {"pn-wafter", "pn-wevery"}),
            # connect: its code box by id, a row's fields and buttons by data-; a field's name comes from the server (name, panel)
            "connect": ((r"cn-[a-z][a-z-]*", r"data-(f|rb)=\"([a-z][a-z-]*)\""), {"f:name", "f:panel", "go", "again", "other"}, 10),
            # family: its page, the phone's window, its rights and the rule action by id; the phone's buttons by data-, the header button
-           "family": (r"(?:fam|fr|rb-fam)-[a-z][a-z-]*", {"fam:open", "rights", "repair", "update", "ring", "stop", "revoke", "all", "dev"}, 10)}
+           "family": (r"(?:fam|fr|rb-fam)-[a-z][a-z-]*", {"fam:open", "rights", "repair", "update", "ring", "stop", "revoke", "level:admin", "level:full", "level:limited", "room", "open", "dev"}, 10)}
 
 
 def _controls(src: str, pat: str) -> set:
