@@ -15,7 +15,6 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import org.json.JSONObject
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -97,10 +96,6 @@ class GuestActivity : AppCompatActivity() {
         text = getString(res); textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(18), 0, dp(4))
     }
 
-    /** The house's own words of a refusal ({"detail": ...} after "HTTP 403: "), else null. */
-    private fun houseText(e: Exception): String? =
-        try { JSONObject(e.message.orEmpty().substringAfter(": ")).optString("detail").ifEmpty { null } } catch (_: Exception) { null }
-
     private fun send(allow: Boolean) {
         if (busy) return
         busy = true
@@ -114,7 +109,7 @@ class GuestActivity : AppCompatActivity() {
                 catch (e: HomeApi.ApiError) {
                     when (e.code) {
                         404, 409 -> getString(R.string.guest_gone)
-                        401, 403 -> houseText(e) ?: getString(R.string.guest_forbidden)
+                        401, 403 -> HomeApi.detail(e) ?: getString(R.string.guest_forbidden)
                         else -> getString(R.string.guest_failed, e.code)
                     }
                 }

@@ -160,4 +160,21 @@
     <string name="guest_forbidden">Only an administrator of the house may let guests in</string>
     <string name="guest_offline">No connection to the house</string>
     <string name="guest_failed">The house did not take the answer (%1$d)</string>
+    <string name="ch_nfc_write">Writing door cards</string>
+    <string name="nfcw_title">Write a card</string>
+    <string name="nfcw_menu">Write a card</string>
+    <string name="nfcw_hold">Hold the card to the back of the phone</string>
+    <string name="nfcw_name_hint">The card\'s name</string>
+    <string name="nfcw_start">Write</string>
+    <string name="nfcw_retry">Try again</string>
+    <string name="nfcw_close">Close</string>
+    <string name="nfcw_no_nfc">This phone has no NFC</string>
+    <string name="nfcw_nfc_off">Turn NFC on in the phone\'s settings</string>
+    <string name="nfcw_not_ours">This card cannot be written: an NTAG 424 DNA is needed</string>
+    <string name="nfcw_writing">Writing\u2026 hold the card still</string>
+    <string name="nfcw_step">Step: %1$s</string>
+    <string name="nfcw_lost">The card moved away: hold it still and try again</string>
+    <string name="nfcw_failed">Not written: %1$s</string>
+    <string name="nfcw_offline">No connection to the house</string>
+    <string name="nfcw_done">Written: %1$s</string>
 </resources>

@@ -1233,10 +1233,9 @@ def _send_update(uid: str, meta) -> bool:
 GUEST_CMDS_MAX = 5              # entry requests one phone keeps waiting for its next pull
 
 
-def _guest_send(req: dict) -> None:
-    """A browser asks to come in: every administrator's phone hears it (no other may allow it). The live link first;
-    without one it waits for the next pull and the phone is tickled. Only {id, code, browser}: no secret, and none via Google."""
-    cmd = {"cmd": "guest", "id": str(req.get("id") or ""), "code": str(req.get("code") or ""), "ua": str(req.get("ua") or "")}
+def _admin_send(cmd: dict, same) -> None:
+    """cmd to every administrator's phone: the live link first; without one it waits for the next pull (an older one `same`
+    names is replaced, at most GUEST_CMDS_MAX of its kind) and the phone is tickled. Nothing of the house goes via Google."""
     for uid in list(_load()):
         if not _is_admin(uid):
             continue
@@ -1244,12 +1243,18 @@ def _guest_send(req: dict) -> None:
             if _send_live(uid, cmd):
                 continue
             q = _pending_cmds.get(uid, [])
-            guests = [c for c in q if c.get("cmd") == "guest" and c.get("id") != cmd["id"]] + [cmd]
-            _pending_cmds[uid] = [c for c in q if c.get("cmd") != "guest"] + guests[-GUEST_CMDS_MAX:]
+            kind = [c for c in q if c.get("cmd") == cmd["cmd"] and not same(c)] + [cmd]
+            _pending_cmds[uid] = [c for c in q if c.get("cmd") != cmd["cmd"]] + kind[-GUEST_CMDS_MAX:]
             if CLOUD:
                 _tickle(uid, high=True)
         except Exception as e:                           # noqa: BLE001  one phone never stops the others
-            core.log.warning(f"[family] entry request to {uid}: {type(e).__name__}: {e}")
+            core.log.warning(f"[family] {cmd['cmd']} to {uid}: {type(e).__name__}: {e}")
+
+
+def _guest_send(req: dict) -> None:
+    """A browser asks to come in: every administrator's phone hears it (no other may allow it). Only {id, code, browser}: no secret."""
+    cmd = {"cmd": "guest", "id": str(req.get("id") or ""), "code": str(req.get("code") or ""), "ua": str(req.get("ua") or "")}
+    _admin_send(cmd, lambda c: c.get("id") == cmd["id"])
 
 
 def _guest_notify(req: dict) -> None:
@@ -1257,6 +1262,19 @@ def _guest_notify(req: dict) -> None:
 
 
 core.GUEST_NOTIFY.append(_guest_notify)
+
+
+def _nfc_write_send(sid: str) -> None:
+    """The house waits for a card to write: the administrators' phones open their "hold the card" screen. One session at a
+    time: a waiting older one is replaced. Only the session id goes; the keys stay in the house."""
+    _admin_send({"cmd": "nfc_write", "sid": str(sid)}, lambda c: True)
+
+
+def _nfc_write_notify(sid: str) -> None:
+    threading.Thread(target=_nfc_write_send, args=(str(sid),), daemon=True, name="family-nfc-write").start()
+
+
+core.NFC_WRITE.append(_nfc_write_notify)
 
 
 _seen_warned: dict = {}

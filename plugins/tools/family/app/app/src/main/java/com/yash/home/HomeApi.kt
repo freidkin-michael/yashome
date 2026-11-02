@@ -189,6 +189,24 @@ object HomeApi {
         call(req(ctx, "/api/guest/" + enc(id) + (if (allow) "/allow" else "/deny")).post(jsonBody(body)).build())
     }
 
+    /** The house's own words of a refusal ({"detail": ...} after "HTTP 4xx: "), else null. */
+    fun detail(e: Exception): String? =
+        try { JSONObject(e.message.orEmpty().substringAfter(": ")).optString("detail").ifEmpty { null } } catch (_: Exception) { null }
+
+    // ---- writing a door card (plug-in nfc): the house holds the keys, the phone only carries the card's commands ----
+    fun nfcWriteStart(ctx: Context, name: String) =
+        JSONObject(call(req(ctx, "/api/nfc/write/start").post(jsonBody(JSONObject().put("name", name))).build()))
+
+    /** resp = the card's whole answer in hex (null for the first command): the next {apdu_hex, step}, or {done, result}. */
+    fun nfcWriteStep(ctx: Context, sid: String, resp: String?): JSONObject {
+        val body = if (resp == null) JSONObject() else JSONObject().put("resp_hex", resp)
+        return JSONObject(call(req(ctx, "/api/nfc/write/" + enc(sid) + "/step").post(jsonBody(body)).build()))
+    }
+
+    fun nfcWriteState(ctx: Context, sid: String) = JSONObject(call(req(ctx, "/api/nfc/write/" + enc(sid)).build()))
+
+    fun nfcWriteCancel(ctx: Context, sid: String) { call(req(ctx, "/api/nfc/write/" + enc(sid)).delete().build()) }
+
     /** TEMPORARY (rotation guard): one line for the house log. */
     fun note(ctx: Context, text: String) { call(req(ctx, "/api/family/me/note").post(jsonBody(JSONObject().put("text", text.take(300)))).build()) }
 

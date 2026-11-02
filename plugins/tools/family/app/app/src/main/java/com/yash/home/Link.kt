@@ -45,6 +45,7 @@ object Link {
             when (c.optString("cmd")) {
                 "update" -> AppUpdate.start(ctx, c)
                 "guest" -> GuestNotice.show(ctx, c)                      // a browser asks to come in
+                "nfc_write" -> NfcWriteActivity.notify(ctx, c)            // the house waits for a card to write
             }
         }
         ctx.getSharedPreferences("yash", Context.MODE_PRIVATE).edit().putLong("pull_ack", r.optLong("t", 0L)).apply()

@@ -13,12 +13,14 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.Button
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import com.google.firebase.database.DataSnapshot
@@ -50,6 +52,7 @@ class DashboardActivity : AppCompatActivity() {
     private val binders = mutableListOf<(JSONObject) -> Unit>()
     private val touchedAt = mutableMapOf<String, Long>()
     private var meKnown = false                                     // the server knows us as a family phone
+    private var meAdmin = false                                     // an administrator's phone: it may write door cards
     private val myItems = mutableListOf<Pair<String, String>>()     // my screen: (device, code), stored per name
     private var editing = false
     private var query = ""
@@ -122,6 +125,8 @@ class DashboardActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         menu.removeItem(3)
+        menu.removeItem(8)
+        if (meAdmin) menu.add(0, 8, 2, R.string.nfcw_menu).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         if (meKnown) menu.add(0, 3, 0, if (editing) R.string.edit_done else R.string.edit_screen)
             .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
         return true
@@ -133,7 +138,27 @@ class DashboardActivity : AppCompatActivity() {
         4 -> { startActivity(Intent(this, MouseActivity::class.java)); true }
         5 -> { startActivity(Intent(this, AskActivity::class.java)); true }
         3 -> { editing = !editing; invalidateOptionsMenu(); render(); true }
+        8 -> { askCardName(); true }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    /** "Write a card": its name, then the house starts a write session and this phone carries it (NfcWriteActivity). */
+    private fun askCardName() {
+        val field = EditText(this).apply { hint = getString(R.string.nfcw_name_hint); setSingleLine() }
+        AlertDialog.Builder(this).setTitle(R.string.nfcw_menu).setView(field)
+            .setPositiveButton(R.string.nfcw_start) { _, _ ->
+                val name = field.text.toString().trim()
+                if (name.isNotEmpty()) io.execute {
+                    try {
+                        val r = HomeApi.nfcWriteStart(this, name)
+                        main.post { NfcWriteActivity.open(this, r.optString("sid"), r.optString("name", name)) }
+                    } catch (e: Exception) {
+                        val why = HomeApi.detail(e) ?: getString(R.string.nfcw_offline)
+                        main.post { Toast.makeText(this, why, Toast.LENGTH_LONG).show() }
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
     }
 
     private fun load() {
@@ -146,6 +171,7 @@ class DashboardActivity : AppCompatActivity() {
                 val me = try { HomeApi.me(this) } catch (_: Exception) { null }
                 main.post {
                     meKnown = me != null
+                    meAdmin = me?.optBoolean("admin") == true
                     myItems.clear()
                     me?.optJSONArray("items")?.let { a -> for (i in 0 until a.length()) a.getJSONObject(i).let { myItems += it.optString("dev") to it.optString("code") } }
                     invalidateOptionsMenu()

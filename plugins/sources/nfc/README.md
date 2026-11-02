@@ -56,12 +56,14 @@ The card goes on the list under the given name (a card on the list already keeps
 The session (one at a time; it ends 60 s after its last step; nothing secret in any answer or log line):
 
 - `POST /api/nfc/write/start {name}` -> `{sid, name, step, done, result, left}`; every `core.NFC_WRITE` hook gets `sid`.
-  The family plug-in must send `{"cmd": "nfc_write", "sid"}` to the phones of members marked admin only (live socket,
-  else the next pull); that consumer is not written yet.
+  The family plug-in sends `{"cmd": "nfc_write", "sid"}` to the phones of members marked Administrator only (live socket,
+  else the next pull with a high-priority tickle).
 - `POST /api/nfc/write/{sid}/step {}` -> `{apdu_hex, step}`: the first APDU (or the unanswered one again, after a lost reply).
 - `POST /api/nfc/write/{sid}/step {resp_hex}` (the card's whole answer, SW1 SW2 included) -> the next `{apdu_hex}`, or
   `{done: true, result: {ok, step, uid?, error?, listed?}}`.
 - `GET /api/nfc/write/{sid}` (the dashboard's progress), `DELETE /api/nfc/write/{sid}` (cancel).
 
-The phone: on `nfc_write` it opens its "hold the card" screen, connects IsoDep, asks for the first APDU, then loops
-transceive -> step until `done`; a lost card or a 60 s pause ends the session, and the dashboard starts a new one.
+The phone (Yash! `NfcWriteActivity`): on `nfc_write` it shows "Hold the card to the phone"; the notification opens the
+"hold the card" screen. An administrator's phone also has "Write a card" in its own menu (a name, then `start`). The screen
+connects IsoDep (5 s timeout), asks for the first APDU, then loops transceive -> step until `done`, showing the step. A card
+moved away says so and Try again cancels the session and starts a new one with the same name; a 60 s pause ends it.

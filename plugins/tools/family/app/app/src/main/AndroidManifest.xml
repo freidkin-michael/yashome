@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
@@ -71,6 +72,12 @@
         <!-- A browser asks to come in: allow or deny (from the entry-request notification) -->
         <activity android:name=".GuestActivity"
                   android:exported="false"
+                  android:excludeFromRecents="true"
+                  android:taskAffinity="" />
+        <!-- Writing a door card: the phone carries the house's commands to the card (the keys stay in the house) -->
+        <activity android:name=".NfcWriteActivity"
+                  android:exported="false"
+                  android:launchMode="singleTop"
                   android:excludeFromRecents="true"
                   android:taskAffinity="" />
         <activity android:name=".AskActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />

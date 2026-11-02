@@ -277,7 +277,7 @@ async function openRights(uid){
   const row = d => `<div class="row" data-row data-name="${esc(String(d.name || d.id).toLowerCase())}"><span class="rlabel">${esc(d.name || d.id)}</span>${
     sel(`data-dev="${esc(d.id)}"${isLockish(d) ? ' data-lock' : ''}`, r.devices[d.id] || '')}</div>`;
   const group = (key, name, list) => `<div class="fr-group" data-group="${esc(key)}">
-      <div class="row" style="gap:8px"><button class="dlg-btn" data-open="${esc(key)}" aria-expanded="false">\u25b8 ${esc(name)}</button>
+      <div class="row" style="gap:8px"><button class="dlg-btn" data-open="${esc(key)}" aria-expanded="false"><span data-chev style="display:inline-block;transition:transform .15s">${Home.icon('play', 12)}</span> ${esc(name)}</button>
         <span class="bindcaption" data-sum style="flex:1"></span><select data-room="${esc(key)}" title="${esc(i18n('Whole room'))}"><option value="mixed" disabled>${esc(i18n('mixed'))}</option>${
           opt('', '', i18n('hidden'))}${opt('view', '', i18n('view'))}${opt('control', '', i18n('control'))}</select></div>
       <div data-items hidden style="padding-left:14px">${list.map(row).join('')}</div></div>`;
@@ -327,7 +327,7 @@ async function openRights(uid){
     g.querySelector('[data-items]').hidden = !open;
     const b = g.querySelector('[data-open]');
     b.setAttribute('aria-expanded', String(open));
-    b.textContent = (open ? '\u25be ' : '\u25b8 ') + b.textContent.slice(2);
+    b.querySelector('[data-chev]').style.transform = open ? 'rotate(90deg)' : '';
   };
   md.querySelectorAll('.fr-group').forEach(g => {
     sync(g);

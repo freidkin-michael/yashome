@@ -87,6 +87,13 @@ phone is woken by a high-priority, data-less Firebase message. Any other phone n
 notification opens a screen with the code, for how long (1, 2, 8 or 24 hours) and the rights (everything except locks and the
 gate, or look only), and Allow / Deny; the phone answers with its own token (`POST /api/guest/{id}/allow` or `/deny`).
 
+## Writing door cards from a phone
+
+An administrator's phone is the antenna for writing an NTAG 424 DNA door card (plugins/sources/nfc/README.md): when a
+write starts (Settings -> NFC tags, or "Write a card" in the app's menu, shown to administrators only), the house sends
+`{cmd: nfc_write, sid}` the same way as an entry request, to administrators' phones only. The phone relays the card's
+commands; the keys never leave the house.
+
 ## Widgets on the phone
 
 The Yash! app has one home-screen widget, Channel (1x1): a switch, a lock, a dimmer (top third
