@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""yashctl: control the house from a shell through the dashboard's REST API (see `yashctl -h`).
+Exit codes: 0 ok, 1 unhealthy (status, plugins), 2 usage, 3 no such device/room/rule, 4 unreachable, 5 HTTP error."""
+import argparse
+import json
+import os
+import pathlib
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+CHECKOUT = pathlib.Path(os.path.realpath(__file__)).parent.parent
+SWITCHES = {"switch", "setting_bool"}
+NUMBERS = {"bright", "setting_int"}
+TEXTS = {"setting_enum"}
+
+
+class Fail(SystemExit):
+    def __init__(self, code: int, msg: str):
+        super().__init__(f"yashctl: {msg}")
+        self.exit_code = code
+
+
+def read_env(path: pathlib.Path) -> dict:
+    env = {}
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            k, sep, v = line.partition("=")
+            if not sep or not k.strip() or k.lstrip().startswith("#"):
+                continue
+            v = v.strip()
+            if v[:1] in ("'", '"') and v[0] in v[1:]:
+                v = v[1:v.index(v[0], 1)]
+            else:
+                v = v.replace("\t", " ").split(" #", 1)[0].strip()
+            env[k.strip()] = v
+    return env
+
+
+class Api:
+    def __init__(self, url: str, token: str, timeout: float):
+        self.url, self.token, self.timeout = url.rstrip("/"), token, timeout
+
+    def call(self, method: str, path: str, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(self.url + path, data=data, method=method,
+                                     headers={"Authorization": f"Bearer {self.token}",
+                                              "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                raw = r.read()
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            try:
+                detail = json.loads(detail).get("detail", detail)
+            except (ValueError, AttributeError):
+                pass
+            raise Fail(3 if e.code == 404 else 5, f"{method} {path}: HTTP {e.code}: {detail}") from None
+        except (urllib.error.URLError, OSError) as e:
+            raise Fail(4, f"cannot reach {self.url}: {getattr(e, 'reason', e)}") from None
+        try:
+            return json.loads(raw) if raw else None
+        except ValueError:
+            raise Fail(5, f"{method} {path}: the answer is not JSON (is {self.url} the dashboard?)") from None
+
+    def get(self, path):
+        return self.call("GET", path)
+
+    def post(self, path, body):
+        return self.call("POST", path, body)
+
+
+def q(s: str) -> str:
+    return urllib.parse.quote(s, safe="")
+
+
+ON, OFF = ("on", "true", "yes", "1"), ("off", "false", "no", "0")
+
+
+def number(text: str):
+    for conv in (int, float):
+        try:
+            return conv(text)
+        except ValueError:
+            pass
+    return None
+
+
+def value(text: str, kind: str = ""):
+    """The command line's text as the channel wants it: on/off for switches, a number for numbers,
+    the text itself for choices and text; for any other kind a guess (on/off, a number, the text)."""
+    low = text.lower()
+    if kind in SWITCHES:
+        if low in ON + OFF:
+            return low in ON
+        raise Fail(2, f"{text!r}: a switch takes on or off")
+    if kind in NUMBERS:
+        n = number(text)
+        if n is None:
+            raise Fail(2, f"{text!r} is not a number")
+        return n
+    if kind in TEXTS:
+        return text
+    if low in ON[:3] + OFF[:3]:
+        return low in ON
+    n = number(text)
+    return text if n is None else n
+
+
+def show(args, data, lines):
+    if args.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        for line in lines:
+            print(line)
+
+
+def table(rows):
+    if not rows:
+        return []
+    w = [max(len(str(r[i])) for r in rows) for i in range(len(rows[0]))]
+    return ["  ".join(str(c).ljust(w[i]) for i, c in enumerate(r)).rstrip() for r in rows]
+
+
+def find_device(api, ref: str) -> dict:
+    devs = api.get("/api/devices")
+    by_id = [d for d in devs if d["id"] == ref]
+    if by_id:
+        return by_id[0]
+    by_name = [d for d in devs if d["name"].lower() == ref.lower()]
+    if len(by_name) == 1:
+        return by_name[0]
+    if by_name:
+        raise Fail(3, f"{ref!r} is the name of {len(by_name)} devices: use the id ({', '.join(d['id'] for d in by_name)})")
+    raise Fail(3, f"no device {ref!r}")
+
+
+def fmt(v):
+    if isinstance(v, bool):
+        return "on" if v else "off"
+    return "-" if v is None else str(v)
+
+
+def pct(ctl: dict, raw):
+    lo, hi = ctl.get("min", 0), ctl.get("max", 0)
+    try:
+        return max(0, min(100, round((raw - lo) / ((hi - lo) or 1) * 100)))
+    except TypeError:
+        return None
+
+
+def cmd_status(api, args):
+    h, p = api.get("/api/health"), api.get("/api/plugins")
+    lines = [f"backend  {'ok' if h.get('ok') else 'NOT ok'}   mqtt {'up' if h.get('mqtt') else 'DOWN'}",
+             f"plug-ins {', '.join(m['id'] for m in p['loaded']) or '-'}"]
+    lines += [f"failed   {f['id']}: {f['error']}" for f in p["failed"]]
+    show(args, {"health": h, "plugins": p}, lines)
+    return 0 if h.get("ok") and h.get("mqtt") else 1
+
+
+def cmd_devices(api, args):
+    devs = api.get("/api/devices")
+    if args.room:
+        rooms = [r for r in api.get("/api/rooms") if args.room.lower() in (r["id"].lower(), r["name"].lower())]
+        if not rooms:
+            raise Fail(3, f"no room {args.room!r}")
+        if len(rooms) > 1:
+            raise Fail(3, f"{args.room!r} names {len(rooms)} rooms: use the id ({', '.join(r['id'] for r in rooms)})")
+        keep = set(rooms[0].get("devices", []))
+        devs = [d for d in devs if d["id"] in keep]
+    if args.category:
+        devs = [d for d in devs if d.get("category") == args.category]
+    rows, out = [("ID", "NAME", "CATEGORY", "TRANSPORT", "ONLINE", "STATE")], []
+    for d in sorted(devs, key=lambda d: d["id"]):
+        st = api.get(f"/api/devices/{q(d['id'])}/status") if args.state else {}
+        vals = st.get("values", {}) if st else {}
+        out.append({**d, "status": st} if args.state else d)
+        rows.append((d["id"], d["name"], d.get("category") or "-", d.get("transport") or "-",
+                     fmt(st.get("online")) if args.state else "",
+                     " ".join(f"{k}={fmt(v)}" for k, v in vals.items())[:60]))
+    show(args, out, table(rows))
+    return 0
+
+
+def cmd_show(api, args):
+    d = find_device(api, args.device)
+    st = api.get(f"/api/devices/{q(d['id'])}/status")
+    lines = [f"{d['name']}  ({d['id']}, {d.get('category')}, {d.get('transport')}, "
+             f"{'online' if st.get('online') else 'offline'})"]
+    vals = st.get("values", {})
+    rows = [("CODE", "KIND", "VALUE", "SET AS", "LABEL")]
+    for c in d.get("controls", []):
+        v = vals.get(c["code"])
+        set_as = (f"{pct(c, v)}%" if c.get("kind") == "bright" and pct(c, v) is not None else
+                  "on/off" if c.get("kind") in SWITCHES else "")
+        rows.append((c["code"], c.get("kind", ""), fmt(v), set_as, c.get("label", "")))
+    show(args, {"device": d, "status": st}, lines + table(rows))
+    return 0
+
+
+def control(api, args, d, code, val):
+    r = api.post(f"/api/devices/{q(d['id'])}/control", {"code": code, "value": val})
+    show(args, r, [f"{d['id']}/{code} <- {fmt(val)}"])
+    return 0
+
+
+def channel(d, code) -> dict:
+    ctl = next((c for c in d.get("controls", []) if c["code"] == code), None)
+    if not ctl:
+        codes = ", ".join(c["code"] for c in d.get("controls", [])) or "none"
+        raise Fail(3, f"{d['id']} has no channel {code!r} (it has: {codes})")
+    return ctl
+
+
+def cmd_set(api, args):
+    d = find_device(api, args.device)
+    return control(api, args, d, args.code, value(args.value, channel(d, args.code).get("kind", "")))
+
+
+def cmd_switch(api, args):
+    d = find_device(api, args.device)
+    if args.code is None:                       # power, else the device's one switch (zigbee calls it state)
+        switches = [c["code"] for c in d.get("controls", []) if c.get("kind") in SWITCHES]
+        args.code = "power" if "power" in switches or len(switches) != 1 else switches[0]
+    if channel(d, args.code).get("kind") not in SWITCHES:
+        raise Fail(2, f"{d['id']}/{args.code} is not a switch: use set")
+    if args.cmd != "toggle":
+        return control(api, args, d, args.code, args.cmd == "on")
+    cur = api.get(f"/api/devices/{q(d['id'])}/status").get("values", {}).get(args.code)
+    if not isinstance(cur, bool):
+        raise Fail(2, f"{d['id']}/{args.code} is {fmt(cur)}, not on or off: say on or off")
+    return control(api, args, d, args.code, not cur)
+
+
+def cmd_watch(api, args):
+    """Polls (the backend's own snapshot runs every 2 s too); --events follows the event list instead."""
+    d = find_device(api, args.device)
+    last, seen = None, None
+    try:
+        while True:
+            if args.events:
+                items = api.get(f"/api/devices/{q(d['id'])}/events").get("items", [])
+                new = items if seen is None else [e for e in items if json.dumps(e, sort_keys=True) not in seen]
+                if seen is not None or args.once:
+                    for e in new:
+                        print(json.dumps(e, ensure_ascii=False), flush=True)
+                seen = {json.dumps(e, sort_keys=True) for e in items}
+            else:
+                st = api.get(f"/api/devices/{q(d['id'])}/status")
+                cur = (st.get("online"), st.get("values"))
+                if cur != last:
+                    print(json.dumps(st, ensure_ascii=False) if args.json else (
+                        f"{time.strftime('%H:%M:%S')}  {'online ' if st.get('online') else 'offline'}  "
+                        + " ".join(f"{k}={fmt(v)}" for k, v in st.get("values", {}).items())), flush=True)
+                    last = cur
+            if args.once:
+                return 0
+            time.sleep(args.every)
+    except KeyboardInterrupt:
+        return 0
+
+
+def cmd_rules(api, args):
+    rules = (api.get(f"/api/devices/{q(find_device(api, args.device)['id'])}/rules") if args.device
+             else api.get("/api/rules"))
+    rows = [("ON", "KIND", "ID", "TITLE")] + [("yes" if r.get("enabled") else "no", r.get("kind", ""), r["id"],
+                                              r.get("title", "")) for r in rules]
+    show(args, rules, table(rows))
+    return 0
+
+
+def cmd_rule(api, args):
+    if args.action == "delete" and not args.yes:
+        raise Fail(2, f"rule delete cannot be undone: add --yes (yashctl rule delete --yes '{args.id}')")
+    body = {"id": args.id}
+    if args.action in ("enable", "disable"):
+        body["enabled"] = args.action == "enable"
+        path = "/api/rules/enable"
+    else:
+        path = f"/api/rules/{args.action}"
+    r = api.post(path, body)
+    show(args, r, [f"{args.action} {args.id}: ok"])
+    return 0
+
+
+def cmd_rooms(api, args):
+    rooms = api.get("/api/rooms")
+    rows = [("ID", "NAME", "DEVICES")] + [(r["id"], r["name"], " ".join(r.get("devices", []))) for r in rooms]
+    show(args, rooms, table(rows))
+    return 0
+
+
+def cmd_favorites(api, args):
+    fav = api.get("/api/favorites")
+    rows = [("DEVICE", "CODE", "ALIAS")] + [(f["device"], f["code"], f.get("alias") or "") for f in fav]
+    show(args, fav, table(rows))
+    return 0
+
+
+def _helper_state(api):
+    api.timeout = max(api.timeout, 45)              # the helper fetches from git first
+    return api.get("/api/helper/state")
+
+
+def cmd_plugin(api, args):
+    st = _helper_state(api)
+    names = {p["name"] for p in st["plugins"]}
+    if args.name not in names:
+        raise Fail(3, f"no plug-in {args.name!r}; present: {', '.join(sorted(names))}")
+    on = {p["name"] for p in st["plugins"] if p["on"] and not p.get("requires_on")}
+    on = on | {args.name} if args.action == "on" else on - {args.name}
+    show(args, api.post("/api/helper/plugins", {"on": sorted(on)}),
+         [f"PLUGINS={','.join(sorted(on))} - `yashctl apply` starts it"])
+    return 0
+
+
+def cmd_key(api, args):
+    show(args, api.post("/api/helper/env", {"key": args.key, "value": args.value}),
+         [f"{args.key} {'removed' if args.value == '' else 'set'} - `yashctl apply` uses it"])
+    return 0
+
+
+def cmd_version(api, args):
+    g = _helper_state(api).get("git") or {}
+    lines = [f"{g.get('branch', '?')} {str(g.get('commit', ''))[:7]}: "
+             + (f"{g['behind']} new commits upstream" if g.get("behind") else "up to date")]
+    lines += ([g["fetch_error"]] if g.get("fetch_error") else []) + list(g.get("changelog") or [])
+    show(args, g, lines)
+    return 0
+
+
+def _job_lines(j):
+    return [f"{j.get('kind')}: {j.get('state')}"] + list(j.get("log") or [])[-20:] if j else ["no job"]
+
+
+def cmd_job(api, args):
+    j = api.get("/api/helper/jobs/current").get("job")
+    show(args, j, _job_lines(j))
+    return 0 if not j or j.get("state") != "error" else 1
+
+
+def cmd_run_job(api, args):
+    api.post("/api/helper/jobs", {"kind": args.cmd})
+    if not args.wait:
+        print(f"{args.cmd} started - `yashctl job` follows it")
+        return 0
+    deadline, j = time.monotonic() + 1800, None
+    while time.monotonic() < deadline:
+        time.sleep(3)
+        try:                                        # the job restarts the dashboard: ride over the gap
+            j = api.get("/api/helper/jobs/current").get("job")
+        except Fail:
+            continue
+        if j and j.get("state") != "running":
+            break
+    show(args, j, _job_lines(j))
+    return 0 if j and j.get("state") == "done" else 1
+
+
+def cmd_plugins(api, args):
+    p = api.get("/api/plugins")
+    rows = [("ID", "GROUP", "VERSION", "STATE")] + [
+        (m["id"], m.get("group") or "-", m.get("version") or "-",
+         "loaded" + (f" (required by {m['required_by']})" if m.get("required_by") else "")) for m in p["loaded"]]
+    rows += [(f["id"], "", "", "FAILED: " + f["error"]) for f in p["failed"]]
+    rows += [(n, "", "", "off") for n in p.get("off", [])]
+    show(args, p, table(rows))
+    return 1 if p["failed"] else 0
+
+
+def cmd_events(api, args):
+    d = find_device(api, args.device)
+    ev = api.get(f"/api/devices/{q(d['id'])}/events").get("items", [])
+    show(args, ev, [json.dumps(e, ensure_ascii=False) for e in ev] or ["(no events)"])
+    return 0
+
+
+def cmd_resync(api, args):
+    r = api.post("/api/resync", {})
+    show(args, r, [f"resync: {r.get('asked', 0)} asked, {r.get('devices', 0)} devices mirrored"])
+    return 0
+
+
+def cmd_relink(api, args):
+    if not args.yes:
+        raise Fail(2, f"relink moves every reference of {args.stale!r} onto {args.into!r} and cannot be undone: add --yes")
+    r = api.post("/api/devices/relink", {"stale": args.stale, "into": args.into})
+    show(args, r, [json.dumps(r, ensure_ascii=False)])
+    return 0
+
+
+def parser():
+    p = argparse.ArgumentParser(prog="yashctl", description="Control a Yashome house from a shell: devices, "
+                                "channels, rules, rooms, plug-ins. Token and port come from the checkout's .env.",
+                                epilog="exit codes: 0 ok, 1 unhealthy, 2 usage, 3 not found, 4 unreachable, 5 HTTP error")
+    p.add_argument("--url", help="dashboard URL (default: $YASHOME_URL, else http://127.0.0.1:<DASHBOARD_PORT>)")
+    p.add_argument("--token", help="DASHBOARD_TOKEN; prefer $YASHOME_TOKEN or the .env (an argument shows in ps)")
+    p.add_argument("--dir", help="Yashome checkout whose .env is read (default: $YASHOME_DIR, else this script's)")
+    p.add_argument("--timeout", type=float, default=10, help="seconds per request (default 10)")
+    p.add_argument("--json", action="store_true", help="print the API's JSON instead of a table")
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
+    sub.add_parser("status", help="backend, broker and plug-ins at a glance (exit 1 if not healthy)")
+    s = sub.add_parser("devices", help="list devices")
+    s.add_argument("--room", help="only the devices of this room (id or name)")
+    s.add_argument("--category", help="only this category (switch, sensor, ...)")
+    s.add_argument("--state", action="store_true", help="also fetch each device's online flag and values")
+    s = sub.add_parser("show", help="one device: its channels, their values and how to set them")
+    s.add_argument("device", help="device id or exact name")
+    s = sub.add_parser("set", help="set a channel: on/off for switches, percent 0-100 for brightness, a number, a text")
+    s.add_argument("device")
+    s.add_argument("code", help="channel code (see `show`)")
+    s.add_argument("value", help="yashctl set lamp_1 brightness 50  (50 %%)")
+    for name, what in (("on", "switch a channel on"), ("off", "switch a channel off"),
+                       ("toggle", "flip a channel that is on or off")):
+        s = sub.add_parser(name, help=what + " (default: power, else the device's only switch)")
+        s.add_argument("device")
+        s.add_argument("code", nargs="?")
+    s = sub.add_parser("watch", help="print a device's state whenever it changes (Ctrl-C stops)")
+    s.add_argument("device")
+    s.add_argument("--every", type=float, default=1.0, help="poll period in seconds (default 1)")
+    s.add_argument("--events", action="store_true", help="follow its events (button presses, triggers) instead")
+    s.add_argument("--once", action="store_true", help="print once and exit")
+    s = sub.add_parser("rules", help="list rules (bindings, schedules, auto-offs)")
+    s.add_argument("--device", help="only the rules this device takes part in")
+    s = sub.add_parser("rule", help="run, enable, disable or delete a rule by id")
+    s.add_argument("action", choices=("run", "enable", "disable", "delete"))
+    s.add_argument("id", help="rule id from `yashctl rules`")
+    s.add_argument("--yes", action="store_true", help="needed for delete")
+    sub.add_parser("rooms", help="list rooms and their devices")
+    sub.add_parser("favorites", help="list favourite channels")
+    sub.add_parser("plugins", help="loaded, failed and switched-off plug-ins (exit 1 if one failed)")
+    s = sub.add_parser("plugin", help="switch a plug-in on or off (then `yashctl apply`)")
+    s.add_argument("action", choices=("on", "off"))
+    s.add_argument("name")
+    s = sub.add_parser("key", help="set a plug-in's .env key (its setup/env.example); \"\" removes it")
+    s.add_argument("key")
+    s.add_argument("value")
+    sub.add_parser("version", help="this version and what a new one brings (its CHANGELOG lines)")
+    for name, what in (("apply", "make update: start what you switched on, use the keys you set"),
+                       ("update", "a backup, then git pull and make update"),
+                       ("rollback", "back to the code before the last update (the house files stay)")):
+        s = sub.add_parser(name, help=what)
+        s.add_argument("--wait", action="store_true", help="follow it to the end (exit 1 if it failed)")
+    sub.add_parser("job", help="the last apply / update / rollback and its log (exit 1 if it failed)")
+    s = sub.add_parser("events", help="recent events of a device")
+    s.add_argument("device")
+    sub.add_parser("resync", help="ask every device to report and republish the home/state mirror")
+    s = sub.add_parser("relink", help="move every reference of a vanished id onto a live one")
+    s.add_argument("stale")
+    s.add_argument("into")
+    s.add_argument("--yes", action="store_true", help="needed: it cannot be undone")
+    return p
+
+
+COMMANDS = {"status": cmd_status, "devices": cmd_devices, "show": cmd_show, "set": cmd_set, "on": cmd_switch,
+            "off": cmd_switch, "toggle": cmd_switch, "watch": cmd_watch, "rules": cmd_rules, "rule": cmd_rule,
+            "rooms": cmd_rooms, "favorites": cmd_favorites, "plugins": cmd_plugins, "events": cmd_events,
+            "resync": cmd_resync, "relink": cmd_relink, "plugin": cmd_plugin, "key": cmd_key, "version": cmd_version,
+            "apply": cmd_run_job, "update": cmd_run_job, "rollback": cmd_run_job, "job": cmd_job}
+
+
+def main(argv=None) -> int:
+    args = parser().parse_args(argv)
+    env = read_env(pathlib.Path(args.dir or os.environ.get("YASHOME_DIR") or CHECKOUT) / ".env")
+    token = args.token or os.environ.get("YASHOME_TOKEN") or env.get("DASHBOARD_TOKEN")
+    if not token:
+        raise Fail(2, "no token: set YASHOME_TOKEN, point --dir at a checkout with .env, or give --token")
+    url = args.url or os.environ.get("YASHOME_URL") or f"http://127.0.0.1:{env.get('DASHBOARD_PORT') or 8765}"
+    return COMMANDS[args.cmd](Api(url, token, args.timeout), args)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Fail as e:
+        print(e.code, file=sys.stderr)
+        sys.exit(e.exit_code)

@@ -1,0 +1,11 @@
+#!/bin/sh
+# The CI's lint before every commit (make hooks turns it on): Gitea runs no GitHub workflow, so this is the gate.
+# ruff: $RUFF, else `git config hooks.ruff`, else .venv/bin/ruff, else ruff on the PATH. A commit that must go
+# through anyway: git commit --no-verify.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+ruff=${RUFF:-$(git config hooks.ruff)}
+if [ -z "$ruff" ]; then
+    if [ -x .venv/bin/ruff ]; then ruff=.venv/bin/ruff; else ruff=ruff; fi
+fi
+command -v "$ruff" >/dev/null 2>&1 || { echo "pre-commit: no ruff ($ruff): set RUFF or git config hooks.ruff <path>" >&2; exit 1; }
+out=$(make -s lint RUFF="$ruff" 2>&1) || { echo "$out" | tail -20 >&2; echo "pre-commit: make lint failed (git commit --no-verify to skip)" >&2; exit 1; }
