@@ -1535,12 +1535,12 @@
         if(!box || !list.length) return;
         box.innerHTML = `<div class="bindcaption" style="margin:8px 0 2px">${esc(i18n('What it does'))}</div>` + list.map((r, i) =>
           `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0${r.enabled ? '' : ';opacity:.5'}"><span>${esc(r.text)}</span>
-            <button class="dlg-btn" data-run="${i}" title="${esc(i18n('Do it now'))}" style="padding:2px 10px">\u25b6</button></div>`).join('');
+            <button class="dlg-btn" data-run="${i}" title="${esc(i18n('Do it now'))}" style="padding:2px 10px">${Home.icon('play', 14)}</button></div>`).join('');
         box.querySelectorAll('[data-run]').forEach(b => { b.onclick = async () => {
           b.disabled = true;
-          try { await Home.runRule(list[+b.dataset.run].id); b.textContent = '\u2713'; }
+          try { await Home.runRule(list[+b.dataset.run].id); b.innerHTML = Home.icon('check', 14); }
           catch(e){ b.textContent = '!'; b.title = e.message || String(e); }
-          setTimeout(() => { b.textContent = '\u25b6'; b.disabled = false; }, 1200);
+          setTimeout(() => { b.innerHTML = Home.icon('play', 14); b.disabled = false; }, 1200);
         }; });
       }).catch(() => {});
       sheet.querySelectorAll('[data-ctl]').forEach(b => { b.onclick = () => { const w = switches[+b.dataset.ctl]; b.classList.toggle('on', !w.on); Home.sendControl(w.dev, w.code, !w.on); setTimeout(() => { if(sheet.style.display !== 'none' && sheet.querySelector('[data-ctl]')) itemSheet(it); }, 900); }; });
