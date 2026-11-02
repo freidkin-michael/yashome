@@ -8,7 +8,6 @@ const esc = Home.escapeHtml;
 const J = b => ({method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b)});
 const IN = 'background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font:inherit';
 const KIND = {zigbee: 'Zigbee', esphome: 'ESPHome', yashgen: 'yashGen', lostwifi: 'Lost its Wi-Fi', tablet: 'Android tablet', screen: 'ESP screen'};
-const CATS = ['switch', 'sensor', 'indicator', 'other'];
 const SCAN_EVERY = 40000, FAST = 2000, ESP_EVERY = 6000, KEEP_OPEN = 60000;       // KEEP_OPEN: Zigbee closes after 254 s, the invite after 5 min
 let S = null;                                    // the open window's state; null when closed
 
@@ -64,19 +63,34 @@ async function scan(){
   paint();
 }
 
+// a Zigbee device's default name from what it is ("Wireless button"), numbered when the house has that name already;
+// never the 0x... address z2m names it by
+const RAW = /^0x[0-9a-f]+$/i;
+function zbName(f){
+  if(S.names[f.ieee]) return S.names[f.ieee];
+  const base = i18n(f.kind || 'Zigbee device'), taken = new Set([...Home.devices().map(d => d.name), ...Object.values(S.names)]);
+  let name = base;
+  for(let n = 2; taken.has(name); n++) name = base + ' ' + n;
+  return (S.names[f.ieee] = name);
+}
+// an ESP node's tab from what it has: anything to switch -> Switches, readings only -> Sensors
+const espCat = n => (n.controls || []).some(c => !c.ro && c.kind !== 'sensor') ? 'switch' : 'sensor';
+
 // every new thing as a row {key, kind, title, sub, ctl (html), act (fn on its button)}
 function rows(){
   const out = [];
   for(const f of (S.zb && S.zb.found) || []){
-    const key = 'zb:' + f.ieee, sub = [f.vendor, f.model, f.interview].filter(Boolean).join(' \u00b7 ');
-    if(f.registered) out.push({key, kind: 'zigbee', title: f.name, sub, done: i18n('added')});
-    else out.push({key, kind: 'zigbee', title: f.friendly_name, sub, fields: [['name', f.friendly_name]], act: v =>
+    const key = 'zb:' + f.ieee;
+    if(f.registered) out.push({key, kind: 'zigbee', title: RAW.test(f.name || '') ? zbName(f) : f.name, done: i18n('added')});
+    else if(f.interview !== 'done') out.push({key, kind: 'zigbee', title: i18n('New device'),
+      sub: f.interview === 'failed' ? i18n('Not recognised: reset the device and pair it again closer to the gateway.') : i18n('identifying\u2026')});
+    else out.push({key, kind: 'zigbee', title: zbName(f), fields: [['name', zbName(f)]], button: 'Add', act: v =>
       Home.api('/api/zigbee/pair/add', J({ieee: f.ieee, friendly_name: f.friendly_name, name: v.name}))});
   }
   for(const n of S.esp || []){
     if(n.registered || n.alive !== 'online' || !n.n_controls) continue;
-    out.push({key: 'esp:' + n.node, kind: 'esphome', title: n.title, sub: [n.model, i18n('{0} channels', n.n_controls)].filter(Boolean).join(' \u00b7 '),
-      fields: [['name', n.title]], cat: true, act: v => Home.api('/api/esphome/add', J({node: n.node, name: v.name, category: v.cat}))});
+    out.push({key: 'esp:' + n.node, kind: 'esphome', title: n.title,
+      fields: [['name', n.title]], button: 'Add', act: v => Home.api('/api/esphome/add', J({node: n.node, name: v.name, category: espCat(n)}))});
   }
   for(const a of S.aps || []){
     if(!a.setup) continue;
@@ -92,13 +106,13 @@ function rows(){
   for(const d of pn.registered || []) byId[d.id] = {...(byId[d.id] || {}), ...d};
   for(const d of Object.values(byId)){
     if(d.status === 'bound') continue;
-    const key = 'tab:' + d.id, title = d.name || d.model || d.id, sub = [d.model, d.ip].filter(Boolean).join(' \u00b7 ');
+    const key = 'tab:' + d.id, title = d.name || i18n('Android tablet');
     if(d.status !== 'pending') out.push({key, kind: 'tablet', title, sub: i18n('heard, waiting for it to introduce itself')});
-    else out.push({key, kind: 'tablet', title, sub: sub + (d.repairs ? ' \u00b7 ' + i18n('pairing again') : ''), code: true,
+    else out.push({key, kind: 'tablet', title, sub: i18n('type the code the tablet shows') + (d.repairs ? ' \u00b7 ' + i18n('pairing again') : ''), code: true,
       fields: [['panel', d.repairs || slug(title)]], act: v => Home.api('/api/panels/bind', J({id: d.id, code: v.code, panel: v.panel}))});
   }
   for(const e of pn.esp || [])
-    out.push({key: 'scr:' + e.mac, kind: 'screen', title: e.hw, sub: [e.mac, e.ip].filter(Boolean).join(' \u00b7 '), code: true,
+    out.push({key: 'scr:' + e.mac, kind: 'screen', title: i18n('Wall screen'), sub: i18n('type the code the screen shows'), code: true,
       fields: [['panel', 'panel-' + String(e.mac).replace(/:/g, '').slice(-4).toLowerCase()]],
       act: v => Home.api('/api/panels/bind_esp', J({mac: e.mac, code: v.code, panel: v.panel}))});
   return out;
@@ -123,7 +137,6 @@ function rowHtml(r){
   const ctl = r.done ? `<span class="bindcaption">${Home.icon ? Home.icon('check', 14) : ''} ${esc(r.done)}</span>` : !r.act ? '' : `
     ${r.code ? `<input data-f="code" placeholder="${esc(i18n('code from the device'))}" autocomplete="off" maxlength="16" style="${IN};width:150px">` : ''}
     ${(r.fields || []).map(([n, v]) => f(n, v, i18n(n === 'panel' ? 'panel name' : 'name'))).join('')}
-    ${r.cat ? `<select data-f="cat" style="${IN}">${CATS.map(c => `<option value="${c}">${esc(i18n('cat:' + c))}</option>`).join('')}</select>` : ''}
     <button class="dlg-btn primary" data-go>${esc(i18n(r.button || 'Bind'))}</button>`;
   return `<div class="row" data-k="${esc(r.key)}" style="flex-wrap:wrap;gap:8px">
     <span class="rlabel"><span class="cn-tag">${esc(i18n(KIND[r.kind]))}</span> ${esc(r.title)}<br>
@@ -200,14 +213,14 @@ async function findCode(){
   row.querySelector('[data-f="code"]').value = code;
   row.scrollIntoView({block: 'center'});
   row.style.outline = '2px solid var(--on)';
-  out.textContent = m.length ? i18n('Found: {0} {1}. Check it and press Bind in its row.', i18n(KIND[m[0].kind === 'tablet' ? 'tablet' : 'screen']), m[0].model)
+  out.textContent = m.length ? i18n('Found: {0} {1}. Check it and press Bind in its row.', i18n(KIND[m[0].kind === 'tablet' ? 'tablet' : 'screen']), m[0].name || '')
     : i18n('Put into the only yashGen device in sight: press Bind in its row.');
 }
 
 // a tablet that is bound already shows its code: it is known, so it is bound again by the house alone (its key stays,
 // its next heartbeat tells it the panel); no invitation over the network is needed
 function rebindAsk(t, code, out){
-  out.innerHTML = `${esc(i18n('This is "{0}" ({1}), bound already to panel {2}. Bind it again?', t.name || t.id, t.model, t.panel))}
+  out.innerHTML = `${esc(i18n('This is "{0}", bound already to panel {1}. Bind it again?', t.name || i18n('Android tablet'), t.panel))}
     <span style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><input data-rb="panel" value="${esc(t.panel)}" autocomplete="off" style="${IN};width:150px">
     <button class="dlg-btn primary" data-rb="go">${esc(i18n('Bind again'))}</button></span><div data-rb="res"></div>`;
   out.querySelector('[data-rb="go"]').onclick = async ev => {
@@ -237,7 +250,7 @@ function open(){
           <button class="dlg-btn" data-other="${i}">${esc(i18n(e.button || 'Open'))}</button></div>`).join('')}</details></section>` : ''}</div>
     <style>.cn-tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:9px;border:1px solid var(--line);color:var(--dim);margin-right:4px}</style>`,
     MID, {onClose: stop});
-  S = {zb: null, pn: null, esp: null, aps: null, scanning: false, errors: {}, msgs: {}, timers: [], id: Math.random().toString(36).slice(2, 12)};
+  S = {zb: null, pn: null, esp: null, aps: null, scanning: false, errors: {}, msgs: {}, names: {}, timers: [], id: Math.random().toString(36).slice(2, 12)};
   box('#cn-find').onclick = findCode;
   box('#cn-code').onkeydown = ev => { if(ev.key === 'Enter') findCode(); };
   box('#cn-scan').onclick = scan;
@@ -256,7 +269,6 @@ HomePlugins.register({addFlow: [open], help: [
   {id: 'connect.name', screen: 'connect', screenName: 'Add / bind', sel: '#cn-list [data-f="name"]', title: 'Name', text: 'The name the new device gets.'},
   {id: 'connect.panel', screen: 'connect', screenName: 'Add / bind', sel: '#cn-list [data-f="panel"]', title: 'Panel', text: 'The panel an Android tablet or an ESP screen shows.'},
   {id: 'connect.devcode', screen: 'connect', screenName: 'Add / bind', sel: '#cn-list [data-f="code"]', title: 'Code', text: 'The code the device shows on its screen or label.'},
-  {id: 'connect.cat', screen: 'connect', screenName: 'Add / bind', sel: '#cn-list [data-f="cat"]', title: 'Kind', text: 'Where it goes on the dashboard: switch, sensor, indicator or other.'},
   {id: 'connect.go', screen: 'connect', screenName: 'Add / bind', sel: '[data-go]', title: 'Bind', text: 'Binds the device of this row with what is filled in.'},
   {id: 'connect.rbpanel', screen: 'connect', screenName: 'Add / bind', sel: '[data-rb="panel"]', title: 'Panel', text: 'The panel this tablet, bound already, shows from now on.'},
   {id: 'connect.rbgo', screen: 'connect', screenName: 'Add / bind', sel: '[data-rb="go"]', title: 'Bind again', text: 'Binds the tablet to that panel; its key stays and it switches within a minute.'},

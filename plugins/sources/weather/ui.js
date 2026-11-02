@@ -5,20 +5,24 @@
   const E = s => Home.escapeHtml(String(s == null ? '' : s));
   const MODEL = {consensus: 'Several models (rain when most agree)', best_match: 'Open-Meteo best match', ecmwf_ifs025: 'ECMWF IFS',
                  icon_seamless: 'DWD ICON', ukmo_seamless: 'UK Met Office', gfs_seamless: 'NOAA GFS', meteofrance_seamless: 'Meteo-France'};
+  const WHY = {far: 'no weather station near the house', away: 'the weather stations do not answer now', stale: 'the station has been silent for an hour'};
   async function settingsPage(box){
     let s;
     try { s = await Home.api('/api/weather/settings'); } catch(e){ box.textContent = e.message || String(e); return; }
     const near = (s.stations || [])[0];
     const src = s.now_source || {};
     const nowLine = src.kind === 'station' ? i18n('Now: from the station {0}, {1} km away, {2} min ago', src.name, src.km, src.age_min)
-      : src.kind === 'model' ? i18n('Now: from the forecast models ({0})', src.why) : '';
+      : src.kind === 'model' ? i18n('Now: from the forecast ({0})', i18n(WHY[src.reason] || 'no weather station near the house')) : '';
     const map = (s.lat != null) ? `https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=13/${s.lat}/${s.lon}` : '';
     box.innerHTML = `
-      <div class="row"><span class="rlabel">${E(i18n('Place of the house'))}<br><span class="bindcaption">${E(s.guessed ? i18n('Guessed from the internet address: find the city or enter the exact point') : i18n('The forecast and the nearest station are for this point'))}</span></span>
+      <div class="row"><span class="rlabel">${E(i18n('Place of the house'))}<br><span class="bindcaption">${E(s.guessed ? i18n('Guessed from the internet address: find your city') : i18n('The forecast is for this place'))}</span></span>
         <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input class="askin" data-w="q" placeholder="${E(i18n('City'))}" style="max-width:220px">
         <button class="dlg-btn" data-w="find">${E(i18n('Find'))}</button></span></div>
       <div data-w="found" class="bindcaption"></div>
-      <div class="row"><span class="rlabel">${E(i18n('Latitude, longitude'))}<br><span class="bindcaption" data-w="placename">${E(s.place || '')}</span></span>
+      <div class="bindcaption" data-w="placename">${E(s.place || '')}</div>
+      <div class="bindcaption" data-w="now">${E(nowLine)}</div>
+      <details${s.guessed && !s.place ? ' open' : ''}><summary>${E(i18n('Advanced'))}</summary>
+      <div class="row"><span class="rlabel">${E(i18n('Latitude, longitude'))}</span>
         <span style="display:flex;gap:6px;align-items:center"><input class="askin" data-w="lat" inputmode="decimal" style="width:110px" value="${E(s.lat ?? '')}">
         <input class="askin" data-w="lon" inputmode="decimal" style="width:110px" value="${E(s.lon ?? '')}">
         ${map ? `<a class="dlg-btn" data-w="map" href="${E(map)}" target="_blank" rel="noopener">${E(i18n('On the map'))}</a>` : ''}</span></div>
@@ -27,7 +31,8 @@
         ${(s.stations || []).slice(0, 40).map(x => `<option value="${x.num}"${String(x.num) === String(s.station) ? ' selected' : ''}>${E(x.name)} \u00b7 ${E(x.km)} km</option>`).join('')}</select></div>
       <div class="row"><span class="rlabel">${E(i18n('Forecast'))}<br><span class="bindcaption">${E(i18n('Several models: rain only when most of them agree'))}</span></span>
         <select class="askin" data-w="model">${(s.models || []).map(m => `<option value="${E(m)}"${m === s.model ? ' selected' : ''}>${E(i18n(MODEL[m] || m))}</option>`).join('')}</select></div>
-      <div class="bindcaption" data-w="now">${E(nowLine)}</div>
+      ${src.why ? `<div class="bindcaption">${E(src.why)}</div>` : ''}
+      </details>
       <div class="row" style="justify-content:flex-end;gap:6px"><span data-w="msg" class="bindcaption"></span><button class="dlg-btn primary" data-w="save">${E(i18n('Save'))}</button></div>`;
     const q = k => box.querySelector(`[data-w="${k}"]`);
     let place = s.place || '';

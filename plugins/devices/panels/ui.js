@@ -29,12 +29,10 @@
   const isAndroid = p => p.hw === 'android';
   const kindBadge = p => `<span class="pnl-kind ${isAndroid(p) ? 'k-android' : 'k-esp'}">${isAndroid(p) ? TABLET_SVG : CHIP_SVG}${esc(i18n(isAndroid(p) ? 'Android tablet' : 'ESP screen'))}</span>`;
   function card(p){
-    const hw = isAndroid(p) ? '' : (hwLabels[p.hw] || p.hw);
     const opts = [`<option value="">${esc(i18n('no room'))}</option>`].concat(rooms.map(r =>
       `<option value="${esc(r.id)}"${r.id === p.room ? ' selected' : ''}>${esc(r.name || r.id)}</option>`)).join('');
     return `<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
-      <div>${kindBadge(p)} <b>${esc(p.title)}</b> <span class="bindcaption">${esc(p.name)}${hw ? ' \u00b7 ' + esc(hw) : ''} \u00b7 ${p.w}\u00d7${p.h}
-        \u00b7 ${esc(i18n('{0} widgets', p.widgets))}${p.hw === 'android' ? ' \u00b7 ' + esc(ago(p.seen) || i18n('never seen')) : ''}</span></div>
+      <div>${kindBadge(p)} <b>${esc(p.title)}</b>${p.hw === 'android' ? ` <span class="bindcaption">${esc(ago(p.seen) || i18n('never seen'))}</span>` : ''}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="dlg-btn pn-edit" data-name="${esc(p.name)}">${esc(i18n('Edit'))}</button>
         <button class="dlg-btn pn-float" data-name="${esc(p.name)}">${esc(i18n('Open beside'))}</button>
@@ -49,10 +47,11 @@
   // A panel is flashed only at its MAC; one without a stored MAC is confirmed here by a human.
   const mac = m => String(m || '').replace(/(..)(?!$)/g, '$1:');
   function screenLine(p){
-    if(p.mac) return `<div class="bindcaption">${esc(i18n('Screen {0}', mac(p.mac)))}</div>`;
-    if(!p.candidate) return `<div class="bindcaption">${esc(i18n('Screen not confirmed and not on the network'))}</div>`;
-    return `<div class="bindcaption">${esc(i18n('A screen at {1} says it is this panel; its MAC is {0}. Check the MAC (router or the board label) before you confirm.', mac(p.candidate.mac), p.candidate.ip))}
-      <button class="dlg-btn pn-mac" data-name="${esc(p.name)}" data-mac="${esc(p.candidate.mac)}">${esc(i18n('Yes, this is it'))}</button></div>`;
+    if(p.mac) return '';
+    if(!p.candidate) return `<div class="bindcaption">${esc(i18n('The screen is not on the network: switch it on'))}</div>`;
+    return `<div class="bindcaption">${esc(i18n('A screen on the network says it is this panel: confirm it under Advanced so the house can update it.'))}</div>
+      <details><summary class="bindcaption">${esc(i18n('Advanced'))}</summary><div class="bindcaption">${esc(i18n('A screen at {1} says it is this panel; its MAC is {0}. Check the MAC (router or the board label) before you confirm.', mac(p.candidate.mac), p.candidate.ip))}
+      <button class="dlg-btn pn-mac" data-name="${esc(p.name)}" data-mac="${esc(p.candidate.mac)}">${esc(i18n('Yes, this is it'))}</button></div></details>`;
   }
 
   // The panels as they look (each drawn live by /panel-view); a click opens the builder in this tab
@@ -131,7 +130,7 @@
     box.querySelectorAll('.pn-flash').forEach(b => b.onclick = () => flash(box, b.dataset.name));
     box.querySelectorAll('.pn-repair').forEach(b => b.onclick = pair);     // the tablet asks again with its own id
     box.querySelectorAll('.pn-del').forEach(b => b.onclick = async () => {
-      if(!confirm(i18n('Delete panel {0}? Its layout, its tablets and their keys, and its messages on the broker go.', b.dataset.name))) return;
+      if(!confirm(i18n('Delete panel {0}? What is on it goes, and its tablet must be connected again.', (panels.find(x => x.name === b.dataset.name) || {}).title || b.dataset.name))) return;
       try { await Home.api('/api/panels/' + encodeURIComponent(b.dataset.name), {method: 'DELETE'}); render(box); }
       catch(e){ alert(e.message || e); }
     });
@@ -255,8 +254,7 @@
       if(list.dataset.sig !== sig){
         list.dataset.sig = sig;
         list.innerHTML = esp.length ? esp.map(e => `<div class="row" style="gap:8px;flex-wrap:wrap">
-            <b>${esc(hwLabels[e.hw] || e.hw)}</b> <span>${esc(mac(e.mac))}</span>
-            <span class="bindcaption">${esc([e.node, e.ip].filter(Boolean).join(' \u00b7 '))}</span>
+            <b>${esc(hwLabels[e.hw] || e.hw)}</b>
             <input class="pe-code" data-mac="${esc(e.mac)}" placeholder="${esc(i18n('code from the screen'))}" inputmode="numeric" maxlength="8" style="width:170px">
             <input class="pe-name" data-mac="${esc(e.mac)}" value="panel-${esc(e.mac.slice(-4).toLowerCase())}" style="width:150px">
             <button class="dlg-btn primary pe-bind" data-mac="${esc(e.mac)}">${esc(i18n('Bind'))}</button>
@@ -266,8 +264,8 @@
         list.querySelectorAll('.pe-bind').forEach(b => b.onclick = async () => {
           const mac = b.dataset.mac;
           try {
-            const r = await Home.api('/api/panels/bind_esp', J({mac, code: q('pe-code', mac).value.trim(), panel: q('pe-name', mac).value.trim()}));
-            q('pe-res', mac).textContent = i18n('Panel {0}: its firmware is on the way', r.panel);
+            await Home.api('/api/panels/bind_esp', J({mac, code: q('pe-code', mac).value.trim(), panel: q('pe-name', mac).value.trim()}));
+            q('pe-res', mac).textContent = i18n('Bound: its firmware is on the way');
             load().then(() => Home.refresh());
           } catch(e){ q('pe-res', mac).textContent = e.message || e; }
         });
@@ -279,18 +277,24 @@
 
   // as the server's _needs_update: by build number when the tablet sends one, else by a differing name
   const older = c => !!published && (Number.isInteger(c.app_code) ? c.app_code < published.code : !!c.app && c.app !== published.name);
+  // what a family needs of a tablet: its battery, an update, a problem; the launcher version, adb, the screen size under Advanced
   const capsLine = d => {
+    const c = d.caps || {};
+    return [c.battery != null ? i18n('battery {0}%', c.battery) : '', c.app && older(c) ? i18n('update available') : '',
+            c.update_error ? i18n('the update failed') : '', c.front === false ? i18n('not in front') : '',
+            c.dnd === 'alarms' ? i18n('do not disturb') : ''].filter(Boolean).join(' \u00b7 ');
+  };
+  const capsMore = d => {
     const c = d.caps || {}, sc = c.screen || {};
-    return [c.app ? `${i18n('launcher')} ${c.app}${older(c) ? ` \u2192 ${published.name}` : ''}` : '', c.update_error ? `${i18n('update failed')}: ${c.update_error}` : '', sc.w && sc.h ? `${sc.w}\u00d7${sc.h}` : '', (c.cameras || []).length ? i18n('camera') : '',
-            c.mic ? i18n('microphone') : '', c.battery != null ? `${c.battery} %` : '',
+    return [d.model || '', d.ip || '', c.app ? `${i18n('launcher')} ${c.app}${older(c) ? ` \u2192 ${published.name}` : ''}` : '', c.update_error ? `${i18n('update failed')}: ${c.update_error}` : '',
+            sc.w && sc.h ? `${sc.w}\u00d7${sc.h}` : '', (c.cameras || []).length ? i18n('camera') : '', c.mic ? i18n('microphone') : '',
             c.adb ? (c.adb.enabled && c.adb.port ? `adb :${c.adb.port}` : c.adb.enabled ? 'adb' : 'adb off') : '',
-            c.front === false ? i18n('not in front') : '',
-            c.dnd ? (c.dnd === 'alarms' ? i18n('do not disturb') : c.dnd === 'no-access' ? i18n('do not disturb: no access') : c.dnd) : ''].filter(Boolean).join(' \u00b7 ');
+            c.dnd === 'no-access' ? i18n('do not disturb: no access') : ''].filter(Boolean).join(' \u00b7 ');
   };
   // the tablet's own pin (from its heartbeat) is what the toggle shows; the house's wish waits for it; no device owner: nothing to pin
   const pinRow = (d, id) => {
     const c = d.caps || {}, actual = typeof c.home_pinned === 'boolean' ? c.home_pinned : d.home_pin !== false, wish = d.home_pin !== false;
-    if(c.owner === false) return `<span class="bindcaption">${esc(i18n('Home screen pin: needs Device Owner mode'))}</span>`;
+    if(c.owner === false) return `<span class="bindcaption">${esc(i18n('The home screen cannot be pinned on this tablet (see the launcher README)'))}</span>`;
     return `<span style="display:inline-flex;align-items:center;gap:6px" title="${esc(i18n('Off: another home screen may be chosen on the tablet'))}">${esc(i18n('Home screen pinned'))}
       <div class="toggle setting pn-pin${actual ? ' on' : ''}" data-id="${id}" data-wish="${wish ? 1 : 0}"></div>${actual !== wish ? `<span class="bindcaption">${esc(i18n('waits for the tablet'))}</span>` : ''}</span>`;
   };
@@ -302,10 +306,14 @@
       <div class="toggle setting pn-won${w.on ? ' on' : ''}" data-id="${id}" role="switch" tabindex="0" aria-checked="${!!w.on}"></div>
       <label>${esc(i18n('after'))} ${num('pn-wafter', w.after_min, 60)} ${esc(i18n('min'))}</label>
       <label>${esc(i18n('at most once in'))} ${num('pn-wevery', w.every_min, 240)} ${esc(i18n('min'))}</label>
-      ${l.noadb ? `<span class="bindcaption">${esc(i18n('adb unavailable'))}</span>` : ''}
+      ${l.noadb ? `<span class="bindcaption">${esc(i18n('the house cannot restart it: turn on network debugging on the tablet'))}</span>` : ''}
       ${at ? `<span class="bindcaption">${esc(i18n('last raise: {0}', at))}${l.ok ? '' : ' \u00b7 ' + esc(i18n('failed: {0}', l.why || ''))}</span>` : ''}</span>`;
   };
   const suggest = d => String(d.name || d.model || 'panel_1').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'panel_1';
+  // the panel a new tablet shows: a new one (its code made here, never typed) or a tablet panel the house has; named by title
+  const freeCode = d => { const b = suggest(d).slice(0, 29); let c = b, n = 2; while(panels.some(p => p.name === c)) c = b + '-' + n++; return c; };
+  const panelChoice = d => [`<option value="${esc(freeCode(d))}"${d.repairs ? '' : ' selected'}>${esc(i18n('a new panel'))}</option>`]
+    .concat(panels.filter(isAndroid).map(p => `<option value="${esc(p.name)}"${p.name === d.repairs ? ' selected' : ''}>${esc(p.title)}</option>`)).join('');
 
   // The launcher APK: built by the build server's app builder with the house's key; polled while busy
   async function appState(){
@@ -381,30 +389,29 @@
       list.innerHTML = devs.length ? devs.map(d => {
         const bound = d.status === 'bound', id = esc(d.id);
         const ctl = bound
-          ? `<span>${esc(i18n('bound to panel {0}', d.panel || ''))}</span>
-             <button class="dlg-btn pn-unbind" data-id="${id}">${esc(i18n('Unbind'))}</button>
-             ${pinRow(d, id)}
-             ${watchRow(d, id)}`
+          ? `<button class="dlg-btn pn-unbind" data-id="${id}">${esc(i18n('Unbind'))}</button>`
           : d.status === 'pending'
             ? `<input class="pn-code" data-id="${id}" placeholder="${esc(i18n('code from the screen'))}" inputmode="numeric" maxlength="16" style="width:170px">
-               <input class="pn-name" data-id="${id}" value="${esc(d.repairs || suggest(d))}" style="width:150px">
+               <select class="pn-name" data-id="${id}" title="${esc(i18n('What the tablet shows'))}">${panelChoice(d)}</select>
                ${d.repairs ? `<span class="bindcaption">${esc(i18n("pairing again: check the new code"))}</span>` : ""}
                <button class="dlg-btn primary pn-bind" data-id="${id}">${esc(i18n('Bind'))}</button>`
             : `<span class="bindcaption">${esc(i18n('heard, waiting for it to introduce itself'))}</span>`;
         return `<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
-          <div><b>${esc(d.name || d.model || d.id)}</b>${d.status === 'bound' ? ` <button class="renbtn pn-ren" data-id="${id}" title="${esc(i18n('Rename the tablet'))}">${Home.icon('pen', 16)}</button>` : ''} <span class="bindcaption">${esc([d.model, d.ip].filter(Boolean).join(' \u00b7 '))}</span></div>
-          <div class="bindcaption">${esc(capsLine(d) || '\u2014')}</div>
+          <div><b>${esc(d.name || d.model || i18n('A tablet'))}</b>${d.status === 'bound' ? ` <button class="renbtn pn-ren" data-id="${id}" title="${esc(i18n('Rename the tablet'))}">${Home.icon('pen', 16)}</button>` : ''}</div>
+          ${capsLine(d) ? `<div class="bindcaption">${esc(capsLine(d))}</div>` : ''}
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${ctl}</div>
+          ${bound ? `<details><summary class="bindcaption">${esc(i18n('Advanced'))}</summary>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">${capsMore(d) ? `<div class="bindcaption">${esc(capsMore(d))}</div>` : ''}${pinRow(d, id)}${watchRow(d, id)}</div></details>` : ''}
           <div class="bindcaption pn-out" data-id="${id}"></div></div>`;
       }).join('') : `<div class="bindcaption">${esc(i18n('Nobody has answered yet\u2026'))}</div>`;
       const q = (cls, id) => list.querySelector(`.${cls}[data-id="${CSS.escape(id)}"]`);
       list.querySelectorAll('.pn-bind').forEach(b => b.onclick = async () => {
         const id = b.dataset.id;
         try {
-          const r = await Home.api('/api/panels/bind', J({id, code: q('pn-code', id).value.trim(), panel: q('pn-name', id).value.trim()}));
+          await Home.api('/api/panels/bind', J({id, code: q('pn-code', id).value.trim(), panel: q('pn-name', id).value}));
           list.dataset.sig = '';
           await refresh();
-          q('pn-out', id).textContent = i18n('Panel {0}: canvas {1}\u00d7{2} (landscape; turn it in the builder)', r.panel, r.w, r.h);
+          q('pn-out', id).textContent = i18n('Connected: the panel is ready to fill in the builder.');
         } catch(e){ q('pn-out', id).textContent = e.message || e; }
       });
       list.querySelectorAll('.pn-ren').forEach(b => b.onclick = async () => {
@@ -579,10 +586,10 @@
       {id: 'panels.flash', screen: 'tab:p:panels', sel: '.pn-flash', title: 'Flash', text: 'ESP screens only: builds this screen\'s firmware and sends it over Wi-Fi.'},
       {id: 'panels.room', screen: 'tab:p:panels', sel: '.pn-room', title: 'Room', text: 'The room the panel is in.'},
       {id: 'panels.repair', screen: 'tab:p:panels', sel: '.pn-repair', title: 'Pair again', text: 'Android tablets only: opens the Android tablets window; the tablet is bound again by its new code.'},
-      {id: 'panels.delete', screen: 'tab:p:panels', sel: '.pn-del', title: 'Delete', text: 'Deletes the panel: its layout, its tablets with their keys, its retained messages on the broker.'},
+      {id: 'panels.delete', screen: 'tab:p:panels', sel: '.pn-del', title: 'Delete', text: 'Deletes the panel and what is on it; its tablet must be connected again.'},
       {id: 'panels.mac', screen: 'tab:p:panels', sel: '.pn-mac', title: 'Yes, this is it', text: 'Confirms the screen\'s MAC; only a confirmed screen is flashed over Wi-Fi.'},
       {id: 'tablets.code', screen: 'panels-tablets', screenName: 'Android tablets', sel: '.pn-code', title: 'Code', text: 'The code the tablet shows on its screen.'},
-      {id: 'tablets.name', screen: 'panels-tablets', screenName: 'Android tablets', sel: '.pn-name', title: 'Panel', text: 'The panel this tablet shows: Latin letters, digits, - or _.'},
+      {id: 'tablets.name', screen: 'panels-tablets', screenName: 'Android tablets', sel: '.pn-name', title: 'Panel', text: 'What this tablet shows: a new panel, or a panel the house has.'},
       {id: 'tablets.bind', screen: 'panels-tablets', screenName: 'Android tablets', sel: '.pn-bind', title: 'Bind', text: 'Binds the tablet to the panel; it gets a key of its own.'},
       {id: 'tablets.unbind', screen: 'panels-tablets', screenName: 'Android tablets', sel: '.pn-unbind', title: 'Unbind', text: 'The tablet\'s key stops working; the panel\'s layout stays.'},
       {id: 'tablets.rename', screen: 'panels-tablets', screenName: 'Android tablets', sel: '.pn-ren', title: 'Rename the tablet',

@@ -220,7 +220,7 @@ function tab(box){
     lastResults = r;
     const errs = Object.entries(r.errors || {}).map(([s, e]) => `${s}: ${i18n(e)}`);
     out.innerHTML = errs.length ? `<span style="color:var(--bad)">${esc(errs.join('; '))}</span>` : '';
-    res.innerHTML = r.searched && !r.searched.length ? `<div class="bindcaption" style="margin-top:10px;color:var(--bad)">${esc(i18n('Nowhere to search: no source of a site is connected. Put the sources of the sites in plugin-data/player/sources/ of the house (Settings -> TVs -> Players lists them), or give Files the folders of a NAS.'))}</div>`
+    res.innerHTML = r.searched && !r.searched.length ? `<div class="bindcaption" style="margin-top:10px;color:var(--bad)">${esc(i18n('Nowhere to search: no film site is connected. Give Files the folders of a NAS in Settings -> TVs -> Players, or ask whoever set up the house to add a site.'))}</div>`
       : r.results.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:10px">${
       r.results.map((x, i) => `<button class="dlg-btn" data-item="${i}" style="display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:6px;height:auto">
         ${x.poster ? `<img data-poster="${esc(x.poster)}" alt="" style="width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;visibility:hidden">` : ''}
@@ -278,9 +278,10 @@ async function settingsPage(box){
       : `<div class="bindcaption">${esc(i18n('No players yet: Settings -> Computers and servers, a computer at a TV -> Player (mpv) -> Install.'))}</div>`;
     box.innerHTML = `<div data-players>${players}</div>
       <h3 style="margin:18px 0 6px">${esc(i18n('Sources'))}</h3>
-      <div class="bindcaption">${esc(i18n('The house\'s own sources are plugin-data/player/sources/<name>.py (see the plug-in README); then Files and Link.'))}</div>
       ${srcs.sources.map(s => `<div class="row"><span class="rlabel"><b>${esc(i18n(s.name))}</b>${s.own ? ` <span class="bindcaption">(${esc(i18n('the house\'s own'))})</span>` : ''}</span>
         <span class="rval bindcaption">${s.error ? `<span style="color:var(--bad)">${esc(s.error)}</span>` : esc([s.search ? i18n('search') : '', s.match ? i18n('pasted pages') : ''].filter(Boolean).join(', '))}</span></div>`).join('')}
+      <details style="margin-top:6px"><summary class="bindcaption">${esc(i18n('Advanced'))}</summary>
+        <div class="bindcaption">${esc(i18n('The house\'s own sources are plugin-data/player/sources/<name>.py (see the plug-in README); then Files and Link.'))}</div></details>
       <h3 style="margin:18px 0 6px">${esc(i18n('Folders of Files'))}</h3>
       <div class="bindcaption">${esc(i18n('Web listings of a NAS, one per line (their sub-folders too): http://192.0.2.5/films/'))}</div>
       <textarea data-folders rows="3" style="width:100%;margin-top:4px" autocapitalize="off">${esc((srcs.folders || []).join('\n'))}</textarea>

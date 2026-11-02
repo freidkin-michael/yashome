@@ -73,6 +73,17 @@
   "Touchmouse receiver": "Приёмник тачмыши",
   "The house logs in to {0} and installs the touchmouse receiver there as root: a phone or a panel moves its pointer. Go on?": "Дом зайдёт на {0} и установит туда приёмник тачмыши с правами root: телефон или панель смогут двигать его курсор. Продолжить?",
   "on every computer that has it; install it from the computer's card": "работает на каждом компьютере, где установлен; ставится из карточки компьютера",
-  "BIND_ADDRESS is not set: the computer would not know the house's address": "BIND_ADDRESS не задан: компьютер не узнает адрес дома"
+  "BIND_ADDRESS is not set: the computer would not know the house's address": "BIND_ADDRESS не задан: компьютер не узнает адрес дома",
+  "Advanced": "Дополнительно",
+  "After a reinstall: the house trusts the computer again": "После переустановки: дом снова доверяет компьютеру",
+  "The house does not know which user to log in to its computers as: whoever set up the house sets it (see Advanced).": "Дом не знает, под каким пользователем входить на компьютеры: это задаёт тот, кто настраивал дом (см. «Дополнительно»).",
+  "Trust again": "Доверять снова",
+  "no connection: is the computer switched on?": "нет связи: компьютер включён?",
+  "reachable": "на связи",
+  "searched {0}": "искали {0}",
+  "no connection: the computer does not let the house in; add it again": "нет связи: компьютер не пускает дом; добавьте его заново",
+  "no connection: turn on remote login on the computer": "нет связи: включите на компьютере удалённый вход",
+  "the house cannot install there: the computer asks for a password": "дом не может там устанавливать: компьютер просит пароль",
+  "Reinstalled? Press Trust again": "Переустановили? Нажмите «Доверять снова»"
  }
 }

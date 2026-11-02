@@ -5,13 +5,16 @@
   function form(s, voices){
     const opt = v => `<option value="${esc(v)}"${v === (s.voice || '') ? ' selected' : ''}>${esc(v || i18n('automatic'))}</option>`;
     const st = s.stats || {};
-    return `<div class="bindcaption">${esc(i18n('Wake word'))}: ${esc(i18n('on the device'))} &middot; ${esc(s.node)}</div>
-      <div class="row"><span class="rlabel">${esc(i18n('Name'))}</span><input class="askin" data-f="name" value="${esc(s.name)}"></div>
-      <div class="row"><span class="rlabel">${esc(i18n('Room'))}</span><input class="askin" data-f="room" value="${esc(s.room)}"></div>
-      <div class="row"><span class="rlabel">${esc(i18n('Audio comes from (address)'))}</span><input class="askin" data-f="peer" value="${esc(s.peer)}"></div>
+    const peer = `<div class="row"><span class="rlabel">${esc(i18n('Audio comes from (address)'))}</span><input class="askin" data-f="peer" value="${esc(s.peer)}"></div>`;
+    const where = s.room_name ? `${esc(i18n('Room'))}: ${esc(s.room_name)}` : esc(i18n('Not in a room: put it in a room on the map'));
+    return `<div class="bindcaption">${where}</div>
+      ${s.peer || s.phone ? '' : `<div class="bindcaption">${esc(i18n('The house does not know where the sound of this satellite comes from: type its address in the network'))}</div>${peer}`}
       ${s.player ? `<div class="row"><span class="rlabel">${esc(i18n('Answers in voice'))}</span><select class="askin" data-f="voice">${['', ...voices].map(opt).join('')}</select></div>
         <div class="row"><span class="rlabel">${esc(i18n('Silent when not understood'))}<br><span class="bindcaption">${esc(i18n('No reply and no sound when a command was not understood: for a satellite that wakes on the TV'))}</span></span><input type="checkbox" data-f="quiet_fail" ${s.quiet_fail ? 'checked' : ''}></div>` : ''}
-      <div class="bindcaption">${esc(i18n('Wakes'))}: ${st.wakes || 0} &middot; ${esc(i18n('Commands'))}: ${st.commands || 0} &middot; ${esc(i18n('Not understood'))}: ${st.errors || 0}${st.last_wake ? ' &middot; ' + esc(i18n('Last wake')) + ': ' + esc(st.last_wake) : ''}</div>
+      <details><summary>${esc(i18n('Advanced'))}</summary>
+        ${s.peer && !s.phone ? peer : ''}
+        <div class="bindcaption">${esc(i18n('Wakes'))}: ${st.wakes || 0} &middot; ${esc(i18n('Commands'))}: ${st.commands || 0} &middot; ${esc(i18n('Not understood'))}: ${st.errors || 0}${st.last_wake ? ' &middot; ' + esc(i18n('Last wake')) + ': ' + esc(st.last_wake) : ''}</div>
+      </details>
       <div class="row" style="justify-content:flex-end;gap:6px"><span data-f="msg" class="bindcaption"></span><button class="dlg-btn primary" data-f="save">${esc(i18n('Save'))}</button></div>`;
   }
 
@@ -28,7 +31,7 @@
     val('save').onclick = async () => {
       const keep = Object.fromEntries(['wake_chime', 'chime', 'lead_in', 'listen_once', 'phone', 'need_wake'].filter(k => k in s).map(k => [k, s[k]]));   // what this form does not show stays as it is
       const body = {...keep, node: s.node, panel: s.panel || '', mic: !!s.mic, player: !!s.player, volume_state: s.volume_state || '',
-                    name: val('name').value.trim(), room: val('room').value.trim(), peer: val('peer').value.trim(), voice: val('voice') ? val('voice').value : (s.voice || ''),
+                    name: s.name || '', room: s.room || '', peer: val('peer') ? val('peer').value.trim() : (s.peer || ''), voice: val('voice') ? val('voice').value : (s.voice || ''),
                     quiet_fail: val('quiet_fail') ? val('quiet_fail').checked : !!s.quiet_fail};
       try { await Home.api('/api/voice/satellites/' + encodeURIComponent(s.id), {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); val('msg').textContent = i18n('Saved'); }
       catch(e){ val('msg').textContent = e.message || String(e); }
@@ -42,7 +45,10 @@
     let rooms = {};
     try { sats = (await Home.api('/api/voice/satellites')).filter(x => x.player); } catch(e){ /* the box works without a speaker */ }
     try { (await Home.api('/api/rooms')).forEach(r => { rooms[r.id] = r.name; }); } catch(e){ /* no room names: the speaker is listed by its own name */ }
-    const place = x => (x.name || x.id) + (rooms[x.room] || x.room ? ` (${rooms[x.room] || x.room})` : '');
+    const place = x => {                                                 // the speaker's card as renamed, and the map's room
+      const n = (x.cards || {}).spk || x.name || x.id, r = x.room_name || rooms[x.room] || x.room;
+      return n + (r && !n.includes(r) ? ` (${r})` : '');
+    };
     const bub = 'padding:8px 12px;border-radius:12px;max-width:85%;font-size:15px;line-height:1.35;white-space:pre-wrap;word-break:break-word;';
     Home.openModal(`<div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box;max-width:100%">
       <div style="display:flex;align-items:center;justify-content:space-between"><h2 style="margin:0">${esc(i18n('Ask the house'))}</h2>
@@ -90,7 +96,7 @@
     };
     const show = (r, text) => {
       if(r.chat){ chat(text); token = ''; q('yn').style.display = 'none'; return; }
-      bubble(false, r.said, '', (r.engine || '') + (r.brain ? ' / ' + r.brain : ''));                      // the engine is a debug detail: a tooltip, not a label
+      bubble(false, r.said);                                                                               // the engine and the model stay in the log
       token = r.ask && r.token ? r.token : '';
       q('yn').style.display = token ? 'flex' : 'none';
     };
@@ -229,24 +235,24 @@
     const mics = sats.filter(s => s.mic && !s.phone && s.peer);
     const langName = (window.I18N_NAMES || {})[c.lang] || c.lang;
     const maxDist = w => Math.max(0, Math.min(3, Math.floor((w.length - 1) / 2)));      // as the server: more on a short word wakes on anything
+    const shortPrefix = c.wake_prefix && c.wake_prefix.length < 3;
     box.innerHTML = `${c.seeded ? '' : `<div class="bindcaption" data-c="wait">${esc(i18n('Waiting for the voice service: it reports its settings within 10 s of its start. Saving is possible after that.'))}</div>`}
-      <h3>${esc(i18n('Wake word'))}</h3>
       ${row('Wake word', 'What a phrase starts with on a satellite that needs it', `<input class="askin" data-c="wake" value="${esc(c.wake || '')}">`)}
+      ${row('Smart answers', 'A phrase no rule understood goes to the language model; what it suggests is checked before anything acts', tog('llm', c.llm !== false))}
+      ${row('Ask before "turn everything off"', 'When the model understood "turn everything off", the house asks first', tog('confirm_all_off', c.confirm_all_off !== false))}
+      <div class="bindcaption">${esc(i18n('Answers are in the house language'))}: ${esc(langName)} (${esc(i18n('Settings - General'))})</div>
+      <details${shortPrefix ? ' open' : ''}><summary>${esc(i18n('Advanced'))}</summary>
       ${row('How exact', 'How many letters a heard word may differ by and still wake (0 = exactly); a short word allows fewer', `<input type="range" data-c="wake_maxdist" min="0" max="${maxDist(c.wake || '')}" step="1" value="${esc(c.wake_maxdist == null ? 0 : c.wake_maxdist)}"><span data-c="maxdist_out" style="min-width:1.5em;text-align:right"></span>`)}
       ${row('Start of the word', 'A heard word that starts like this also wakes: at least 3 letters; empty = off', `<input class="askin" data-c="wake_prefix" value="${esc(c.wake_prefix || '')}">`)}
-      ${c.wake_prefix && c.wake_prefix.length < 3 ? `<div class="bindcaption" style="color:var(--bad)">${esc(i18n('This start of the word is too short and does not count: make it 3 letters or more, or empty.'))}</div>` : ''}
+      ${shortPrefix ? `<div class="bindcaption" style="color:var(--bad)">${esc(i18n('This start of the word is too short and does not count: make it 3 letters or more, or empty.'))}</div>` : ''}
       ${row('Also heard as', 'How the recogniser also writes the wake word, comma separated; a word ending in * takes any ending', `<textarea class="askin" data-c="wake_variants" rows="2">${esc((c.wake_variants || []).join(', '))}</textarea>`)}
       ${mics.length ? `<div class="bindcaption">${esc(i18n('Needs the wake word in the phrase: tick a satellite that wakes by mistake; the others listen for it themselves.'))}</div>
-        ${mics.map(s => row(s.name || s.id, '', `<input type="checkbox" data-nw="${esc(s.id)}" ${s.need_wake ? 'checked' : ''}>`)).join('')}` : ''}
-      <h3>${esc(i18n('Smart answers'))}</h3>
-      ${row('Smart answers', 'A phrase no rule understood goes to the language model; what it suggests is checked before anything acts', tog('llm', c.llm !== false))}
+        ${mics.map(s => row((s.cards || {}).mic || s.name || s.id, '', `<input type="checkbox" data-nw="${esc(s.id)}" ${s.need_wake ? 'checked' : ''}>`)).join('')}` : ''}
       ${row('Model', 'On this computer', `<select class="askin" data-c="llm_model"><option>${esc(c.llm_model || '')}</option></select>`)}
       ${row('Big model', 'On another computer, used while it is on', `<select class="askin" data-c="big_model"><option>${esc(c.big_model || '')}</option></select>`)}
       ${row('Wait for the model (s)', '', num('llm_timeout', 1, 60, 0.5))}
-      <h3>${esc(i18n('Questions before acting'))}</h3>
-      ${row('Ask before "turn everything off"', 'When the model understood "turn everything off", the house asks first', tog('confirm_all_off', c.confirm_all_off !== false))}
       ${row('A question waits (s)', 'How long the house waits for yes or no', num('ask_ttl', 3, 120, 1))}
-      <div class="bindcaption">${esc(i18n('Answers are in the house language'))}: ${esc(langName)} (${esc(i18n('Settings - General'))})</div>
+      </details>
       <div class="row" style="justify-content:flex-end;gap:6px"><span data-c="msg" class="bindcaption"></span><button class="dlg-btn primary" data-c="save">${esc(i18n('Save'))}</button></div>`;
     const q = f => box.querySelector(`[data-c="${f}"]`);
     const out = () => { q('maxdist_out').textContent = q('wake_maxdist').value; };
@@ -296,7 +302,7 @@
         for(const s of mics){
           const want = box.querySelector(`[data-nw="${s.id}"]`).checked;
           if(want === !!s.need_wake) continue;
-          const {id, stats, ...rec} = s;
+          const {id, stats, room_name, cards, ...rec} = s;
           await Home.api('/api/voice/satellites/' + encodeURIComponent(id), {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({...rec, need_wake: want})});
           s.need_wake = want;
         }
@@ -317,9 +323,6 @@
       wire(box, d){ fill(box, d); },
     }],
     help: [
-      {id: 'voicesat.name', screen: 'voice-sat', screenName: 'Satellite settings', sel: '[data-voice="box"] [data-f="name"]', at: 'label', title: 'Name', text: 'What the dashboard calls this satellite.'},
-      {id: 'voicesat.room', screen: 'voice-sat', screenName: 'Satellite settings', sel: '[data-voice="box"] [data-f="room"]', at: 'label', title: 'Room',
-       text: 'The room it stands in: two satellites of one room answer one phrase once, and a message for the room is played here.'},
       {id: 'voicesat.peer', screen: 'voice-sat', screenName: 'Satellite settings', sel: '[data-voice="box"] [data-f="peer"]', at: 'label', title: 'Audio comes from (address)',
        text: 'The address the satellite\'s audio comes from; the answer goes back to the satellite of that address.'},
       {id: 'voicesat.voice', screen: 'voice-sat', screenName: 'Satellite settings', sel: '[data-voice="box"] [data-f="voice"]', at: 'label', title: 'Answers in voice',

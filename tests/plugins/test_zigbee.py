@@ -328,6 +328,19 @@ def test_pairing_lists_joins_and_orphans(bridge):
     assert s["active"] and s["found"][0]["interview"] == "done" and s["orphans"][0]["id"] == "zs_or"
 
 
+def test_a_joined_device_is_named_by_what_it_is_not_its_model(bridge):
+    """The pairing list offers "Wireless button", "Light"... from the exposes; nothing known: no kind (the screen says so)."""
+    assert me.kind_name([{"type": "enum", "property": "action"}, {"type": "numeric", "property": "battery"}]) == "Wireless button"
+    assert me.kind_name([{"type": "light", "features": []}, {"type": "numeric", "property": "linkquality"}]) == "Light"
+    assert me.kind_name([{"type": "binary", "property": "contact"}]) == "Door sensor"
+    assert me.kind_name([{"type": "numeric", "property": "linkquality"}]) == "" and me.kind_name(None) == ""
+    me.pair_start()
+    me.on_bridge(["zigbee2mqtt", "bridge", "event"], json.dumps(
+        {"type": "device_interview", "data": {"ieee_address": "0xb1", "friendly_name": "0xb1", "status": "successful",
+                                              "definition": {"model": "TS0043", "exposes": [{"type": "enum", "property": "action"}]}}}).encode())
+    assert next(f for f in me.pair_status()["found"] if f["ieee"] == "0xb1")["kind"] == "Wireless button"
+
+
 def test_rename_moves_references_caches_and_state(bridge, monkeypatch):
     me.sync_devices([z("zs_old")])
     core._store_status("zs_old", {"online": True, "values": {"state": True}, "raw": {}})

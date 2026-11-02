@@ -25,6 +25,16 @@ def devices(monkeypatch):
     return saved
 
 
+def test_a_running_bridge_is_found_so_its_id_is_never_typed(devices, monkeypatch):
+    """The Add window offers the bridges the broker holds an availability of; a lock in the house already is not offered."""
+    seen = ["switchbot/front_lock/availability", "switchbot/yard/availability", "switchbot/Bad Id/availability", "switchbot/x/y/availability"]
+    monkeypatch.setattr(core, "_retained_topics", lambda filters, listen=2.5: list(seen))
+    c = TestClient(core.app)
+    assert c.get("/api/switchbot/found", headers=HOUSE).json() == {"found": ["front_lock", "yard"]}
+    assert c.put("/api/switchbot/locks/yard", headers=HOUSE, json={"name": "Yard", "model": "lock"}).status_code == 200
+    assert c.get("/api/switchbot/found", headers=HOUSE).json() == {"found": ["front_lock"]}
+
+
 def test_a_lock_is_added_as_a_generic_device(devices, monkeypatch):
     c = TestClient(core.app)
     r = c.put("/api/switchbot/locks/front_lock", headers=HOUSE, json={"name": "Yard", "model": "lock_ultra"})

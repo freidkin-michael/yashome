@@ -36,11 +36,11 @@
              <button class="dlg-btn" data-adding-off>${esc(i18n('Cancel'))}</button></div>`
         : `<button class="dlg-btn primary" data-adding style="margin:4px 0 6px">${esc(i18n('+ Add a tag'))}</button>`;
       box.innerHTML = `
-        ${v.ready ? '' : `<div class="bindcaption" style="color:var(--bad);margin-bottom:8px">${esc(i18n('The card keys are not set (NFC_SDM_META_KEY and NFC_SDM_FILE_KEY in .env): no tap is accepted.'))}</div>`}
+        ${v.ready ? '' : `<div class="bindcaption" style="color:var(--bad);margin-bottom:8px">${esc(i18n('Tags do not work yet: the house has no tag keys. Whoever looks after the house sets them (NFC_SDM_META_KEY and NFC_SDM_FILE_KEY in the .env file).'))}</div>`}
         <div class="bindcaption" style="margin-bottom:8px">${esc(i18n('A tap of a tag on the list is an event for the rules: each tag starts what its rules say.'))}</div>
         ${enrol}
         ${v.new.map(n => `<div class="row" style="${CARD};flex-wrap:wrap;gap:8px;border-color:var(--on)">
-            <span class="rlabel">${esc(i18n('A new tag was tapped'))}<br><span class="bindcaption">${esc(n.uid)} &middot; ${esc(Home.ago(Date.now() / 1000 - n.ts))}</span></span>
+            <span class="rlabel">${esc(i18n('A new tag was tapped'))}<br><span class="bindcaption">${esc(Home.ago(Date.now() / 1000 - n.ts))}</span></span>
             ${nameField(n.uid, 'Its name')}<button class="dlg-btn primary" data-add="${esc(n.uid)}">${esc(i18n('Add'))}</button></div>`).join('')}
         <div class="nfc-list">${v.cards.map(c => {
           const rs = mine(c.name);
@@ -50,7 +50,7 @@
                  <button class="dlg-btn" data-rename-off>${esc(i18n('Cancel'))}</button></span>`
             : `<span class="rlabel">${Home.icon('nfc', 16)} <b>${esc(c.name)}</b>
                  <button class="dlg-btn" data-rename="${esc(c.uid)}" title="${esc(i18n('Rename'))}" aria-label="${esc(i18n('Rename'))}" style="padding:2px 8px">${Home.icon('pen', 14)}</button><br>
-                 <span class="bindcaption">${esc(c.uid)} &middot; ${esc(c.last ? i18n('last tap {0}', Home.ago(Date.now() / 1000 - c.last)) : i18n('no tap since the start'))}</span></span>
+                 <span class="bindcaption">${esc(c.last ? i18n('last tap {0}', Home.ago(Date.now() / 1000 - c.last)) : i18n('no tap since the start'))}</span></span>
                <span class="rval" style="display:flex;gap:6px"><button class="dlg-btn" data-rule="${esc(c.name)}">${esc(i18n('+ Rule'))}</button>
                  <button class="dlg-btn" data-del="${esc(c.uid)}" style="color:var(--bad)">${esc(i18n('Remove'))}</button></span>`;
           return `<section class="nfc-card" data-uid="${esc(c.uid)}" style="${CARD}">

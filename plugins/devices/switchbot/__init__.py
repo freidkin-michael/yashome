@@ -57,6 +57,14 @@ def switchbot_list():
     return locks()
 
 
+@core.app.get("/api/switchbot/found")
+def switchbot_found():
+    """The bridges heard on the broker (their retained switchbot/<id>/availability) whose lock is not in the house yet:
+    the Add window offers them, so the id is never typed."""
+    ids = {t.split("/")[1] for t in core.retained_topics(("switchbot/+/availability",)) if t.count("/") == 2}
+    return {"found": sorted(i for i in ids if ID_RE.match(i) and not _ours(core.DEVICES.get(i)))}
+
+
 class Lock(core.Body):
     name: str = Field("", max_length=40)
     model: str = "lock_ultra"

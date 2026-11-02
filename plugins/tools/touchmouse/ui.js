@@ -8,11 +8,12 @@ async function open(){
     <div class="head">
       <button class="closebtn" onclick="Home.closeModal()">\u00d7</button>
       <h2>${i18n('Touchmouse')}</h2>
-      <div class="sub">${i18n('A phone or a wall panel moves the pointer of a TV box or a computer. Each one needs the receiver running (see the plug-in README).')}</div>
+      <div class="sub">${i18n('A phone or a wall panel moves the pointer of a TV box or a computer. The ones the house found are listed here.')}</div>
     </div>
     <div class="body"><section>
-      <div id="tm-list"><div class="bindcaption">${i18n('Loading\u2026')}</div></div>
-      <h3>${i18n('Add a receiver')}</h3>
+      <div id="tm-list"><div class="bindcaption">${i18n('Loading\u2026')}</div></div></section>
+    <section><details><summary style="cursor:pointer;font-weight:600">${i18n('Advanced')}</summary>
+      <div class="bindcaption" style="margin-top:8px">${i18n('Add a receiver by hand: one the house did not find by itself.')}</div>
       <div class="row"><input id="tm-id" placeholder="${i18n('id, latin letters: tv-box')}" style="flex:1" autocapitalize="off">
         <input id="tm-name" placeholder="${i18n('name')}" style="flex:1"></div>
       <div class="row"><input id="tm-host" placeholder="${i18n('address: 192.0.2.30')}" style="flex:2" autocapitalize="off">
@@ -20,7 +21,7 @@ async function open(){
         <select id="tm-os"><option value="linux">Linux</option><option value="android">Android</option></select></div>
       <button class="primary" id="tm-add" style="margin-top:8px">${i18n('Add')}</button>
       <div id="tm-out" class="bindcaption"></div>
-    </section></div>`, MID);
+    </details></section></div>`, MID);
   document.getElementById('tm-add').onclick = add;
   await load();
 }
@@ -32,9 +33,9 @@ async function load(){
   catch(e){ if(box) box.innerHTML = `<div class="bindcaption" style="color:var(--bad)">${esc(e.message||e)}</div>`; return; }
   if(Home.modalId() !== MID || !box) return;
   box.innerHTML = list.length ? list.map(r => `<div class="row"><span class="rlabel"><b>${esc(r.name)}</b>
-      <span style="color:var(--dim);font-size:12px"> \u00b7 ${esc(r.host)}:${esc(r.port)} \u00b7 ${esc(r.os)}${r.device ? ' \u00b7 ' + i18n('a device') : r.found ? ' \u00b7 ' + i18n('found in the network') : ''}</span></span>
+      <span style="color:var(--dim);font-size:12px">${r.device ? ' \u00b7 ' + i18n('a device') : r.found ? ' \u00b7 ' + i18n('found in the network') : ' \u00b7 ' + i18n('added by hand')}</span></span>
       ${r.device || r.found ? '' : `<button data-del="${esc(r.id)}" style="color:var(--bad)">${i18n('Delete')}</button>`}</div>`).join('')
-    : `<div class="bindcaption">${i18n('No receivers yet.')}</div>`;
+    : `<div class="bindcaption">${i18n('Nothing found yet: start the receiver on the TV box or the computer (the plug-in guide says how), then open this window again.')}</div>`;
   box.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     try { await Home.api('/api/touchmouse/receivers/' + encodeURIComponent(b.dataset.del), {method: 'DELETE'}); }
     catch(e){ alert(e.message||e); }

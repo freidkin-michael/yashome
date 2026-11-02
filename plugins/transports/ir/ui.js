@@ -7,7 +7,7 @@ const sendControl = (id, code, value) => Home.sendControl(id, code, value);
 const byId = id => Home.devices().find(d => d.id === id);
 const ctl = d => ({presses: (d.controls || []).filter(c => c.kind === 'ir_press')});
 // i18n: plural forms per language
-const IR_PLURALS = {"en": {"interval": ["interval", "intervals"], "button": ["button", "buttons"], "function": ["group", "groups"]}, "ru": {"interval": ["\u0438\u043d\u0442\u0435\u0440\u0432\u0430\u043b", "\u0438\u043d\u0442\u0435\u0440\u0432\u0430\u043b\u0430", "\u0438\u043d\u0442\u0435\u0440\u0432\u0430\u043b\u043e\u0432"], "button": ["\u043a\u043d\u043e\u043f\u043a\u0430", "\u043a\u043d\u043e\u043f\u043a\u0438", "\u043a\u043d\u043e\u043f\u043e\u043a"], "function": ["\u0433\u0440\u0443\u043f\u043f\u0430", "\u0433\u0440\u0443\u043f\u043f\u044b", "\u0433\u0440\u0443\u043f\u043f"]}};
+const IR_PLURALS = {"en": {"button": ["button", "buttons"]}, "ru": {"button": ["\u043a\u043d\u043e\u043f\u043a\u0430", "\u043a\u043d\u043e\u043f\u043a\u0438", "\u043a\u043d\u043e\u043f\u043e\u043a"]}};
 function irPlural(key, n){             // the core has no plural forms for these words
   const ru = typeof LANG === 'string' && LANG === 'ru', f = (IR_PLURALS[ru ? 'ru' : 'en'] || {})[key] || [key, key];
   n = Math.abs(Math.trunc(n || 0));
@@ -280,6 +280,44 @@ function irFace(c, d){
 // the action's name. Learn = the server arms the node and waits for a frame (the request
 // hangs exactly as long as the node listens), press = the server publishes the stored code
 // to <node>/tx/{ir,rf}_raw. The node holds no codes, so reflashing loses nothing.
+// the ESPHome nodes of the network that may be a blaster: online, not one already; IR-looking names first
+function blasterCandidates(nodes){
+  const have = new Set((IR.blasters || []).map(b => b.node)), ir = n => /(^|[-_ ])(ir|blaster)/i.test(n.node + ' ' + n.title) ? 0 : 1;
+  return nodes.filter(n => n.alive === 'online' && !have.has(n.node)).sort((a, b) => ir(a) - ir(b) || String(a.title).localeCompare(String(b.title)));
+}
+// a new blaster: picked from the found nodes, its house name from the node's own; the name of its firmware is typed only
+// when nothing was found. Resolves {node, name} or null (cancelled)
+function askBlasterForm(nodes){
+  return new Promise(resolve => {
+    const ov = el('div', 'askbd'); ov.style.zIndex = 60;
+    const card = el('div', 'askcard'); card.style.maxWidth = '440px';
+    card.innerHTML = nodes.length ? `<div class="asklbl">${escapeHtml(i18n('Which device is the blaster?'))}</div>
+        <select class="askin" data-f="node">${nodes.map(n => `<option value="${escapeHtml(n.node)}">${escapeHtml(n.title || n.node)}</option>`).join('')}</select>`
+      : `<div class="asklbl">${escapeHtml(i18n('No new blaster found on the network. Switch it on and connect it to the house Wi-Fi, then try again; or type the name from its firmware:'))}</div>
+        <input class="askin" data-f="node" autocomplete="off" placeholder="ir-blaster">`;
+    card.innerHTML += `<div class="asklbl" style="margin-top:12px">${escapeHtml(i18n('Its name in the house'))}</div>
+      <input class="askin" data-f="name" autocomplete="off">
+      <div class="askbtns"><button class="dlg-btn" data-f="cancel">${escapeHtml(i18n('Cancel'))}</button>
+        <button class="dlg-btn primary" data-f="ok">${escapeHtml(i18n('Add'))}</button></div>`;
+    const q = f => card.querySelector(`[data-f="${f}"]`);
+    const titleOf = v => (nodes.find(n => n.node === v) || {}).title || '';
+    let auto = true;                                  // the name follows the pick until it is typed
+    q('name').value = titleOf(q('node').value);
+    q('name').oninput = () => { auto = false; };
+    q('node').onchange = () => { if(auto) q('name').value = titleOf(q('node').value); };
+    const done = v => { ov.remove(); resolve(v); };
+    q('cancel').onclick = () => done(null);
+    q('ok').onclick = () => {
+      const node = q('node').value.trim();
+      if(!node){ q('node').focus(); return; }
+      done({node, name: q('name').value.trim()});
+    };
+    card.onkeydown = e => { if(e.key === 'Enter' && e.target.tagName === 'INPUT') q('ok').click(); else if(e.key === 'Escape') done(null); };
+    ov.append(card); ov.onclick = e => { if(e.target === ov) done(null); };
+    document.body.append(ov);
+    q('node').focus();
+  });
+}
 // one window for a button: its name, its group (one of the remote's, or a new one) and its icon from the layout's set
 // resolves {name, group, icon} or null (cancelled)
 // the heading of each icon set of widgets.js (IR_ICON_SETS) in the button form
@@ -393,8 +431,7 @@ function irRemoteSection(r, titleOverride){
   const btnRow = b => `
     <div class="row">
       <span class="rlabel">${escapeHtml(i18n(b.name))}
-        <span class="rval">${b.n} ${irPlural('interval', b.n)}${
-          b.proto === 'rf' ? i18n(' \u00b7 433 MHz') : ''}</span></span>
+        ${b.proto === 'rf' ? `<span class="rval">${i18n('433 MHz')}</span>` : ''}</span>
       <span style="display:flex;gap:6px;align-items:center">
         <button class="dlg-btn primary" data-act="send" data-r="${r.id}" data-b="${b.id}"
                 title="${i18n('Transmit this button')}">${Home.icon('play', 16)}</button>
@@ -445,7 +482,7 @@ function irRemoteSection(r, titleOverride){
       <select data-ir-test="${escapeHtml(r.id)}">${
         (IR.blasters||[]).map(b=>`<option value="${escapeHtml(b.node)}"${
           b.node === preset ? ' selected' : ''}>${escapeHtml(b.name)}${
-          b.online ? '' : ' (offline)'}</option>`).join('')
+          b.online ? '' : i18n(' (offline)')}</option>`).join('')
       }</select></div>`;
   // This remote's appliances may extend existing cards whose frame is built by the
   // firmware (air conditioners). Their buttons are not, and cannot be, in the remote
@@ -501,9 +538,7 @@ function irRemoteSection(r, titleOverride){
     return rows ? `<div class="aclbl">${i18n('From firmware \u00b7')} ${escapeHtml(dev.name)}</div>${rows}` : '';
   }).join('');
   const fwNote = fwSections
-    ? `${fwSections}<div class="bindcaption">${i18n('These buttons are built by the blaster firmware')}
-        ${i18n('(mqtt_devices.json) \u2014 they work even with the server down. Below is what was')}
-        ${i18n('learned here.')}</div>` : '';
+    ? `${fwSections}<div class="bindcaption">${i18n('These buttons are built into the blaster: they work even when the house server is down. Below are the ones learned here.')}</div>` : '';
   return `
     <section>
       <h3>${escapeHtml(titleOverride || r.name)}
@@ -600,15 +635,14 @@ function irTile(r){
           // "no buttons" would be untrue: the appliance has them, only their frame is
           // built by the firmware. Count and show them \u2014 they open in the remote's window.
           ? `<b style="color:var(--txt)">${fw.buttons}</b> ${
-              irPlural('button', fw.buttons)} ${i18n('from the firmware in')} ${
-              fw.codes} ${irPlural('function', fw.codes)}`
+              irPlural('button', fw.buttons)} ${i18n('built into the blaster')}`
           : i18n('No buttons')}</div>
       <div>${used.length
         ? i18n('Appliances:') + ' <b style="color:var(--txt)">' +
           used.map(u => escapeHtml(u.name)).join('</b>, <b style="color:var(--txt)">') + '</b>'
         : i18n('No appliances')}</div>
       ${r.learned_on && r.learned_on !== hubNode
-        ? `<div style="color:var(--bad)">${i18n('learned on')} ${escapeHtml(r.learned_on)}</div>` : ''}
+        ? `<div style="color:var(--bad)">${escapeHtml(i18n('learned through another blaster: {0}', (irBlaster(r.learned_on) || {}).name || r.learned_on))}</div>` : ''}
     </div>
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
       <span style="display:flex;gap:2px;flex:none">
@@ -627,7 +661,7 @@ function blasterTile(b){
   return `<div class="card" data-blaster="${escapeHtml(b.node)}">
     <div class="name">${escapeHtml(b.name)}</div>
     <div class="info" style="font-size:15px;gap:6px">
-      <div>${escapeHtml(b.node)} \u00b7 ${b.online ? i18n('online') : `<span style="color:var(--bad)">${i18n('offline')}</span>`}${b.rx ? ' \u00b7 ' + i18n('learns') : ''}</div>
+      <div>${b.online ? i18n('online') : `<span style="color:var(--bad)">${i18n('offline: check that it has power and Wi-Fi')}</span>`}${b.rx ? ' \u00b7 ' + i18n('learns') : ''}</div>
       <div>${users.length ? i18n('Sends for:') + ' <b style="color:var(--txt)">' + users.map(escapeHtml).join('</b>, <b style="color:var(--txt)">') + '</b>'
         : i18n('Nothing sends through it')}</div>
     </div>
@@ -716,10 +750,8 @@ function buildIrRemoteModal(){
     <div class="head">
       <button class="closebtn" onclick="closeModal()">\u00d7</button>
       <h2>${escapeHtml(r.name)}</h2>
-      <div class="sub">${i18n('A remote is a set of codes; the tile decides where to shine.')}
-        <br>${i18n('Learning \u2014 through')} ${escapeHtml(hub ? hub.name : i18n('the receiving node'))}${i18n(': receiver')}
-        ${i18n('has the only receiver. The codes live on the server, the blaster keeps none and only')}
-        ${i18n('transmits.')}</div>
+      <div class="sub">${i18n('The usual buttons are there; learn the missing ones here.')}
+        ${hub ? escapeHtml(i18n('Point the remote at {0} to learn.', hub.name)) : ''}</div>
     </div>
     <div class="body" id="ir-body">${irRemoteSection(r, i18n('Remote'))}</div>`;
   wireIrPane(md.querySelector('#ir-body'));
@@ -771,7 +803,7 @@ function buildIrApplianceModal(){
           <span class="rlabel">${i18n('Blaster')} <span class="rval">${i18n('which room it shines into')}</span></span>
           <select data-ira-sel="blaster">${(IR.blasters||[]).map(b=>`<option value="${
             escapeHtml(b.node)}"${b.node===a.blaster?' selected':''}>${escapeHtml(b.name)}${
-            b.online?'':' (offline)'}</option>`).join('')}</select>
+            b.online?'':i18n(' (offline)')}</option>`).join('')}</select>
         </div>
         <div class="row">
           <span class="rlabel">${i18n('Extends the card')}
@@ -943,7 +975,7 @@ async function irClick(ev){
              `/api/ir/remotes/${encodeURIComponent(rid)}/buttons/${encodeURIComponent(bid)}/send`,
              {method:'POST', headers:{'Content-Type':'application/json'},
               body: JSON.stringify(tx ? {tx} : {})});
-           irStatus(rid, i18n('Sent via ') + (res.via || tx || i18n('the receiving node')), 'ok'); }
+           irStatus(rid, i18n('Sent via ') + ((irBlaster(res.via || tx) || {}).name || i18n('the receiving node')), 'ok'); }
       finally{ b.textContent = was; }
     } else if(act === 'ren-btn'){
       const cur = r ? (r.buttons||[]).find(x => x.id === bid) : null;
@@ -968,10 +1000,13 @@ async function irClick(ev){
           {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({part: on})});
       await irReload();
     } else if(act === 'add-blaster'){
-      const node = (await Home.askText(i18n('The blaster\'s ESPHome name (as in its firmware, e.g. ir-blaster-4):'), '', 'ir-blaster-4') || '').trim();
-      if(!node) return;
-      const name = (await Home.askText(i18n('Its name in the house (e.g. IR bedroom):'), '') || '').trim();
-      await Home.api('/api/ir/blasters', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({node, name})});
+      irStatus('_', i18n('Looking for blasters on the network\u2026'));
+      let found = [];
+      try { found = (await Home.api('/api/esphome/discover')).nodes || []; } catch(e){ /* nothing found: the form asks for the name */ }
+      irStatus('_', '');
+      const f = await askBlasterForm(blasterCandidates(found));
+      if(!f) return;
+      await Home.api('/api/ir/blasters', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(f)});
       await irReload();
     } else if(act === 'rx-blaster'){
       await Home.api(`/api/ir/blasters/${encodeURIComponent(b.dataset.n)}`, {method:'PATCH',
@@ -1020,7 +1055,7 @@ async function irLearn(rid, proto){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({name, group, proto, timeout: 30, icon: icon || undefined})});
     await irReload();
-    irStatus(rid, `${i18n('Learned:')} ${res.button.name} (${res.button.n} ${i18n('intervals)')}`, 'ok');
+    irStatus(rid, `${i18n('Learned:')} ${res.button.name}`, 'ok');
   }catch(e){
     irStatus(rid, irErrText(e).slice(0, 200), 'bad');
   }finally{
@@ -1085,7 +1120,8 @@ HomePlugins.register({
     {id: 'ir.renblaster', screen: 'tab:p:ir', sel: '[data-act="ren-blaster"]', title: 'Rename blaster', text: 'A new name for this blaster.'},
     {id: 'ir.blastercard', screen: 'tab:p:ir', sel: '[data-act="card-blaster"]', title: 'Open its card', text: 'The device window of this blaster: its room, its name, where it is used.'},
     {id: 'ir.delblaster', screen: 'tab:p:ir', sel: '[data-act="del-blaster"]', title: 'Delete blaster', text: 'Forgets the blaster; its icon leaves the map.'},
-    {id: 'ir.addblaster', screen: 'tab:p:ir', sel: '[data-act="add-blaster"]', title: '+ Blaster', text: 'Adds an ESPHome IR node of the network by its name, and its name in the house.'},
+    {id: 'ir.addblaster', screen: 'tab:p:ir', sel: '[data-act="add-blaster"]', title: '+ Blaster', text: 'Adds a blaster found on the network, under a name in the house.'},
+    {id: 'irblaster.node', screen: 'ir-blaster-form', screenName: 'IR blaster', sel: '[data-f="node"]', title: 'Blaster', text: 'The device found on the network that is the blaster; when none is found, the name from its firmware.'},
     {id: 'irbutton.name', screen: 'ir-button-form', screenName: 'IR button', sel: '[data-f="name"]', at: 'label', title: 'Name', text: 'The button\'s name on the remote and on the tile.'},
     {id: 'irbutton.group', screen: 'ir-button-form', screenName: 'IR button', sel: '[data-f="group"]', at: 'label', title: 'Group', text: 'One of the remote\'s groups or a new one: a group\'s keys sit together.'},
     {id: 'irbutton.cancel', screen: 'ir-button-form', screenName: 'IR button', sel: '[data-f="cancel"]', title: 'Cancel', text: 'Nothing changes.'},
