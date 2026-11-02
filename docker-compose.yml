@@ -1,0 +1,104 @@
+# Yashome: the broker and the backend. Settings come from .env (see secrets.env.example);
+# `make install` fills it in. A plug-in's own containers (zigbee2mqtt) come from its
+# setup/compose.yml, which `make update` lists in COMPOSE_FILE.
+name: yashome
+
+services:
+  home:
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here or pinned: an updater must not pull or replace it
+    build:
+      context: .
+      args:
+        EXTRA_PIP: ${EXTRA_PIP:-}      # Python packages the plug-ins need (docs/plugins.md)
+    restart: unless-stopped
+    # runs as your user so the JSON files it writes stay yours, not root's
+    user: "${PUID:-1000}:${PGID:-1000}"
+    mem_limit: 512m
+    env_file: .env
+    environment:
+      - HOME=/tmp
+      - MQTT_HOST=${MQTT_HOST:-mosquitto}
+      # MQTT_PORT in .env is the HOST port; inside the compose network the broker is always 1883
+      - MQTT_PORT=1883
+      - MQTT_HOST_PORT=${MQTT_PORT:-1883}     # what nodes on the network connect to
+      - TZ=${TZ:-UTC}
+      # the house's files (devices, settings, plugin-data/): HOUSE_DIR, or the checkout itself
+      - HOUSE_ROOT=/house
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${DASHBOARD_PORT:-8765}:8765"
+    volumes:
+      - .:/app
+      - ${HOUSE_DIR:-.}:/house
+      # plug-ins of your own beside the shipped plugins/ (docs/plugins.md), read-only
+      - ${PLUGINS_EXTRA_DIR:-./plugins-extra}:/app/plugins-extra:ro
+      # the nodes' secrets.yaml, so a description holding one of its values is refused (plugins/sources/fwdesc)
+      - ${ESPHOME_SECRETS:-./.helper/none-secrets}:/run/esphome-secrets.yaml:ro
+      # the house's helpers on this host (Wake-on-LAN, ESP rescue, a tablet's launcher): socket files, no ports
+      # (tools/host-sockets.sh, tools/hostsock.py)
+      - /run/yashome:/run/yashome
+    networks: [default, helper]
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  # the helper: what the dashboard (and yashctl) may change on this host - plug-ins on/off, their keys,
+  # apply, update, roll back. It holds the docker socket (that is root on this host), so it listens on
+  # the compose network only, with HELPER_KEY, and does a fixed list of things (helper/helper.py).
+  helper:
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here or pinned: an updater must not pull or replace it
+    build:
+      context: ./helper
+      args: {PUID: "${PUID:-1000}", PGID: "${PGID:-1000}"}   # ssh needs a passwd entry for the user
+    image: yashome-helper:local
+    restart: unless-stopped
+    init: true                  # tini as PID 1 hands SIGTERM to python: no 10 s wait, no exit 137 at an update
+    stop_grace_period: 3s
+    user: "${PUID:-1000}:${PGID:-1000}"
+    group_add: ["${DOCKER_GID:-65534}"]
+    mem_limit: 128m
+    environment:
+      - HELPER_KEY=${HELPER_KEY:-}
+      - YASHOME_DIR=${YASHOME_DIR:-}
+      - YASHOME_HOUSE_ABS=${YASHOME_HOUSE_ABS:-}
+      - YASHOME_EXTRA_ABS=${YASHOME_EXTRA_ABS:-}
+      - YASHOME_Z2M_ABS=${YASHOME_Z2M_ABS:-}
+      - YASHOME_SSH_DIR=${YASHOME_SSH_DIR:-}
+      - GIT_SSH_COMMAND=ssh -i /run/yashome-ssh/id -o UserKnownHostsFile=/run/yashome-ssh/known_hosts -o StrictHostKeyChecking=yes
+      - YASHOME_GIT_INSTEADOF=${YASHOME_GIT_INSTEADOF:-}
+      - HOME=/tmp
+    working_dir: ${YASHOME_DIR:-/tmp}
+    # a network of its own with the backend: other containers (a plug-in's) cannot reach it; the host itself is
+    # host.docker.internal (a git server published on the host, see YASHOME_GIT_INSTEADOF)
+    networks: [helper]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${YASHOME_DIR:-./.helper/none}:${YASHOME_DIR:-/srv/no-checkout}
+      - ${YASHOME_HOUSE_ABS:-./.helper/none-house}:${YASHOME_HOUSE_ABS:-/srv/no-house}
+      - ${YASHOME_EXTRA_ABS:-./.helper/none-extra}:${YASHOME_EXTRA_ABS:-/srv/no-extra}
+      - ${YASHOME_Z2M_ABS:-./.helper/none-z2m}:${YASHOME_Z2M_ABS:-/srv/no-z2m}
+      # git over ssh: the deploy key and its known_hosts only (README)
+      - ${YASHOME_SSH_DIR:-./.helper/none-ssh}:/run/yashome-ssh:ro
+
+  mosquitto:
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here or pinned: an updater must not pull or replace it
+    image: eclipse-mosquitto:2.1.2-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${MQTT_PORT:-1883}:1883"
+    volumes:
+      # the directory, not single files: `make secrets` replaces dynamic-security.json by inode
+      - ./config/mosquitto:/mosquitto/config:ro
+      - ./config/mosquitto/data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  helper: {}
