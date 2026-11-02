@@ -307,7 +307,7 @@ async def _control(cfg: dict, code: str, val):
     except tv.Unauthorized:
         raise HTTPException(409, f"{name}: the TV refused the pairing: pair it again (Settings -> Samsung TV)")
     except (OSError, asyncio.TimeoutError) as e:
-        raise HTTPException(502, f"{name}: no answer ({type(e).__name__})")
+        raise HTTPException(503, f"{name}: the TV does not answer. Is it on and on the network? ({type(e).__name__})")
     core.log.info(f"[control] {name}/{code}={val} via tizen")
 
 
@@ -418,9 +418,9 @@ async def tizen_pair(dev_id: str):
     try:
         token = await tv.pair(t["host"])
     except tv.Unauthorized as e:
-        raise HTTPException(409, f"the TV did not allow it ({e})")
+        raise HTTPException(409, f"The TV did not allow it: press Pairing again and Allow on the TV within 30 s ({e})")
     except (OSError, asyncio.TimeoutError) as e:
-        raise HTTPException(502, f"no answer from the TV ({type(e).__name__})")
+        raise HTTPException(503, f"The TV does not answer: switch it on (with its remote), then press Pairing again ({type(e).__name__})")
 
     def keep():
         with _lock:

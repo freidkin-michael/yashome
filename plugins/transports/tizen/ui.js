@@ -51,6 +51,7 @@
         <button class="dlg-btn danger" data-tz="del">${esc(i18n('Remove'))}</button></span>
       <div class="bindcaption" data-tz="msg" style="flex-basis:100%"></div><div data-tz="form" style="flex-basis:100%"></div></div>`;
     const b = k => box.querySelector(`[data-tz="${k}"]`), say = m => { b('msg').textContent = m; };
+    box.querySelectorAll('button[data-tz]').forEach(x => x.addEventListener('click', () => say(''), true));   // a new press clears the old word
     b('edit').onclick = () => form(b('form'), t, '', reload, say);
     b('del').onclick = async () => {
       try { await Home.api('/api/tizen/tvs/' + encodeURIComponent(t.id), {method: 'DELETE'}); reload(); } catch(e){ say(e.message || String(e)); }

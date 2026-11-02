@@ -24,6 +24,9 @@
     "Its name, address, MAC for power-on, and the inputs and apps its card offers.": "Его имя, адрес, MAC для включения, а также входы и приложения на его карточке.",
     "Remove": "Убрать",
     "Remove {0} from the house? Its card, rules and pairing go; the TV itself is not touched.": "Убрать {0} из дома? Его карточка и сопряжение уйдут; сам телевизор не трогается.",
-    "Takes the TV out of the house: its card and its pairing go; the TV itself is not touched.": "Убирает телевизор из дома: его карточка и сопряжение уходят; сам телевизор не трогается."
+    "Takes the TV out of the house: its card and its pairing go; the TV itself is not touched.": "Убирает телевизор из дома: его карточка и сопряжение уходят; сам телевизор не трогается.",
+    "The TV does not answer. Is it on and on the network? ({0})": "Телевизор не отвечает. Он включён и в сети? ({0})",
+    "The TV refused the command: {0}": "Телевизор не выполнил команду: {0}",
+    "The TV did not pair: switch it on, press Pairing again and accept on the TV ({0})": "Сопряжение не прошло: включите телевизор, нажмите «Сопряжение» ещё раз и примите запрос на телевизоре ({0})"
   }
 }

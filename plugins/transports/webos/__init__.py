@@ -223,9 +223,9 @@ async def _webos_control(cfg, code, val):
     except HTTPException:
         raise
     except (OSError, asyncio.TimeoutError) as e:     # could not reach it: off since the last poll
-        raise HTTPException(409 if code != "power" else 502, off if code != "power" else f"webos: {e}")
+        raise HTTPException(409 if code != "power" else 503, off if code != "power" else f"The TV does not answer. Is it on and on the network? ({type(e).__name__})")
     except Exception as e:
-        raise HTTPException(502, f"webos: {str(e) or type(e).__name__}")
+        raise HTTPException(503, f"The TV refused the command: {str(e) or type(e).__name__}")
     core.log.info(f"[control] {cfg['name']}/{code}={val} via webos")
     _webos_kick(cfg["id"], bool(val) if code == "power" else None)   # power: wait for exactly that
 
@@ -273,7 +273,7 @@ async def webos_pair(dev_id: str):
     try:
         key = await webos.pair(_webos_host(cfg))
     except Exception as e:
-        raise HTTPException(502, f"pair failed: {e}")
+        raise HTTPException(503, f"The TV did not pair: switch it on, press Pairing again and accept on the TV ({str(e) or type(e).__name__})")
     def keep():
         with core.settings_lock:
             _webos_keys[dev_id] = key
