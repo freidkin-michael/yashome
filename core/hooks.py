@@ -13,6 +13,7 @@ ASYNC_CONTROL: dict = {}     # transport -> async fn(cfg, code, val): actuate fr
 CONTROL_KINDS: dict = {}     # control kind -> fn(cfg, ctl, val) -> dict: stateless channels (e.g. an IR button)
 MQTT_SUBSCRIPTIONS: list = []   # topic filters subscribed after the core's own, on every (re)connect
 TOKEN_CHECKS: list = []      # fn(token, method, path) -> True: a token a plug-in issued, for this request only
+KEY_REFUSALS: list = []      # fn(token, method, path) -> a reason: a known key, not for this route (403, not 401)
 WS_FILTERS: list = []        # fn(websocket, payload) -> payload: what this /ws caller may see
 HEALTH_CHECKS: list = []     # fn() -> [row]: a plug-in's rows on the health page (see health_row)
 ON_REPORT: list = []         # fn(dev_id, values: dict, ts): a device's own report (not a command's echo), the channels it carries; inline, fast

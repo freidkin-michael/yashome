@@ -47,7 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # The core lives in core/*.py, one file per area, run here in this order in this module's own namespace:
 # one module as before (plug-ins do `import app as core`, tests patch app.<name>), split only to be read.
-CORE_PARTS = ("base", "hooks", "devices_file", "migrations", "status", "timers", "bindings_run", "http_auth", "mqtt", "mqtt_devices", "startup", "api_devices", "rules", "rooms", "device_keys", "esphome", "web", "plugin_api", "services", "loader", "wiring")
+CORE_PARTS = ("base", "hooks", "devices_file", "migrations", "status", "timers", "bindings_run", "http_auth", "mqtt", "mqtt_devices", "startup", "api_devices", "rules", "rooms", "device_keys", "esphome", "web", "plugin_api", "services", "guest", "loader", "wiring")
 for _part in CORE_PARTS:
     _path = Path(__file__).resolve().parent / "core" / f"{_part}.py"
     exec(compile(_path.read_text(encoding="utf-8"), str(_path), "exec"), globals())

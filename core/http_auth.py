@@ -32,7 +32,7 @@ _CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'
 # the PWA shell stays open so the token prompt can load. Empty token = FAIL
 # CLOSED: a lost .env must never silently reopen the house.
 DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
-_OPEN_PATHS = {"/", "/app.js", "/app.css", "/manifest.json", "/sw.js", "/i18n.js", "/display.js", "/favicon.ico"}
+_OPEN_PATHS = {"/", "/app.js", "/app.css", "/manifest.json", "/sw.js", "/i18n.js", "/display.js", "/favicon.ico", "/guest"}
 _OPEN_PREFIXES = ("/icon-",)
 # a plug-in's public assets: GET /plugins/<name>/ui.js | i18n.json | static/<file>; routes a plug-in
 # adds under /plugins/ (any other shape or method) need the token like everything else
@@ -224,6 +224,15 @@ async def _require_token(request, call_next):
             return _refuse(503, f"{_settings_bad()}: fix or remove it and restart; "
                                 "nothing that is kept in it can change until then")
         return await call_next(request)
+    tok = request_token(request.headers)
+    for fn in list(KEY_REFUSALS) if tok and len(tok) <= 256 else ():
+        try:
+            why = fn(tok, request.method, p)
+        except Exception as e:                    # noqa: BLE001  a broken check: the plain 401
+            log.error(f"[auth] key refusal {getattr(fn, '__name__', fn)}: {e}")
+            why = None
+        if why:
+            return _refuse(403, str(why))
     return _refuse(401, "token required")
 
 

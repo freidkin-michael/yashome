@@ -71,6 +71,7 @@
   .signin-card input{width:100%;box-sizing:border-box;font:inherit;font-size:18px;padding:12px 14px;border-radius:12px;
     border:1px solid var(--line);background:var(--card2);color:var(--txt);margin-bottom:10px;min-height:48px}
   .signin-card .dlg-btn{width:100%;min-height:48px;font-size:16px}
+  .signin-card a.dlg-btn{display:flex;align-items:center;justify-content:center;box-sizing:border-box;text-decoration:none;color:inherit}
   .signin-err{color:var(--bad);font-size:13px;min-height:18px;margin:8px 0}
   body.signedout .conngroup > :not(#conn), body.signedout #tabbar, body.signedout #roomsbar, body.signedout .tabs{display:none}
   .room{padding:20px 18px 6px;font-size:13px;text-transform:uppercase;
@@ -260,6 +261,7 @@
   @media (prefers-reduced-motion: reduce){ .cmdwait, .card.cmdwait-face{animation:none;outline:2px dashed var(--dim)} }
   .toasts{position:fixed;left:5vw;right:5vw;bottom:24px;z-index:var(--z-toast);
     display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+  .toast.guest{background:var(--card);color:inherit;border-color:var(--line);display:flex;gap:12px;align-items:center;pointer-events:auto}
   .toast{background:#5a1e22;color:#fff;border:1px solid var(--bad);border-radius:12px;padding:10px 16px;font-size:15px}
 
   .topbar{display:flex;align-items:flex-start;gap:6px;min-width:0}
@@ -669,3 +671,7 @@
   .rc .rrow .dotwrap.inrow{flex-direction:row;gap:8px;min-width:0;margin-right:8px}
   .rc .rrow .dotwrap.inrow .dotlabel{display:none}   /* in the power row the dot's colour tells the state */
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* a guest browser: using the house, not setting it up */
+  body.guest #add-device-btn, body.guest #fav-add, body.guest #fav-edit, body.guest #fav-del, body.guest [data-tb="order"], body.guest .renbtn{display:none !important}
+  body.guest #conn.guestmark{display:inline !important;font-size:13px;width:auto;height:auto;background:none;color:var(--dim)}
