@@ -35,6 +35,8 @@ const HELP = [
    text: 'Voice, clocks and panels speak it. A screen shows it until someone picks another language there.'},
   {id: 'settings.lang.lang', screen: 'settings:lang', sel: '#st-lang', at: 'label', title: 'Dashboard language',
    text: 'Only the dashboard\'s own words change; the names of devices and rooms stay.'},
+  {id: 'settings.guest.accept', screen: 'settings:device', sel: '#st-guest-acc', at: 'label', title: 'Take entry requests',
+   text: 'Off: nobody can even ask to come in from /guest, and no notice reaches your phone. More than 10 requests in an hour pause them by themselves for an hour.'},
   {id: 'settings.connect.code', screen: 'settings:device', sel: '#st-signin', at: 'label', title: 'Show code',
    text: 'A one-time code for the dashboard in another browser: type it on its sign-in card within 5 minutes.'},
   {id: 'settings.backups.now', screen: 'settings:backups', sel: '#bk-now', title: 'Back up now',

@@ -36,7 +36,7 @@ class Guest(unittest.TestCase):
     def setUp(self):
         self.saved = (app.DASHBOARD_TOKEN, app.RESTRICTED, dict(app.DEVICES))
         app.DASHBOARD_TOKEN, app.RESTRICTED = HOUSE, False
-        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear()
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0; app._guest_cfg["accept"] = True
         app.DEVICES["lamp"] = device("lamp", [{"kind": "switch", "code": "state"}], category="switch")
         app.DEVICES["door"] = device("door", [{"kind": "switch", "code": "locked"}], category="switch")
         app.DEVICES["bolt"] = device("bolt", [{"kind": "switch", "code": "state"}], category="lock")
@@ -45,7 +45,7 @@ class Guest(unittest.TestCase):
     def tearDown(self):
         app.DASHBOARD_TOKEN, app.RESTRICTED = self.saved[0], self.saved[1]
         app.DEVICES.clear(); app.DEVICES.update(self.saved[2])
-        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear()
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_keys.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0; app._guest_cfg["accept"] = True
 
     def ask(self, ip="203.0.113.7"):
         r = self.c.post("/api/guest/request", headers={"x-real-ip": ip, "user-agent":
@@ -237,7 +237,7 @@ class Guest(unittest.TestCase):
             req = self.ask()
         finally:
             app.GUEST_NOTIFY[:] = saved
-        self.assertEqual(heard, [{"id": req["id"], "code": req["code"], "ua": "Chrome on Windows"}])
+        self.assertEqual(heard, [{"id": req["id"], "code": req["code"], "ua": "Chrome on Windows", "waiting": 1}])
         self.assertNotIn(req["secret"], json.dumps(heard))
 
 
@@ -260,3 +260,35 @@ def test_a_radar_s_gate_setting_is_no_lock(monkeypatch):
     monkeypatch.setitem(core_app.DEVICES, "radar_t", {"id": "radar_t", "category": "sensor", "controls": [{"code": "max_move_gate"}, {"code": "presence"}]})
     monkeypatch.setitem(core_app.DEVICES, "lock_t", {"id": "lock_t", "category": "switch", "controls": [{"code": "locked"}, {"code": "state"}]})
     assert not core_app._is_lockish("radar_t") and core_app._is_lockish("lock_t")
+
+
+class Flood(unittest.TestCase):
+    def setUp(self):
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0
+        app._guest_cfg["accept"] = True
+        self.told = []
+        self.saved = list(app.GUEST_NOTIFY)
+        app.GUEST_NOTIFY[:] = [self.told.append]
+        self.c = TestClient(app.app)
+
+    def tearDown(self):
+        app.GUEST_NOTIFY[:] = self.saved
+        app._guest_reqs.clear(); app._guest_hits.clear(); app._guest_recent.clear(); app._guest_pause["until"] = 0.0
+        app._guest_cfg["accept"] = True
+
+    def ask(self, ip):
+        return self.c.post("/api/guest/request", headers={"X-Real-IP": ip})
+
+    def test_a_flood_from_many_addresses_pauses_the_requests_and_tells_the_administrators_once(self):
+        codes = []
+        for i in range(app.GUEST_HOUR_MAX + 5):
+            app._guest_reqs.clear()                     # each one answered: only the hourly cap counts
+            codes.append(self.ask(f"198.51.100.{i}").status_code)
+        assert codes[:app.GUEST_HOUR_MAX] == [200] * app.GUEST_HOUR_MAX and set(codes[app.GUEST_HOUR_MAX:]) == {429}
+        paused = [t for t in self.told if t.get("paused_until")]
+        assert len(paused) == 1 and len(self.told) == app.GUEST_HOUR_MAX + 1
+        assert self.told[1]["waiting"] >= 1
+
+    def test_a_closed_door_takes_no_request_and_tells_nobody(self):
+        app._guest_cfg["accept"] = False
+        assert self.ask("198.51.100.7").status_code == 403 and self.told == []

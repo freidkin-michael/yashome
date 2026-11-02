@@ -1253,8 +1253,9 @@ def _admin_send(cmd: dict, same) -> None:
 
 def _guest_send(req: dict) -> None:
     """A browser asks to come in: every administrator's phone hears it (no other may allow it). Only {id, code, browser}: no secret."""
-    cmd = {"cmd": "guest", "id": str(req.get("id") or ""), "code": str(req.get("code") or ""), "ua": str(req.get("ua") or "")}
-    _admin_send(cmd, lambda c: c.get("id") == cmd["id"])
+    cmd = {"cmd": "guest", "id": str(req.get("id") or ""), "code": str(req.get("code") or ""), "ua": str(req.get("ua") or ""),
+           "waiting": int(req.get("waiting") or 1), "paused_until": int(req.get("paused_until") or 0)}
+    _admin_send(cmd, lambda c: True)              # one notice on the phone: a newer one replaces the waiting one
 
 
 def _guest_notify(req: dict) -> None:

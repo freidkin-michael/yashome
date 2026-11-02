@@ -13,11 +13,28 @@ GUEST_KEEP_S = 900               # a decided request is forgotten after 15 min
 GUEST_PENDING_MAX = 10
 GUEST_RATE = (5, 600)            # 5 requests per IP in 10 min
 GUEST_KEYS_MAX = 50
+GUEST_HOUR_MAX = 10              # requests from everyone in an hour; more pause the requests for an hour (a flood)
+GUEST_PAUSE_S = 3600
 
 _guest_lock = threading.RLock()
 _guest_reqs: dict = {}           # id -> {secret, code, created, ip, ua, state, token, hours}
 _guest_hits: dict = {}           # ip -> [request times]
 _guest_keys: dict = {}           # gid -> {sha256, scope, expires, ip, ua, created, label}
+_guest_recent: list = []         # times of every request in the last hour (all addresses)
+_guest_pause = {"until": 0.0}    # a flood paused the requests until then
+_guest_cfg = {"accept": True}    # the administrator's switch: does the house take requests at all
+
+
+def _guest_cfg_file() -> Path:
+    return PLUGIN_STATE / "guest" / "settings.json"
+
+
+try:
+    _guest_cfg.update({k: v for k, v in json.loads(_guest_cfg_file().read_text(encoding="utf-8")).items() if k == "accept"})
+except FileNotFoundError:
+    pass
+except Exception as e:                            # noqa: BLE001  a bad file: the default (requests taken)
+    log.error(f"[guest] settings.json unreadable: {e}")
 
 
 def _guest_file() -> Path:
@@ -205,6 +222,28 @@ def _admin_only(request: Request):
         raise HTTPException(403, "only an administrator of the house may let guests in")
 
 
+class GuestCfgBody(Body):
+    accept: bool
+
+
+@app.get("/api/guest/settings")
+def guest_settings_get(request: Request):
+    _admin_only(request)
+    return {"accept": bool(_guest_cfg.get("accept", True)), "paused_until": int(_guest_pause["until"])}
+
+
+@use_route
+@app.put("/api/guest/settings")
+def guest_settings_put(body: GuestCfgBody, request: Request):
+    _admin_only(request)
+    _guest_cfg["accept"] = bool(body.accept)
+    if body.accept:
+        _guest_pause["until"] = 0.0               # taken again: a pause from a flood ends too
+    path = plugin_state("guest") / "settings.json"
+    _atomic_json_dump(path, _guest_cfg, indent=1)
+    return {"accept": _guest_cfg["accept"]}
+
+
 @app.get("/guest")
 def guest_page():
     return FileResponse(CHECKOUT / "web" / "guest.html", headers={"Cache-Control": "no-cache"})
@@ -215,11 +254,28 @@ def guest_request(request: Request):
     ip, now = _guest_ip(request), time.time()
     with _guest_lock:
         _guest_sweep(now)
-        hits = _guest_hits.setdefault(ip, [])
-        if len(hits) >= GUEST_RATE[0]:
+        if not _guest_cfg.get("accept", True):
+            raise HTTPException(403, "this house does not take entry requests now")
+        if now < _guest_pause["until"]:
+            raise HTTPException(429, "too many entry requests: they are paused for a while")
+        if len(_guest_hits.setdefault(ip, [])) >= GUEST_RATE[0]:
             raise HTTPException(429, "too many requests from this address: try again in 10 minutes")
         if sum(r["state"] == "pending" for r in _guest_reqs.values()) >= GUEST_PENDING_MAX:
             raise HTTPException(429, "too many browsers are waiting: try again in a few minutes")
+        _guest_recent[:] = [t for t in _guest_recent if now - t < 3600] + [now]
+        paused = len(_guest_recent) > GUEST_HOUR_MAX   # a flood from many addresses: paused, the administrators told once
+        if paused:
+            _guest_pause["until"] = now + GUEST_PAUSE_S
+    if paused:
+        log.warning(f"[guest] more than {GUEST_HOUR_MAX} entry requests in an hour: paused for {GUEST_PAUSE_S // 60} min")
+        for fn in list(GUEST_NOTIFY):
+            try:
+                fn({"id": "", "paused_until": int(_guest_pause["until"])})
+            except Exception:                     # noqa: BLE001
+                log.exception("[guest] a GUEST_NOTIFY hook failed")
+        raise HTTPException(429, "too many entry requests: they are paused for a while")
+    with _guest_lock:
+        hits = _guest_hits.setdefault(ip, [])
         hits.append(now)
         rid, secret = secrets.token_urlsafe(16), secrets.token_urlsafe(32)
         code = f"{secrets.randbelow(10 ** 6):06d}"
@@ -228,9 +284,11 @@ def guest_request(request: Request):
                             "state": "pending", "token": "", "hours": 0}
     log.warning(f"[guest] a browser asks to come in: code {code}, {ua}, from {ip}")
     _emit({"kind": "guest_request", "device": "", "id": rid, "code": code, "ua": ua, "source": "guest"})
+    with _guest_lock:
+        waiting = sum(r["state"] == "pending" for r in _guest_reqs.values())
     for fn in list(GUEST_NOTIFY):                 # the family phones hear of it (no secret goes along)
         try:
-            fn({"id": rid, "code": code, "ua": ua})
+            fn({"id": rid, "code": code, "ua": ua, "waiting": waiting})
         except Exception:                         # noqa: BLE001  one hook never stops the request
             log.exception("[guest] a GUEST_NOTIFY hook failed")
     _bump()

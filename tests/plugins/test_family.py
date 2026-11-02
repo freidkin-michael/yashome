@@ -1289,7 +1289,7 @@ def test_an_entry_request_goes_to_administrators_only_live_first_else_queued_and
     _make_admin()
     monkeypatch.setattr(me, "_send_live", lambda uid, msg: live.append((uid, msg)) or True)
     monkeypatch.setattr(me, "_tickle", lambda uid, high=False: tickles.append((uid, high)) or True)
-    req = {"id": "r1", "code": "123456", "ua": "Chrome on Windows"}
+    req = {"id": "r1", "code": "123456", "ua": "Chrome on Windows", "waiting": 1, "paused_until": 0}
     me._guest_send(req)
     assert live == [("adult", {"cmd": "guest", **req})] and tickles == [] and me._pending_cmds == {}   # the restricted kid never
     monkeypatch.setattr(me, "_send_live", lambda uid, msg: False)                                       # no live link: queued for the pull
@@ -1299,11 +1299,11 @@ def test_an_entry_request_goes_to_administrators_only_live_first_else_queued_and
     for i in range(6):
         me._guest_send({**req, "id": f"x{i}"})
     q = me._pending_cmds["adult"]
-    assert q[0] == {"cmd": "update", "code": 99} and len(q) == 1 + me.GUEST_CMDS_MAX                  # an update is never pushed out
-    assert [c["id"] for c in q[1:]] == ["x1", "x2", "x3", "x4", "x5"] and "kid" not in me._pending_cmds
+    assert q[0] == {"cmd": "update", "code": 99} and len(q) == 2                                       # an update is never pushed out
+    assert [c["id"] for c in q[1:]] == ["x5"] and "kid" not in me._pending_cmds                         # one notice: the newest
     assert tickles == [("adult", True)] * 8
     c = TestClient(core.app)
-    assert [x["cmd"] for x in c.get("/api/family/me/pull", headers=_phone(FULL)).json()["cmds"]] == ["update"] + ["guest"] * 5
+    assert [x["cmd"] for x in c.get("/api/family/me/pull", headers=_phone(FULL)).json()["cmds"]] == ["update", "guest"]
 
 
 def test_an_entry_request_reaches_the_family_plug_in_through_the_core_hook(phones, monkeypatch):

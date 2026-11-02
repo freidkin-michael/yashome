@@ -177,4 +177,7 @@
     <string name="nfcw_failed">Not written: %1$s</string>
     <string name="nfcw_offline">No connection to the house</string>
     <string name="nfcw_done">Written: %1$s</string>
+    <string name="guest_flood_title">Too many entry requests</string>
+    <string name="guest_flood_text">Requests are paused until %1$s. Nobody got in.</string>
+    <string name="guest_text_many">%1$d browsers ask to come in - latest code %2$s</string>
 </resources>
