@@ -36,6 +36,7 @@ function askToken(msg){
       <button class="dlg-btn primary" id="si-go">${i18n('Sign in')}</button>
       <div class="signin-err" id="si-err">${msg ? escapeHtml(msg) : ''}</div>
       <p>${i18n('No code? Ask whoever runs this house to show it from a signed-in screen.')}</p>
+      <a class="dlg-btn" id="si-guest" href="/guest">${i18n('Ask for entry')}</a>
     </div></div>`;
   const inp = $('#si-code'), go = () => {
     const t = inp.value.trim();
@@ -47,7 +48,14 @@ function askToken(msg){
   inp.onkeydown = e => { if(e.key === 'Enter') go(); };
   inp.focus();
 }
-function logout(){ localStorage.removeItem(TOKEN_KEY); TOKEN = ''; location.reload(); }
+function logout(){
+  const guest = TOKEN.startsWith('yg_');
+  localStorage.removeItem(TOKEN_KEY); TOKEN = '';
+  if(!guest){ location.reload(); return; }
+  localStorage.removeItem('hs_guest_until');                 // a guest forgets its key and the cookie the proxy reads
+  document.cookie = 'yashguest=; Path=/; Max-Age=0; Secure; SameSite=Strict';
+  location.replace('/guest');
+}
 // no eager prompt: behind a proxy that injects the header nobody is asked,
 // so we only ask when the API actually answers 401 (see api() below).
 let _focusBeforeModal = null;   // where the focus was before a modal took it

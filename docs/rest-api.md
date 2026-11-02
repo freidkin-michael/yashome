@@ -5,7 +5,7 @@ Everything under `/api` needs `Authorization: Bearer <DASHBOARD_TOKEN>` (or the 
 The page itself accepts `/?token=<token>&tab=<tab>` once to sign a device in (see security.md).
 Any method but GET, HEAD and OPTIONS with an `Origin` other than the dashboard's host gets 403 (the
 host is `Host` or `X-Forwarded-Host`; `DASHBOARD_ORIGINS` adds names a proxy uses). The page, its script,
-`/i18n.js`, `/display.js`, the PWA files and `POST /api/signin` are open. In restricted mode
+`/i18n.js`, `/display.js`, the PWA files, `/guest`, `POST /api/signin` and the two guest request routes are open. In restricted mode
 (`YASHOME_RESTRICTED=1`, security.md) only the routes a plug-in lists answer; every other one is 403.
 
 ## Devices and control
@@ -135,6 +135,12 @@ discover and add answer 503 "broker not reachable" while the backend has no brok
 ```
 POST   /api/signin/start                        -> {code, valid_s}: a 6-digit code for a new screen (house token)
 POST   /api/signin                              {code} -> {token}: no token needed; once, within 5 min, 5 tries
+POST   /api/guest/request                       -> {id, secret, code}: a browser asks to come in (/guest); no token, 5 per IP in 10 min
+GET    /api/guest/request/{id}?secret=          {state: pending|allowed|denied|expired}; allowed: {token, hours} once
+GET    /api/guest                               {pending: [{id, code, ip, ua, age_s}], guests: [{gid, label, scope, expires, ip, ua}]}
+POST   /api/guest/{id}/allow                    {hours: 1|2|8|24, scope: no_locks|view} -> a yg_ key for that browser (not a guest key)
+POST   /api/guest/{id}/deny                     the request is refused (not a guest key)
+DELETE /api/guest/keys/{gid}                    the guest key stops working (not a guest key)
 GET    /api/backups                             {items, age_s, error, warnings, at, nightly, keep} (house token)
 POST   /api/backups                             a backup now: {ok, name, warnings} (house token)
 GET    /api/backups/{name}                      the archive (house token)

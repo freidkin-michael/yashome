@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Yashome</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+         background: #0f1115; color: #e6e8eb; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .card { background: #1a1d23; border: 1px solid #2a2e36; border-radius: 16px; padding: 28px 24px;
+          max-width: 420px; width: calc(100% - 40px); text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+  h1 { font-size: 20px; margin: 0 0 14px; font-weight: 600; }
+  p { color: #aab0ba; margin: 10px 0; }
+  .code { font-size: 44px; font-weight: 700; letter-spacing: 10px; margin: 16px 0; color: #fff; font-variant-numeric: tabular-nums; }
+  button { background: #3d7eff; color: #fff; border: 0; border-radius: 10px; padding: 12px 22px; font-size: 16px;
+           cursor: pointer; margin-top: 10px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .err { color: #ff8a80; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<div class="card" id="box"></div>
+<script>
+(function(){
+  'use strict';
+  var RU = {
+    'Ask the house to let this browser in': '\u041f\u043e\u043f\u0440\u043e\u0441\u0438\u0442\u0435 \u0434\u043e\u043c \u0432\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u044d\u0442\u043e\u0442 \u0431\u0440\u0430\u0443\u0437\u0435\u0440',
+    'Whoever runs the house gets your request and lets this browser in for a few hours.': '\u0425\u043e\u0437\u044f\u0438\u043d \u0434\u043e\u043c\u0430 \u043f\u043e\u043b\u0443\u0447\u0438\u0442 \u0437\u0430\u043f\u0440\u043e\u0441 \u0438 \u0432\u043f\u0443\u0441\u0442\u0438\u0442 \u044d\u0442\u043e\u0442 \u0431\u0440\u0430\u0443\u0437\u0435\u0440 \u043d\u0430 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0447\u0430\u0441\u043e\u0432.',
+    'Ask for entry': '\u041f\u043e\u043f\u0440\u043e\u0441\u0438\u0442\u044c\u0441\u044f \u0432\u043e\u0439\u0442\u0438',
+    'Read this code to whoever runs the house; they confirm it on their screen or phone': '\u041d\u0430\u0437\u043e\u0432\u0438\u0442\u0435 \u044d\u0442\u043e\u0442 \u043a\u043e\u0434 \u0445\u043e\u0437\u044f\u0438\u043d\u0443 \u0434\u043e\u043c\u0430; \u043e\u043d \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442 \u0435\u0433\u043e \u043d\u0430 \u0441\u0432\u043e\u0451\u043c \u044d\u043a\u0440\u0430\u043d\u0435 \u0438\u043b\u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0435',
+    'Waiting for an answer...': '\u0416\u0434\u0451\u043c \u043e\u0442\u0432\u0435\u0442\u0430...',
+    'Let in. Opening the house...': '\u0412\u043f\u0443\u0441\u0442\u0438\u043b\u0438. \u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u043c \u0434\u043e\u043c...',
+    'The request was refused.': '\u0417\u0430\u043f\u0440\u043e\u0441 \u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d.',
+    'Nobody answered in 5 minutes.': '\u0417\u0430 5 \u043c\u0438\u043d\u0443\u0442 \u043d\u0438\u043a\u0442\u043e \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b.',
+    'Ask again': '\u041f\u043e\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u0441\u043d\u043e\u0432\u0430',
+    'No answer from the house: try again.': '\u0414\u043e\u043c \u043d\u0435 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442: \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0435\u0449\u0451 \u0440\u0430\u0437.',
+    'Too many requests: try again in a few minutes.': '\u0421\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u043d\u043e\u0433\u043e \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u0432: \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0447\u0435\u0440\u0435\u0437 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u043c\u0438\u043d\u0443\u0442.'
+  };
+  var ru = (navigator.language || '').toLowerCase().indexOf('ru') === 0;
+  if(ru) document.documentElement.lang = 'ru';
+  function t(s){ return ru && RU[s] ? RU[s] : s; }
+  var box = document.getElementById('box'), timer = 0;
+  function el(tag, cls, text){ var e = document.createElement(tag); if(cls) e.className = cls; if(text) e.textContent = text; return e; }
+  function draw(parts){ box.textContent = ''; parts.forEach(function(p){ box.appendChild(p); }); }
+
+  function start(msg){
+    var b = el('button', '', t(msg ? 'Ask again' : 'Ask for entry'));
+    b.onclick = ask;
+    draw([el('h1', '', t('Ask the house to let this browser in')),
+          el('p', '', t('Whoever runs the house gets your request and lets this browser in for a few hours.')),
+          b, el('p', 'err', msg || '')]);
+  }
+
+  function ask(){
+    clearTimeout(timer);
+    fetch('/api/guest/request', {method: 'POST', credentials: 'same-origin'}).then(function(r){
+      if(r.status === 429) throw new Error(t('Too many requests: try again in a few minutes.'));
+      if(!r.ok) throw new Error(t('No answer from the house: try again.'));
+      return r.json();
+    }).then(function(req){
+      draw([el('h1', '', t('Ask the house to let this browser in')), el('div', 'code', req.code),
+            el('p', '', t('Read this code to whoever runs the house; they confirm it on their screen or phone')),
+            el('p', '', t('Waiting for an answer...'))]);
+      poll(req, Date.now() + 5 * 60 * 1000);
+    }).catch(function(e){ start(e.message); });
+  }
+
+  function poll(req, until){
+    if(Date.now() > until){ start(t('Nobody answered in 5 minutes.')); return; }
+    timer = setTimeout(function(){
+      fetch('/api/guest/request/' + encodeURIComponent(req.id) + '?secret=' + encodeURIComponent(req.secret))
+        .then(function(r){ if(r.status === 404) return {state: 'expired'}; if(!r.ok) throw new Error(); return r.json(); })
+        .then(function(s){
+          if(s.state === 'allowed' && s.token){
+            localStorage.setItem('hs_token', s.token);
+            localStorage.setItem('hs_guest_until', String(Date.now() + (+s.hours || 1) * 3600 * 1000));
+            document.cookie = 'yashguest=1; Path=/; Max-Age=' + (Math.round(+s.hours * 3600) || 3600) + '; Secure; SameSite=Strict';
+            draw([el('h1', '', t('Let in. Opening the house...'))]);
+            location.replace('/');
+          } else if(s.state === 'denied') start(t('The request was refused.'));
+          else if(s.state === 'expired' || s.state === 'allowed') start(t('Nobody answered in 5 minutes.'));
+          else poll(req, until);
+        }).catch(function(){ poll(req, until); });
+    }, 2000);
+  }
+
+  start('');
+})();
+</script>
+</body>
+</html>

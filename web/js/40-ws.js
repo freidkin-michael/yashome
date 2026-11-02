@@ -34,7 +34,7 @@ function connectWS(){
   };
   ws.onopen  = ()=>{
     opened = true; _wsRefused = 0;
-    $('#conn').textContent = ''; $('#conn').title = ''; $('#conn').classList.add('live');   // a live link is the normal state: nothing shown
+    $('#conn').textContent = $('#conn').dataset.guest || ''; $('#conn').title = ''; $('#conn').classList.add('live');   // a live link: nothing shown (a guest: its time)
     _wsDelay = 1000; _wsLast = Date.now();
     clearInterval(_wsWatch);
     _wsWatch = setInterval(()=>{
@@ -58,6 +58,7 @@ function connectWS(){
       const id = k.slice(0, slash), code = k.slice(slash+1);
       if(incoming[id]?.values) incoming[id].values[code] = info.value;
     }
+    if(incoming._meta) guestNotice(incoming._meta.guest);
     delete incoming._meta;
     STATE = incoming;
     updateCards();

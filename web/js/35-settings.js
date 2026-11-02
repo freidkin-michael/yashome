@@ -265,6 +265,11 @@ function stRenderCore(cur, box, tab, quiet){
         <div class="row" id="st-install-no"><span class="rlabel bindcaption">${i18n('To put the dashboard on the home screen use the browser\'s menu: Install app / Add to Home screen.')}</span></div>
         <div class="row" id="st-code-row"><span class="rlabel">${i18n('Another browser')}<br><span class="bindcaption">${i18n('A one-time code for the dashboard in another browser of this network (5 minutes). A phone app joins on Family, a tablet panel on Panels.')}</span></span>
           <button class="dlg-btn" id="st-signin">${i18n('Show code')}</button></div><div id="st-signin-out"></div>
+      </section>
+      <section id="st-guests"><h3>${i18n('Waiting to come in')}</h3>
+        <div class="bindcaption" style="margin-bottom:8px">${i18n('A browser without the front door\'s login asks to come in (/guest). Allow it only when its code is the one you were told.')}</div>
+        <div id="st-guest-wait"></div>
+        <h3>${i18n('Guests')}</h3><div id="st-guest-keys"></div>
       </section>`,
     houselang: `<section>
         <div class="row" id="st-house-row"><span class="rlabel">${i18n('House language')}<br><span class="bindcaption">${i18n('Voice answers, clocks and panels speak it; a screen with no language of its own shows it too (This screen -> Language).')}</span></span><span class="enum" id="st-house-lang"></span></div>
@@ -315,7 +320,15 @@ function stRenderCore(cur, box, tab, quiet){
   if(cur.id === 'device' && !TOKEN){                       // no token of its own, yet signed in: a proxy signs browsers in
     box.querySelector('#st-front').hidden = false;
     ['#st-out-row', '#st-code-row'].forEach(q => { const e = box.querySelector(q); if(e) e.remove(); });
+    box.querySelector('#st-front').insertAdjacentHTML('beforeend', `<a class="dlg-btn" href="/logout">${i18n('Log out')}</a>`);
   }
+  if(cur.id === 'device' && TOKEN.startsWith('yg_')){      // a guest: until when, and a way out; no codes, no guests
+    const until = +localStorage.getItem('hs_guest_until') || 0, row = box.querySelector('#st-out-row');
+    if(row) row.querySelector('.rlabel').innerHTML = escapeHtml(until ? i18n('Guest access until {0}', hhmm(until / 1000)) : i18n('Guest access'))
+      + `<br><span class="bindcaption">${escapeHtml(i18n('Log out: this browser forgets the sign-in; other screens are not touched.'))}</span>`;
+    ['#st-code-row', '#st-guests'].forEach(q => { const e = box.querySelector(q); if(e) e.remove(); });
+  }
+  if(cur.id === 'device' && box.querySelector('#st-guests')) stGuests(box.querySelector('#st-guests'));
   if(cur.id === 'device' && box.querySelector('#st-signin')) box.querySelector('#st-signin').onclick = async () => {
     const out = box.querySelector('#st-signin-out');
     try {
@@ -324,6 +337,62 @@ function stRenderCore(cur, box, tab, quiet){
         <div class="bindcaption">${escapeHtml(i18n('Works once, for 5 minutes. It gives the device the house access: only for your own devices.'))}</div>`;
     } catch(e){ out.textContent = e.message || e; }
   };
+}
+// Settings -> This screen -> Sign-in: browsers that asked at /guest, and the guest keys given out
+const GUEST_RIGHTS = {no_locks: 'Everything except locks and the gate', view: 'Look only'};
+function stGuests(sec){
+  const wait = sec.querySelector('#st-guest-wait'), keys = sec.querySelector('#st-guest-keys');
+  let shown = '';
+  const draw = async () => {
+    if(!sec.isConnected){ clearInterval(timer); return; }
+    let d;
+    try { d = await api('/api/guest'); } catch(e){ sec.hidden = true; clearInterval(timer); return; }   // a screen that may not list them
+    const sig = JSON.stringify([d.pending.map(p => p.id), d.guests.map(g => g.gid)]);
+    if(sig === shown){                                       // only the ages move: keep what is picked in the selects
+      d.pending.forEach(p => { const a = wait.querySelector(`[data-age="${CSS.escape(p.id)}"]`); if(a) a.textContent = ago(p.age_s); });
+      return;
+    }
+    shown = sig;
+    wait.innerHTML = d.pending.length ? d.pending.map(p => `<div class="row" data-req="${escapeHtml(p.id)}">
+        <span class="rlabel"><span style="font-size:28px;letter-spacing:6px;font-weight:700">${escapeHtml(p.code)}</span><br>
+          <span class="bindcaption">${escapeHtml(p.ua)} \u00b7 ${escapeHtml(p.ip)} \u00b7 <span data-age="${escapeHtml(p.id)}">${ago(p.age_s)}</span></span></span>
+        <select class="g-hours" aria-label="${escapeHtml(i18n('For how long'))}">${[1, 2, 8, 24].map(h => `<option value="${h}"${h === 2 ? ' selected' : ''}>${escapeHtml(i18n('{0} h', h))}</option>`).join('')}</select>
+        <select class="g-scope" aria-label="${escapeHtml(i18n('Rights'))}">${Object.entries(GUEST_RIGHTS).map(([k, v]) => `<option value="${k}">${escapeHtml(i18n(v))}</option>`).join('')}</select>
+        <button class="dlg-btn primary g-allow">${i18n('Allow')}</button> <button class="dlg-btn g-deny">${i18n('Deny')}</button></div>`).join('')
+      : `<div class="bindcaption">${i18n('Nobody is waiting.')}</div>`;
+    keys.innerHTML = d.guests.length ? d.guests.map(g => `<div class="row" data-gid="${escapeHtml(g.gid)}">
+        <span class="rlabel">${escapeHtml(g.ua || g.label)}<br><span class="bindcaption">${escapeHtml(i18n(GUEST_RIGHTS[g.scope] || g.scope))} \u00b7 ${escapeHtml(i18n('until {0}', hhmm(g.expires)))} \u00b7 ${escapeHtml(g.ip)}</span></span>
+        <button class="dlg-btn g-revoke">${i18n('Revoke')}</button></div>`).join('')
+      : `<div class="bindcaption">${i18n('No guest has a key now.')}</div>`;
+    const act = async (path, opts) => { try { await api(path, opts); } catch(e){ stToast(e.message || String(e)); } shown = ''; draw(); };
+    wait.querySelectorAll('[data-req]').forEach(row => {
+      const id = encodeURIComponent(row.dataset.req);
+      row.querySelector('.g-allow').onclick = () => act(`/api/guest/${id}/allow`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({hours: +row.querySelector('.g-hours').value, scope: row.querySelector('.g-scope').value})});
+      row.querySelector('.g-deny').onclick = () => act(`/api/guest/${id}/deny`, {method: 'POST'});
+    });
+    keys.querySelectorAll('[data-gid]').forEach(row => {
+      row.querySelector('.g-revoke').onclick = () => act(`/api/guest/keys/${encodeURIComponent(row.dataset.gid)}`, {method: 'DELETE'});
+    });
+  };
+  const ago = s => s < 60 ? i18n('just now') : i18n('{0} min ago', Math.floor(s / 60));
+  const timer = setInterval(draw, 3000);
+  draw();
+}
+// a browser asks at /guest: every screen with the house token hears it on the live link (_meta.guest)
+const _guestSeen = new Set();
+function guestNotice(list){
+  if(!Array.isArray(list) || TOKEN.startsWith('yg_')) return;
+  for(const g of list){
+    if(_guestSeen.has(g.id)) continue;
+    _guestSeen.add(g.id);
+    const box = toastBox(), t = el('div', 'toast guest'), open = el('button', 'dlg-btn primary');
+    t.append(document.createTextNode(i18n('A browser asks to come in: code {0}', g.code)));
+    open.textContent = i18n('Open');
+    open.onclick = () => { t.remove(); openSettings('device'); };
+    t.append(open); box.append(t);
+    setTimeout(() => t.remove(), 60000);
+  }
 }
 function stShow(page, tab){
   let root = document.getElementById('stx');

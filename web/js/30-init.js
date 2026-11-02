@@ -95,6 +95,11 @@ async function init(){
     if(e.target.id === 'bd') closeModal();
   };
   document.getElementById('add-device-btn').onclick = openAddDevice;
+  if(TOKEN.startsWith('yg_')){                               // a guest browser: no setting-up controls, its time in the header
+    document.body.classList.add('guest');
+    const until = +localStorage.getItem('hs_guest_until') || 0, conn = document.getElementById('conn');
+    if(conn && until){ conn.dataset.guest = i18n('Guest until {0}', new Date(until).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})); conn.textContent = conn.dataset.guest; conn.classList.add('guestmark'); }
+  }
   const ns = document.getElementById('navsearch');
   ns.oninput = () => {
     SEARCH_Q = ns.value;
