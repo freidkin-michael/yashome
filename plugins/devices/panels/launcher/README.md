@@ -12,6 +12,7 @@ and keeps the kiosk usable without anybody touching Android.
 | `build.sh` | builds the APK in a docker Android toolchain, by hand |
 | `app/build.gradle.kts` | package name, version, signing |
 | `Launcher.java` | the home screen: pairing code, then the panel page in a WebView |
+| `PanelClient.java`, `UiState.java` | whether the panel page really came up; the pairing thread's state for the screen |
 | `Pairing.java` | answers the house's UDP invitation (port 51823), registers, waits for the bind |
 | `Heartbeat.java` | `POST /api/panels/heartbeat` once a minute; learns name, charge window, orientation |
 | `Caps.java` | the passport (screen, cameras, sensors, battery) sent with register and heartbeat |
@@ -44,7 +45,8 @@ once; keep it, a new key means reinstalling the app on every tablet.
 ## Pairing
 
 1. Install the APK on the tablet, start it and make it the home app: it shows a six-digit code.
-2. Dashboard -> Panels -> **Connect a tablet**: the house broadcasts an invitation in the network.
+2. Dashboard -> Panels (or Settings -> Devices -> Panels) -> **Connect an Android tablet**: the house
+   broadcasts an invitation in the network for 5 minutes.
 3. The tablet answers and registers; check the code, name the panel, **Bind**.
 4. The tablet gets its own key and opens the panel, for example
    `http://192.0.2.10:8765/panel-view.html?panel=hall`.
@@ -59,8 +61,11 @@ panel; the pairing screen shows only while the thread that asks for it is the li
 
 ## Left out
 
-Voice (the wake word and the microphone stream) is not in this app: it comes with the voice
-plug-in. The page's voice calls on the `Panel` bridge are no-ops until then.
+Voice (the wake word and the microphone stream) is not in this app. The page's voice calls on the
+`Panel` bridge are no-ops, and the passport says `mic: false`, so the builder offers no microphone
+widget. Self-update, device owner, the wireless-adb and Do-Not-Disturb reports and the "panel in
+front" check are not in this app either: the panels plug-in serves them to a launcher of your own
+(see "Updating tablets").
 
 ## Updating tablets
 
@@ -69,8 +74,9 @@ The shipped launcher does not update itself. A house whose launcher does (a devi
 panel) reads the version at `GET /plugins/panels/app` and the file at `/plugins/panels/panel.apk`. Its project
 lives in `plugin-data/panels/launcher/`, which Build the app prefers to this directory.
 
-## A house with an older launcher
+## Another package name
 
-A house whose tablets already run an older launcher under another package name sets
-`PANELS_APP_ID` in `.env` to that package. The build then uses it as the application id, so the
-new APK installs as an update over the old one (it must be signed with the same key).
+The package is `org.yashome.panel`. A house whose tablets run a launcher under another package name
+sets `PANELS_APP_ID` in `.env` to that package. The build then uses it as the application id
+(`-PyashAppId`), so the APK installs as an update over the one on the tablets (it must be signed
+with the same key).

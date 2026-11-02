@@ -14,6 +14,18 @@ resends with `force: true`, which first publishes a retained "offline" there (by
 A brand-new blank board still gets its first firmware over USB; this plug-in only recovers nodes that
 already run firmware with a fallback AP (`firmware/base.yaml` has one).
 
+## Files
+
+| file | what |
+|---|---|
+| `__init__.py` | the scan, the relays, `POST /api/esphome/ap/scan`, `POST /api/esphome/ap/provision`, the health row |
+| `ui.js`, `i18n.json` | Add -> ESP via its setup AP |
+| `host/esp-provision.py`, `host/esp-provision-nmcli`, `host/provision.env.example` | the host relay, its nmcli gate, its env file |
+| `firmware/` | ESPHome packages for your nodes (below) |
+| `setup/broker.json`, `setup/env.example`, `setup/install.sh` | the bus rights, `PANELS_AP_PASSWORD` |
+
+There is no Settings page: the plug-in is the Add dialog and a row on Settings -> Overview.
+
 ## The two relays
 
 | relay | what it hands over | needs |
@@ -61,7 +73,7 @@ makes, writable by the house's group only (the home container has `/run/yashome`
    `sudo sh tools/host-sockets.sh` (once, and again after an update that changes the host pieces) installs the house's helpers
 on its host - this one too: the user `yashome-provision`, the root-owned nmcli gate with its sudoers line,
    `yashome-provision.socket` and its service. `/etc/yashome/provision.env` may name the card (`PROVISION_WIFI_IF`).
-3. Settings -> Health shows "ESP recovery: host relay" as ok, or the helper's own error (e.g. "no Wi-Fi
+3. Settings -> Overview shows "ESP recovery: host relay" as ok, or the helper's own error (e.g. "no Wi-Fi
    interface" when it finds no Wi-Fi card; then /scan and /provision answer 503 too).
 
 `PROVISION_WIFI_IF` empty = the first Wi-Fi interface NetworkManager knows (`wlan0`, ...). Use a card
@@ -80,10 +92,11 @@ version; the node then runs on its compiled Wi-Fi again, and with an outdated on
 once more. The relay node joins the setup AP with `save: false` and goes home to the network it ran on
 before without saving anything (its flash stays as it was). The durable fix is an OTA build with the current `HOUSE_WIFI_*`.
 
-## Upgrading
+## Updating
 
-OTA the relay nodes first, then update the core: a relay with the old firmware takes the new `do` (an
-empty `ap_password` for a `*-setup` AP) as an open AP and fails slowly (about 80-90 s per attempt).
+When `firmware/provision.yaml` changes, OTA the relay nodes first, then update the core. A relay whose
+firmware does not know an empty `ap_password` in `do` takes a `*-setup` AP as open and fails slowly
+(about 80-90 s per attempt).
 
 ## When the house Wi-Fi changes
 

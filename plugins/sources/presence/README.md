@@ -31,4 +31,12 @@ phone of several with a changed MAC does not show there.
    It runs as a dynamic user with CAP_NET_RAW only. `PRESENCE_IFACE` empty = the interface of the
    default route. MQTT is plain: across hosts keep it on the LAN or a VPN.
 
-Check: `journalctl -u phone-presence -f`, and the device `presence` in the dashboard.
+Check: `journalctl -u phone-presence -f`, and the device `presence` in the dashboard (Settings ->
+Devices -> All devices). There is no Settings page of its own.
+
+| file | what |
+|---|---|
+| `__init__.py` | reads `presence/state` and `presence/unseen_days` into the device `presence`, the arrival / departure events |
+| `ui.js`, `i18n.json` | the header badge |
+| `host/` | the host piece, its env file and its systemd unit |
+| `setup/broker.json`, `setup/install.sh`, `setup/env.example` | the broker account `presence` |

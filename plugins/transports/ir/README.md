@@ -8,7 +8,7 @@ board loses nothing.
 | file | what |
 |---|---|
 | `__init__.py` | remotes, appliances, learning, sending, IR toggles (`/api/ir/*`) |
-| `ui.js`, `i18n.json` | the IR remotes tab, learning, the appliance tiles, the buttons on a host device's card, "+ IR appliance" on the Appliances tab |
+| `ui.js`, `i18n.json` | the IR remotes tab and Settings -> Devices -> IR (the same page), learning, the appliance tiles, the buttons on a host device's card, "+ IR appliance" on the Appliances tab |
 | `setup/settings.example.json`, `setup/ir_remotes.example.json` | the shape of the settings sections and of the stored codes |
 
 - **Remote**: a set of learned buttons, in `plugin-data/ir/ir_remotes.json`.
@@ -29,6 +29,11 @@ board loses nothing.
   silence (at most once per 5 minutes). A `touchmouse` field (cutover-compat) (`{"port": 7709, "os": "android"}`) makes
   the box a touchpad target at its probe address.
 
+Setup: flash a blaster (an ESPHome node with the topics above) and turn `ir` on. Then Settings ->
+Devices -> IR (or the IR remotes tab, shown once there is a remote or a blaster): "+ Blaster", then
+"+ Remote" (learn its buttons with "+ Learn a button", or "+ 433 MHz" for an RF one), then
+"+ IR appliance" (there, or on the Appliances tab).
+
 Learning: open a remote, press Learn, point the original remote at the blaster. One learning
 session at a time; closing the window cancels it.
 
@@ -39,7 +44,7 @@ wall panels leave those out, the dashboard does not); without it, the buttons ar
 A group can be PART OF THIS REMOTE instead (a keypad, the inputs: `part: true` on its buttons, the "part of the remote" switch
 by the group's name in the remote window, `PATCH .../buttons/<id> {"part": true}`): it never counts as another device, so a TV
 with a "Digits" group keeps its one remote. A button moved into a group or learned into it takes that group's kind; a group whose
-buttons disagree (older data) shows a dash on its switch, and a tap sets all. No flag: the group is a device, as before.
+buttons disagree shows a dash on its switch, and a tap sets all. No flag: the group is a device of its own.
 A remote whose keys are in two or more groups of devices drives two things in one body (a ceiling light with a fan): its
 tile shows each group as a titled zone ("Light", "Fan") with the keys by name in their stored order, and no
 remote layout.
@@ -55,8 +60,8 @@ is a toggle and says nothing); it is cleared when the switch goes off. The map s
 switch, the badge the keys last sent, a tap opens its window; a dashed line from the switch is drawn by itself.
 
 One name each: an appliance's or a toggle's name is in its record only (`core.NAME_OWNERS`), so the tile's pencil and the
-card's rename change the same name, shown on the tile, the card, in voice and on the map; a rename the core had saved in
-`settings.json` "names" moves into the record at start. A blaster fronted by a device (its card) is named by that device and
+card's rename change the same name, shown on the tile, the card, in voice and on the map; at start, a rename found in the
+core's `settings.json` "names" moves into the record. A blaster fronted by a device (its card) is named by that device and
 keeps no name in `ir_blasters`; a blaster without one is named there.
 
 A remote can hide groups of keys on its face (power, navigation, volume, channels, media, other: `PATCH /api/ir/remotes/<id>` with

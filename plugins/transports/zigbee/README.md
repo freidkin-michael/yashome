@@ -29,10 +29,14 @@ Zigbee for Yashome through [zigbee2mqtt](https://www.zigbee2mqtt.io/), with its 
   state, a name for each, leftovers of failed pairings to remove. A Zigbee device's modal has
   "Rename in zigbee2mqtt": the key itself changes, and the core moves every binding, favourite,
   room, automation and timer with it.
+- **Settings -> Devices -> Zigbee.** Three tabs: Devices (every Zigbee device; a tap opens its
+  window), Pairing (the same pairing window) and Gateway (the coordinator, its network, the
+  connection; zigbee2mqtt's own page).
 
 Routes (token needed): `POST /api/zigbee/pair/start|stop`, `GET /api/zigbee/pair/status`,
 `POST /api/zigbee/pair/add`, `POST /api/zigbee/device/rename`, `POST /api/zigbee/device/remove`,
-`GET /api/zigbee/gateway`, `GET /api/zigbee/gateway/key`, `POST /api/zigbee/gateway/check` (Settings -> Zigbee -> Gateway: the
+`GET /api/zigbee/gateway`, `GET /api/zigbee/gateway/key`, `POST /api/zigbee/gateway/check`, `POST /api/zigbee/ui`
+(Settings -> Devices -> Zigbee -> Gateway: the
 coordinator and its network from bridge/info, else configuration.yaml and the coordinator backup; the connection and adapter
 are saved through the helper as Z2M_SERIAL / Z2M_ADAPTER and applied).
 
@@ -63,7 +67,7 @@ are saved through the helper as Z2M_SERIAL / Z2M_ADAPTER and applied).
   node cannot pair, remove or switch a Zigbee device; only the backend and zigbee2mqtt can.
 - `setup/preflight.sh` (the stick, or that a network coordinator answers on its port), `setup/smoke.sh` (zigbee2mqtt reports
   online), `setup/summary.sh` (where the frontend is).
-- zigbee2mqtt's own page publishes no port: Settings -> Zigbee -> Gateway -> Open zigbee2mqtt. The dashboard hands it on at
+- zigbee2mqtt's own page publishes no port: Settings -> Devices -> Zigbee -> Gateway -> Open zigbee2mqtt. The dashboard hands it on at
   `/plugins/zigbee/ui/` (its `frontend.base_url`, set in `setup/compose.yml`) to whoever got a pass there (`POST /api/zigbee/ui`,
   the house token: a cookie for that path only, 12 hours) and fills in zigbee2mqtt's login itself.
 
@@ -75,7 +79,7 @@ starts: two coordinators with one network fight. Set `Z2M_SERIAL` (and `Z2M_ADAP
 again from `coordinator_backup.json`. The `ember` adapter does not carry over the coordinator's
 address (IEEE), and devices bound to it stop reporting: stop zigbee2mqtt, write the old address
 (`ieeeAddr` of the Coordinator in `database.db`) with `universal-silabs-flasher --device
-socket://HOST:6638 write-ieee --ieee <it>`, make the radio leave its network (bellows `leave`),
+socket://<host>:<port> write-ieee --ieee <it>`, make the radio leave its network (bellows `leave`),
 start zigbee2mqtt so it forms from the backup once more. A network coordinator needs a steady 5 V
 supply: a weak one resets it the moment the radio starts sending.
 

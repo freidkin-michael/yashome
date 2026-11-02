@@ -6,7 +6,7 @@ house token (`DASHBOARD_TOKEN`) never goes to a phone.
 
 | part | where | what |
 |---|---|---|
-| this plug-in | the core | phone tokens, rights, the pairing page `/plugins/family/static/pair.html` (it only opens the app), the app download `/plugins/family/yash.apk` (the link, the build and the pairing of new phones are all on the Family card) |
+| this plug-in | the core | phone tokens, rights, the pairing page `/plugins/family/static/pair.html` (it only opens the app), the app download `/plugins/family/yash.apk` (the link, the build and the pairing of new phones are all on the Family page) |
 | `bridge/` | a container on this host - optional (below) | Firebase: the sign-in token the app gets once with its claim, pushes (ring, sync), `/state` for the phones |
 | `static/` | served by the core | `pair.html` (the QR's landing page; it clears the code from the address bar and the history), `qrcode.js` (qrcode-generator 1.4.4, Kazuhiko Arase, MIT - `qrcode-LICENSE.txt`; its few block characters written as `\u` escapes) |
 | `app/` | Build the app in the dashboard, or `app/build.sh` | the Android app; the APK lands in `plugin-state/family/yash.apk` (outside git and backups: it is rebuilt); Firebase in it only with your `google-services.json` |
@@ -22,7 +22,7 @@ house token (`DASHBOARD_TOKEN`) never goes to a phone.
   The phones see the house state while away (`/state`).
 - **Without** (both empty): no Firebase account, no bridge container. Step 4 (the app) and step 5 (pair): the
   address for the phones is this house on its network (`BIND_ADDRESS` and the dashboard's port) unless Settings ->
-  Family -> App names another. The
+  House -> Family -> App names another. The
   QR holds that address and a one-time code the app swaps for its token; the app keeps a connection to the house open
   (`/api/family/live`, a quiet notification shows it), and rings, widget state and updates go down it - only while the
   phone is on the house's network or the VPN. No away state.
@@ -33,17 +33,18 @@ can ring a phone too: Rules -> then -> "Ring a phone" (5-300 seconds, or Stop ri
 a phone at most once a minute. Only the dashboard (the house token) stores or runs such a rule - a
 phone with full access cannot ring the others. "Stop" in the list ends a ring.
 
-The app talks to the address for the phones (Settings -> Family -> App; empty = this house on its network) over https, or
+The app talks to the address for the phones (Settings -> House -> Family -> App; empty = this house on its network) over https, or
 plain http on your own network or VPN - never plain http over the internet. **With Firebase, use an address
 the phones reach from outside**: with a LAN or VPN-only address the tickle still wakes the phone
 away from home, but its pull fails (widgets and updates do not arrive); the house logs a warning at
 start. An address set there reaches the phones already paired too: each pull carries it (`srv`), and the app
-(0.32 and later) moves to it once its own token works there (at most one try an hour) - no new QR. On each phone, once: allow notifications and the location permissions, and try Test ring in
+moves to it once its own token works there (at most one try an hour) - no new QR. On each phone, once: allow notifications and the location permissions, and try Test ring in
 its settings (app/README.md); the app never asks to skip battery optimisation.
 
 ## Presence: who is home
 
-The Family button in the header (before Log out; also Family phone in the Add menu) opens the Family page: a strip with the add form and the app, a square per phone that opens its window (the "Family card" below) lists each paired phone with a dot - at home, away or
+The Family button in the header (before Log out; also Family phone in the Add menu) opens the Family page, the same as
+Settings -> House -> Family: a strip with the add form and the app, a square per phone that opens its window lists each paired phone with a dot - at home, away or
 not known yet - and "At home: ... Away: ..." above the list, next to Rights, Ring and Delete. Each phone
 also has a device `person_<name>` (hidden from the tab grids) with `home` (true / false) and the event
 `arrival` / `departure` for rules. A phone is home while the house believes it is on the house network. The app tells the house - when its network changes and when it
@@ -65,7 +66,7 @@ plug-in: the phone's window on the Family page -> "Also at home when" -> that pr
 ## Updating the app from the house
 
 Build the app (Build the app, or `app/build.sh`): the APK in `plugin-state/family/yash.apk` is the one
-the phones fetch; the Family card shows `yash.apk | <versionName> (<versionCode>) | <built>`. The app tells the house its version with each report and each pull; the list shows it and, when it is
+the phones fetch; Settings -> House -> Family -> App shows `yash.apk | <versionName> (<versionCode>) | <built>`. The app tells the house its version with each report and each pull; the list shows it and, when it is
 older than the built APK, an "Update app" button (`POST /api/family/update`, the dashboard only; `name`
 empty = every phone with an older app). The house then sends `update` down the phone's live link when its app screen is
 open; otherwise the command waits for the phone's next pull and the phone is woken by a high-priority, data-less Firebase message. The
@@ -74,8 +75,7 @@ size, and hands it to Android's installer, which accepts only an APK signed with
 Android 12 an app that installed the previous version updates without a tap; otherwise a notification
 asks for one. Once per phone: Settings -> Apps -> Yash! -> Install unknown apps -> allow (the app
 notifies when that is missing). The house also sends the command by itself, at most once an hour per phone, when a
-phone reports an older version; the app's settings have "Check for an update" (`GET /api/family/me/app`). An app older than 0.17 cannot update itself:
-install 0.17 by hand once.
+phone reports an older version; the app's settings have "Check for an update" (`GET /api/family/me/app`).
 
 ## Widgets on the phone
 
@@ -98,7 +98,7 @@ and when the app is opened; while the phone charges the app also pulls every 2 m
 | service account key (JSON) | Firebase console -> Project settings -> Service accounts -> Generate new private key | a file outside every repository, e.g. `/srv/secrets/firebase-key.json`; its full path in `FAMILY_FIREBASE_KEY` | **yes** - full admin of the Firebase project |
 | database URL | Firebase console -> Realtime Database -> the URL at the top (`https://<project>-default-rtdb.<region>.firebasedatabase.app`) | `FAMILY_FIREBASE_DB` | no |
 | package name | you choose it once (default `com.yash.home`) | the Android app in Firebase, and `FAMILY_APP_ID` | no |
-| address for the phones | this house on its network by default; a domain over https, a VPN address: Settings -> Family -> App | settings `family.server_url` | no |
+| address for the phones | this house on its network by default; a domain over https, a VPN address: Settings -> House -> Family -> App | settings `family.server_url` | no |
 | `FAMILY_BRIDGE_KEY` | `make install` / `make update` generates it | `.env` (and the bridge host's `.env`, the same value) | **yes** |
 | `MQTT_FAMILY_PASSWORD` | `make install` / `make update` generates it | `.env` (and the bridge host's `.env`) | **yes** |
 | a phone's token (`yfd_...`) | made when the app swaps the QR's one-time code (`yfc_...`) | nowhere by hand: the app keeps it | **yes** - only its sha256 is kept here |
@@ -143,7 +143,7 @@ and `MQTT_FAMILY_PASSWORD`, creates the bridge's broker account (it writes `fami
 
 ### 4. Build the app
 
-Dashboard -> Add -> Family phone -> Build the app: the build server's app builder (Settings -> Computers and
+Settings -> House -> Family -> App -> Build the app: the build server's app builder (Settings -> Devices -> Computers and
 servers: a computer with the Android app builder) builds it from `app/` here, signs it with the house's key and puts it where the pairing
 page offers it. The key is made at the first build and kept in `plugin-state/family/app.keystore`
 (with `app.keystore.pass`) - in the backup; lose it and every phone has to uninstall the app once.
@@ -158,7 +158,7 @@ By hand, on any host with docker - the same key (the house's, when there is one)
 
     plugins/tools/family/app/build.sh
 
-It builds in a container and copies the APK to `plugin-state/family/yash.apk`, where the Family card
+It builds in a container and copies the APK to `plugin-state/family/yash.apk`, where the Family page
 offers it. Without `app/google-services.json` it builds an app without Firebase (for a house without
 it): the phone then keeps a link to the house open - a quiet "Connected to the house" notification -
 and starts it again after a reboot. The signing key: the house's (`plugin-state/family/app.keystore`,
@@ -185,8 +185,8 @@ name: the Full access box counts only for a name not in the list; Rights changes
 One phone, one entry: the app sends the phone's ANDROID_ID (`and-...`, it survives a reinstall signed
 with the same key) when it claims a QR. A phone the house knows by that id gets its own entry back (its
 name, widgets and the rules that ring it), when the QR was made for a new name; its old token dies,
-and the QR's placeholder entry goes. Never matched by name. An app without the id (an older
-build) still pairs as before; the list marks a phone paired without the id ("New QR with an updated app
+and the QR's placeholder entry goes. Never matched by name. An app that sends no id still
+pairs by its QR alone; the list marks a phone paired without the id ("New QR with an updated app
 stops duplicates"). The absorbed entry keeps its name, widgets and rules; its rights and screen come
 from the new QR (the admin's latest choice: a restricted QR never hands out the old full rights). A
 New QR of a listed phone is never folded into another entry: claimed by a phone known under another

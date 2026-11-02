@@ -5,13 +5,17 @@ screen. The builder draws it; a tablet shows it in a browser; an ESP screen gets
 
 | part | where | what |
 |---|---|---|
-| this plug-in | the core | layouts, the Panels tab (by room), the builder `/panel-builder`, the kiosk page `/panel-view.html?panel=<name>`, pairing of Android tablets |
+| this plug-in | the core | layouts, the Panels tab (by room) and the same page in Settings -> Devices -> Panels, the builder `/panel-builder`, the kiosk page `/panel-view.html?panel=<name>`, pairing of Android tablets, Add -> "ESP screen: its first firmware over USB" |
 | `discover/` | the `panels-discover` container, in the host's network | invites tablets by a UDP broadcast (port 51823) while pairing is open |
 
 Files: the layouts are configuration, `plugin-data/panels/layouts.json` (kept in the house's git);
 `plugin-state/panels/` holds the bound tablets (`paired.json`), the pairing window and who answered.
 
-## The Panels tab
+Setup: turn `panels` on in Settings -> Maintenance -> Plug-ins and update. `make install` /
+`make update` makes the keys of `setup/env.example`. ESP screens and the launcher app also need the
+`build` plug-in and a build server (Settings -> Devices -> Computers and servers).
+
+## The Panels tab (and Settings -> Devices -> Panels)
 
 Each panel is a card with its live picture (`/panel-view`); a click opens the builder (`/panel-builder`) inside the tab,
 "All panels" returns. The Panel builder button and Edit open the builder in the same tab (no new window: an installed dashboard would open it as another app). Under "Manage panels": Edit, Flash, the room,
@@ -22,16 +26,17 @@ each by room.
 ## A tablet
 
 The panel launcher, Home Panel, is a small Android app in `launcher/` (a full-screen kiosk that
-pairs, keeps the screen on and reports its battery; see its README). It needs Android 7 or newer.
-Panels -> **Build the app** builds it on the build server's app builder (Settings -> Computers and
-servers: a computer with the Android app builder) with the house's key and offers it at `/plugins/panels/panel.apk` (open: a tablet has
+pairs, keeps the screen on and reports its battery; see its README). The self-update, the package
+move and the reports below serve a launcher of your own that supports them; the shipped one does not. It needs Android 7 or newer.
+Panels -> **Build the app** builds it on the build server's app builder (Settings -> Devices -> Computers
+and servers: a computer with the Android app builder) with the house's key and offers it at `/plugins/panels/panel.apk` (open: a tablet has
 no key before it pairs). A tablet can also show a panel in its browser: sign the browser in on the
 dashboard (Settings -> Sign in from another screen) and open `/panel-view.html?panel=<name>`.
 
 `GET /plugins/panels/app` (open) names the published launcher: `{code, name, package, size, sha256, path}`, read
 from the APK's own manifest. A launcher that updates itself asks it, downloads `/plugins/panels/panel.apk` when
 `package` is its own and `code` is newer, checks size and sha256 and hands it to the Android installer (the signature is checked
-there). The heartbeat says when to: a tablet whose `caps.app_code` (or, from an older launcher, `caps.app`)
+there). The heartbeat says when to: a tablet whose `caps.app_code` (or, when it sends no code, its `caps.app` name)
 differs from the published launcher, on the same package (`caps.pkg`, when it sends one), gets `"update": true` in the heartbeat's answer, and a launcher that knows
 it checks at once (a failed install is retried at most every 5 minutes) instead of at its half-hour check.
 The launcher row (Panels -> Manage panels) shows `panel.apk | <versionName> (<versionCode>) | <built>` (the version comes with
@@ -51,7 +56,7 @@ goes quiet. Health warns when a tablet stays quiet 2 minutes after an ask and th
 package gets onto a tablet by `adb install`, one tablet at a time: a launcher that checks `package` never fetches
 another package's APK. A launcher that does not check it installs any published APK with a higher `code`, and as
 device owner it installs a different package silently. Every such tablet then moves at its next ask.
-The old package stays installed until it is removed (`adb uninstall`).
+The package it moved from stays installed until it is removed (`adb uninstall`).
 
 1. Install the launcher on the tablet (`http://<house>/plugins/panels/panel.apk`) and start it: it
    waits for an invitation.
@@ -84,15 +89,14 @@ One tablet, one record. The launcher's id is `and-` + the tablet's full ANDROID_
 reinstall signed with the same key. A tablet paired again (**Pair again**, or it simply asks again)
 keeps its record and its panel (a tablet that still has a working key asks again only after a long
 press on its brand corner, and then keeps its code): the dashboard shows it waiting with its code,
-its old key works until a human checks that code, then a new key replaces the old one. An id from an
-older launcher (`and-` + 8 characters) takes the full id in place at its first heartbeat with its
-own key (cutover-compat). **Delete** on a panel removes its layout, its tablets with their keys and
+its key works until a human checks that code, then a new key replaces it. A short id (`and-` +
+8 characters) takes the full id in place at its first heartbeat with its own key (cutover-compat). **Delete** on a panel removes its layout, its tablets with their keys and
 its retained messages; **Unbind** (in Connect an Android tablet; with the `connect` plug-in in **Android tablets**) frees only the tablet.
 `POST /api/panels/bind` with `keep_key: true` binds a tablet that is bound already (the code still checked) to a panel without a new
 key: its next heartbeat names the panel; should its pairing screen poll within the key window, it gets a new key then. A tablet bound to
 another panel leaves the one it served. A pairing-again from another address within 10 minutes is
 refused, and one nobody confirms lapses after 10 minutes. A full id also drops a bound record of the
-same tablet's older short id (an old launcher reinstalled straight to the new one; cutover-compat).
+same tablet's short id (cutover-compat).
 Binding, unbinding and deleting need the house token: a phone of the family plug-in cannot do them.
 
 Tablets find the house by a broadcast, so they must be in the same network (Wi-Fi and LAN of one subnet).
@@ -105,7 +109,8 @@ waiting tablets per address (5) and a tablet's camera is fetched from the addres
 
 ## Launcher watchdog
 
-A bound tablet whose launcher stopped (no heartbeat) gets it started again. Each tablet's row under Panels -> Tablets has
+A bound tablet whose launcher stopped (no heartbeat) gets it started again. Each tablet's row under Panels -> Android tablets
+(Connect an Android tablet when the `connect` plug-in is off) has
 **Raise the launcher if it fell** (on by default), **after N min** of silence (2) and **at most once in M min** (10), kept in
 `paired.json` as `watch: {on, after_min, every_min}` (`PATCH /api/panels/bind/<id>/watch`, the house key; 1-60 and 1-240 min).
 Every 30 s the plug-in looks at the bound tablets; of those silent for N minutes (counted from the plug-in's start after a
@@ -131,8 +136,8 @@ a failure's `why`, `noadb` (no connection) or `refused`; no answer at all counts
 
 An Android panel can show a mouse button in its status bar: pick a receiver (a TV box or a computer
 from `GET /api/touchmouse`) in the builder's **Touchmouse** select. The layout keeps it as `"bar":
-[{"type": "touchmouse", "receiver": "<receiver id>"}]` (at most 4 items; the old `{"type":
-"airmouse", "device": ...}` is converted on save; cutover-compat). A tap on the button opens a
+[{"type": "touchmouse", "receiver": "<receiver id>"}]` (at most 4 items; a `{"type":
+"airmouse", "device": ...}` item is converted to it on save; cutover-compat). A tap on the button opens a
 full-screen touchpad: a finger moves the pointer, a tap clicks, a two-finger tap right-clicks, two
 fingers dragged up and down scroll, a three-finger tap clicks the wheel, plus Back, Home and
 Keyboard (the key `kbd`, for a binding on the receiver). The launcher itself sends the UDP
@@ -177,7 +182,7 @@ minute, to be given new Wi-Fi details from a phone).
    firmware** and flash it over USB with ESPHome Web (web.esphome.io, Chrome or Edge) or
    `esptool.py write_flash 0 panel-<board>.factory.bin`. **Flash over USB (beta)** does the same from the
    dashboard (Chrome or Edge, dashboard over HTTPS; pick the screen's port, never a Zigbee stick); on
-   Linux it connected to an ESP32-C3 only now and then, so the download is the dependable way. If a
+   Linux it connects to an ESP32-C3 only now and then, so the download is the dependable way. If a
    screen stays dark after any attempt, unplug it and plug it in again (it may wait in its loader).
 2. The screen joins the Wi-Fi and shows a six-digit code; it appears in the same window. Type the code,
    name the panel (small latin letters, digits or -: it becomes the node name), **Bind**: the panel is
@@ -187,10 +192,10 @@ minute, to be given new Wi-Fi details from a phone).
    (no display, so the flash write is not starved by the screen), then takes the new firmware. A screen that
    does not restart within 30 s, or does not come back in safe mode within 90 s, ends the job: the build server drops it.
 
-A screen flashed now has a broker account of its own (see "Broker accounts of the screens"): it reads
+A screen built by this plug-in has a broker account of its own (see "Broker accounts of the screens"): it reads
 the house state (`home/state/#`, `home/weather`, the clock on `home/clock/`) and writes only under its
-own `panel/<name>/`; screens flashed before share the `panels` account, which may write anywhere under
-`panel/`. Their commands go to
+own `panel/<name>/`. A screen whose firmware carries no own account uses the shared `panels` account,
+which may write anywhere under `panel/`. Their commands go to
 `panel/<name>/cmd/<device>/<code>`, and the plug-in passes on only the exact commands a widget of an ESP
 panel sends (a device a panel only shows cannot be switched through it).
 
@@ -199,15 +204,15 @@ is greyed and takes no tap, one waiting for its report dimmed: the plug-in publi
 `panel/<name>/away` (retained) within a second of a change. A tap on a dimmer leaves the bar where
 it is and dims its fill until the device reports, 5 s at most.
 
-What the shared account means, until every screen is flashed again: whoever takes such a screen (or its
-broker password - the older firmware and the starter image carry it) sees the live state of every device
+What the shared account means: whoever takes a screen on it (or its broker password - such firmware
+and the starter image carry it) sees the live state of every device
 of the house and can send the commands that any ESP panel's widgets send. A screen with its own account
 reaches only its own panel's commands. Restart and safe mode
 take only a message with the panel's own key (a new one with every flash, known to the backend and that
 firmware only; a new screen takes only its own code), so a broker client cannot loop the screens. The key
 travels on the screen's own topic during a flash and is retired by the next good one; after a flash that
 failed once the screen had been sent to safe mode, flash it again (or clear that topic) to retire the key
-it heard; wiping a screen is a local 10 s hold only. Device accounts cannot read the new screens' codes
+it heard; wiping a screen is a local 10 s hold only. Device accounts cannot read the codes of new screens
 either. Flashing, binding and confirming a screen need the dashboard's own token (not a phone's, nor a
 panel's key). It cannot reach devices no ESP panel commands, the core's `home/cmd`, settings or rules.
 
@@ -222,9 +227,9 @@ restart into safe mode) is called off on the build server, so the next one can s
 
 The clock and the date on the screens are texts the core sends every minute (retained on
 `home/clock/`, in `CLOCK_LANG`). A new board is a new file in
-`profiles/` (the board, display, touch and backlight blocks); the generator draws the widgets. Compared
-with older firmware of these screens: no assisted onboarding of other nodes (`provision`), and the
-fallback Wi-Fi is no longer open.
+`profiles/` (the board, display, touch and backlight blocks); the generator draws the widgets. The
+screens do not onboard other nodes (`provision`), and their fallback Wi-Fi has a password
+(`PANELS_AP_PASSWORD`).
 
 ## Broker accounts of the screens
 
@@ -236,21 +241,21 @@ up to 5 s for the broker's own answers (matched by correlation data, so another 
 not count); the firmware carries it only then. A build of a panel whose account the broker has not
 confirmed yet (a new one, a lost file entry, a failed earlier build) replaces it as a whole: deleted
 and made again with the stored password and the current rights (a connected screen reconnects); a
-confirmed account is not sent again. A broker still running on its file from before this version
-cannot be told (the backend's right on `$CONTROL` comes with the new file): the build then answers
-503 "restart it once (docker compose restart mosquitto), then build again", and the account is sent
-again at the next build. `make update` restarts the broker only when its file changed, and the
-failed build has rewritten that file already, so restart the broker itself. The broker's file is
+confirmed account is not sent again. A broker started from a file without the backend's right on
+`$CONTROL` cannot be told: the build then answers 503 "restart it once (docker compose restart
+mosquitto), then build again", and the account is sent again at the next build. `make update`
+restarts the broker only when its file changed, and the failed build has rewritten that file
+already, so restart the broker itself. The broker's file is
 rewritten too (`tools/mkpasswd.py --accounts-only`), for its next start; the broker's own "Error
 saving Dynamic security plugin config ... Read-only file system" in its log is expected (its config
 directory is read-only on purpose, the file is written by the backend).
 
 Deleting a panel removes its account; a panel built again under the same name gets a new password,
-so a screen still on the old firmware stays offline until it is flashed again. Screens flashed before
-this version keep the shared `panels` account until they are flashed again. Nothing retires that
-account by itself: once every screen is flashed, change `MQTT_PANELS_PASSWORD` in `.env` and run
-`make update`. That breaks every screen still on the shared account - a legacy screen, and a starter
-flashed but not yet bound - so flash those again first.
+so a screen whose firmware has the earlier password stays offline until it is flashed again. A
+screen on the shared `panels` account keeps it until it is flashed again. Nothing retires that
+account by itself: once every screen has its own account, change `MQTT_PANELS_PASSWORD` in `.env`
+and run `make update`. That breaks every screen still on the shared account (a starter flashed but
+not yet bound too), so flash those again first.
 
 ## The knob
 
@@ -273,6 +278,12 @@ An ESP screen publishes its own sensors (temperature, humidity, light) on `panel
 its status on `panel/<name>/status`. These two filters are open for reading, so a generic device in
 `mqtt_devices.json` can show them (state topics only; the rest of `panel/` stays the plug-in's).
 
+## Voice of a tablet
+
+A tablet can be a voice satellite (the `voice` plug-in). `GET /api/panels/voice/next` is its long poll
+for the commands the voice plug-in queued for it. `POST /api/panels/voice/event` is what it tells back:
+a wake word, the player state, listening on or off, the volume.
+
 ## A file that does not parse
 
 `layouts.json`, `paired.json` or `service_keys.json` that does not parse (a cut write, a hand edit) is
@@ -287,13 +298,13 @@ saved: the topics of a new or changed widget must belong to a device of the hous
 house bus at build; a widget whose device went away later stays, sends nothing and is logged), and every
 number in a widget must be finite (position and size -10000..100000).
 
-## Moving from an older install
+## Layouts and tablets from another install
 
 <!-- cutover-compat -->
 
-Copy the old `panel_layouts.json` to `plugin-data/panels/layouts.json` and the old `paired.json` to
-`plugin-state/panels/paired.json`, then restart. Tablets bound before hold the house token, not a key of
-their own: they keep working only while `DASHBOARD_TOKEN` stays the same. Bind each one again (Panels ->
+Copy that install's `panel_layouts.json` to `plugin-data/panels/layouts.json` and its `paired.json` to
+`plugin-state/panels/paired.json`, then restart. A tablet bound there may hold the house token, not a key
+of its own: it keeps working only while `DASHBOARD_TOKEN` stays the same. Bind each one again (Panels ->
 Connect an Android tablet) to give it its own key.
 
 ## Third-party code
@@ -302,7 +313,7 @@ Connect an Android tablet) to give it its own key.
 the npm package's `bundle.js` unchanged: it writes the first firmware over USB from the browser. The
 bundle carries pako (MIT and Zlib) and atob-lite (MIT) inside, with their notices.
 
-The launcher also reports, in its heartbeat, the wireless-adb state (`adb`: enabled, wifi, port, rooted) and the Do-Not-Disturb filter (`dnd`: alarms / no-access / ...); the panel's card shows them (`adb :5555`, `adb off`, do not disturb). A rooted tablet keeps `persist.adb.tcp.port` at 5555; on any tablet the launcher keeps "alarms only" once it holds the DND right (`cmd notification allow_dnd <launcher package>`, done by the launcher itself on a rooted tablet, else once over adb).
+A launcher of your own may also report, in its heartbeat (the shipped one does not), the wireless-adb state (`adb`: enabled, wifi, port, rooted) and the Do-Not-Disturb filter (`dnd`: alarms / no-access / ...); the panel's card shows them (`adb :5555`, `adb off`, do not disturb). A rooted tablet keeps `persist.adb.tcp.port` at 5555; on any tablet the launcher keeps "alarms only" once it holds the DND right (`cmd notification allow_dnd <launcher package>`, done by the launcher itself on a rooted tablet, else once over adb).
 
-The launcher also says whether the panel is in front (`front`); when another app has sat on top for 5 minutes the launcher brings itself back
-(after a self-update too), and until then the health page warns "another app is in front of the panel".
+Such a launcher may also say whether the panel is in front (`front`). When it says no, the health page warns
+"another app is in front of the panel".

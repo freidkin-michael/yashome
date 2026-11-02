@@ -18,3 +18,14 @@ A new hash never changes the device's card by itself: `changes` lists the channe
 
 - a node with a description is skipped by the Add ESPHome discovery (`core.DISCOVERY_IGNORE`): its Home Assistant configs make no second card.
 - removing the device also empties its `homeassistant/+/<node>/+/config`.
+
+| file | what |
+|---|---|
+| `__init__.py` | the reading, the checks, the routes above |
+| `ui.js`, `i18n.json` | the description section of the device window (the three cases, the build records) |
+| `setup/env.example` | `FWGEN_BUILDER_TOKEN`; `ESPHOME_SECRETS`, the host path of your nodes' `secrets.yaml` |
+
+Setup: turn `fwdesc` on in Settings -> Maintenance -> Plug-ins and update. Point `ESPHOME_SECRETS` at
+the nodes' `secrets.yaml` (mounted read-only at `/run/esphome-secrets.yaml`) so a description that
+holds one of its values is refused; without it the health page says so. There is no Settings page:
+the description shows in each device's window.

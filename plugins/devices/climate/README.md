@@ -11,9 +11,12 @@ answers, `core.room_reading`): it is copied every 120 s, and at once when the ch
 | `ui.js`, `i18n.json` | the card face and the remote window |
 | `setup/settings.example.json` | the shape of the settings section |
 
+Where to set it: open the AC's window (tap its card) and pick the source of "in the room". There
+is no Settings page of its own.
+
 The AC itself is any device of category `climate` (for example an ESPHome node that decodes the AC's
-own remote and publishes its state). Older `mqtt_devices.json` entries that still carry
-`room_temp_from` are taken over once.
+own remote and publishes its state). An `mqtt_devices.json` entry that carries `room_temp_from` is
+taken over once, while the settings section has no choice saved yet.
 
 With the `panels` plug-in on, the mode and fan buttons get the panels' icons (`window.PW.acIcon`);
 without it they show text.

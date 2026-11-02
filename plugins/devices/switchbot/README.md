@@ -62,21 +62,21 @@ broker with the lock.
    `SWITCHBOT_LOCK_KEY_ID` / `SWITCHBOT_LOCK_ENC_KEY` lines into the env file. A factory reset of the
    lock changes the key.
 4. `sudo systemctl enable --now switchbot-lock@front_lock`.
-5. Dashboard -> Add -> SwitchBot lock, with the same id (`front_lock`) and the model.
+5. Dashboard -> Add -> SwitchBot lock, with the same id (`front_lock`) and the model. The lock is then
+   listed in Settings -> Devices -> All devices.
 
 A wrong env file stops the unit with exit code 2, and the message is in its journal. The unit runs as
 a dynamic user with no files or home of its own (BlueZ accepts D-Bus calls from any user).
 
-## Moving from an older setup
+## A device of the same id
 
 <!-- cutover-compat -->
 
-An existing device of the same id is replaced only when it is a SwitchBot lock already: one made by
-this plug-in, or a hand-made `mqtt_devices.json` entry whose `model` starts with "SwitchBot". Adding it
-here moves its topics to `switchbot/<id>/`. Keep the old id: Yash! remembers its lock by the id.
+Add -> SwitchBot lock replaces an existing device of the same id only when it is a SwitchBot lock:
+one made by this plug-in, or a hand-made `mqtt_devices.json` entry whose `model` starts with
+"SwitchBot". Its topics become `switchbot/<id>/`. Keep the id: Yash! finds its lock by the id.
 
-- Stop the old bridge for good before starting the new one, `sudo systemctl disable --now
-  switchbot-lock` (its unit name): only one of them can hold the lock's BLE session, and an enabled
-  old unit comes back after a reboot.
-- A panel lock widget keeps the topics it was built with: pick the lock again in the panel builder and
-  save (an ESP screen: rebuild and flash it), or it keeps sending to the old topics.
+- Only one bridge can hold the lock's BLE session. Disable any other bridge of the same lock for
+  good (`sudo systemctl disable --now <its unit>`), or it comes back after a reboot.
+- A panel lock widget keeps the topics it was built with: pick the lock again in the panel builder
+  and save (an ESP screen: rebuild and flash it).

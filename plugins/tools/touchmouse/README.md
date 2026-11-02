@@ -12,7 +12,9 @@ deletes plain hosts.
 |---|---|
 | `__init__.py` | the list: devices with a `touchmouse` field and the hosts of the settings section `touchmouse` |
 | `ui.js`, `i18n.json` | Add -> Touchmouse |
+| `__init__.py` (routes) | `GET /api/touchmouse`, `PUT` / `DELETE /api/touchmouse/receivers/<id>` (a host added by hand), `GET /plugins/touchmouse/host.tar.gz` (the host files, for the installer) |
 | `host/touchmouse-rx.py`, `host/touchmouse-rx.service` | the receiver of a Linux host (a uinput mouse) |
+| `host/touchmouse-type.py`, `host/touchmouse-type.service` | the typing helper of the desktop session (below) |
 | `setup/settings.example.json` | the shape of the settings section |
 
 ## Found by themselves
@@ -23,7 +25,9 @@ no Delete: remove the receiver from the computer's card). A receiver listed by h
 
 ## A receiver
 
-**A Linux computer** (a media PC, a desktop): on that host, from a checkout of this repository -
+**A Linux computer** (a media PC, a desktop): the easy way is Settings -> Devices -> Computers and servers -> its
+card -> Touchmouse receiver -> Install (plug-in computers): the receiver and the typing helper, found by themselves.
+By hand, on that host, from a checkout of this repository -
 
     sudo install -D -m 755 plugins/tools/touchmouse/host/touchmouse-rx.py /usr/local/lib/yashome/touchmouse-rx.py
     sudo install -m 644 plugins/tools/touchmouse/host/touchmouse-rx.service /etc/systemd/system/
@@ -44,7 +48,7 @@ appears in the list by itself.
     b l|r|m 1|0      left / right / middle (wheel) button down / up
     w <n>            the wheel turns n notches (+ up, - down; capped at 20)
     k back|home|kbd  a key (kbd = KEY_PROG1, XF86Launch1: bind it on the receiver, e.g. to an on-screen keyboard)
-    k forward        KEY_FORWARD (browser forward); k home stays for older apps
+    k forward        KEY_FORWARD (browser forward)
     k playpause      KEY_PLAYPAUSE (the player in front plays or pauses)
     k voldown|mute|volup   KEY_VOLUMEDOWN / KEY_MUTE / KEY_VOLUMEUP: the desktop changes the system's volume
     k up|down|left|right|enter   the arrow keys and Enter

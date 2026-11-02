@@ -15,3 +15,4 @@ No configuration.
 | file | what |
 |---|---|
 | `__init__.py` | the route |
+| `i18n.json` | the plug-in's name |

@@ -75,7 +75,7 @@ points the tunnel there; the card shows whether it is up. The helper keeps its t
 
 - **yashGen firmware builder** (Linux only, not a WSL): Install (`helper/roles/yashgen-install.sh`) prepares
   `/opt/yashome-yashgen` (docker, rsync, a compose.yml on the official ESPHome image of the builder's version - start.sh
-  writes it as `ESPHOME_VERSION` in its `.env` - and start.sh / stop.sh); nothing runs yet. Use (Settings -> yashGen, or the card) writes `plugin-data/computers/yashgen.json` {host, user};
+  writes it as `ESPHOME_VERSION` in its `.env` - and start.sh / stop.sh); nothing runs yet. Use (the Servers tab, or the card) writes `plugin-data/computers/yashgen.json` {host, user};
   the house's own computer: empty = its own builder. Remove: not the one in use.
 
   The host piece, when `YASHGEN_SRC` is in `.env` (the builder's folder on the house's computer): the user units
@@ -91,6 +91,10 @@ points the tunnel there; the card shows whether it is up. The helper keeps its t
   (`helper/roles/player-install.sh`) puts mpv and the player plug-in's user unit there, Remove takes them off (mpv stays).
   The house drives it through the helper over ssh: the player plug-in's README.
 
+- **Touchmouse receiver**: like the player, on every Linux computer that wants one (no Use; not in a WSL): Install
+  (`helper/roles/touchmouse-install.sh`) puts the touchmouse plug-in's receiver there, Remove takes it off. The hello
+  responder then names it with its port, so the touchmouse plug-in lists it: that plug-in's README.
+
 The arguments reach a script inside it (`set -- ...` at its top), never on a command line: a key would show in `ps`.
 
 **A Windows computer** (OpenSSH): add it with its WSL, `<distribution>/<user>`; the probe and the roles run there
@@ -98,10 +102,13 @@ The arguments reach a script inside it (`set -- ...` at its top), never on a com
 
 | file | what |
 |---|---|
-| `__init__.py` | the list (`plugin-data/computers/computers.json`), `/api/computers` (list, add, edit, remove, check, scan, roles), a check of every computer every 5 minutes |
+| `__init__.py` | the list (`plugin-data/computers/computers.json`), `/api/computers` (list, add, edit, remove, check, scan, roles, forget-key), a check of every computer every 5 minutes |
 | `ui.js` | the Settings page |
-| `setup/env.example` | `COMPUTERS_SSH_USER`; `YASHGEN_*` for the host piece |
-| `host/` | the host piece: `install.sh`, the big model's tunnel and health, yashGen's tunnel |
+| `setup/env.example` | `COMPUTERS_SSH_USER`; `YASHGEN_*` for the host piece (`YASHGEN_RESPEAKER`: a folder of node YAMLs outside the house that also goes to the builder) |
+| `host/` | the host piece: `install.sh`, the big model's tunnel and health, yashGen's tunnel and stop, `llm-target.py` (reads `llm.json` / `yashgen.json` for the tunnels) |
+| `discover/discoverd.py`, `setup/compose.yml` | the `computers-discover` companion (the broadcast above) |
+| `setup/secrets.sh` | makes the companion's `plugin-state/computers/` folder as the house's user |
+| `i18n.json` | the page's words |
 
 A computer found at another address with the same host name moves there when its old address does not answer.
 Owner only (the house token).

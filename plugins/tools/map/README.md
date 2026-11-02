@@ -1,7 +1,11 @@
 # map - the floor plan of the house
 
 OWNER ONLY (the house token / the dashboard login): every route answers 401 or 403 to anyone else (a full-access family phone included) and the
-dashboard shows the tab "Home map" only when the first call succeeds.
+dashboard shows the tab "Home map" only when the first call succeeds. The same page is Settings -> House -> Home map.
+
+Setup: turn `map` on in Settings -> Maintenance -> Plug-ins and update; optionally put the house's drawing in
+`plugin-data/map/scheme.svg` (below) or upload a plan of the flat on the map. Files: `__init__.py` (the routes below), `ui.js`
+and `i18n.json` (the page).
 
 ## The scheme
 
@@ -23,8 +27,8 @@ sheet (`POST /api/map/zones/tidy`) gives rooms drawn each on its side of a wall 
 at most 16 units apart and overlapping, move onto their length-weighted middle, and so do edges that continue each other end to end (at most
 12 units apart both ways: one straight wall has no step at a joint); before that, edges within 3 degrees of an axis and at least 30 units
 long are made exactly horizontal or vertical (a curve's short pieces stay); a zone that would cross itself keeps its points (the numbers are
-named at the top of `__init__.py`). It ran once at start for the house (`geo` 4 in map.json; a house with no zones yet takes geo 4 at once,
-so zones drawn later are never moved by a restart). Names of icons keep off the wall lines, doors and windows.
+named at the top of `__init__.py`). The same tidy runs once at a start while `geo` in map.json is below 4, then `geo` becomes 4; a
+house with no zones yet takes geo 4 at once, so zones drawn later are never moved by a restart. Names of icons keep off the wall lines, doors and windows.
 
 WALLS INSIDE A ROOM: "Walls" in the map bar is a tool: tap, tap draws a wall (snapping to 0/90 degrees, zone edges and other walls; the room
 stays one zone); a tap on a free wall removes it (with the doors and windows on it); Undo / Redo, Done. They are `walls` ([{id, a, b}], 0..1)
@@ -37,7 +41,7 @@ opens the same sheet (change, flip, remove). A stroke away from walls says so in
 gap with a thin double line, a swing door as its leaf and a quarter circle, a sliding door as a leaf beside the gap with an arrow. They are
 `openings` ([{id, a, b: its ends on the wall's line, 0..1 of the frame; kind door|window; open left|right|slide; side}]) of map.json: "left"
 hangs the door at a, the end that lies left of (or above) b. An opening keeps its place whatever happens to the zones (an import renumbers
-their edges); one stored by zone and edge index (before) is dropped when the map is read. One that no longer lies on a wall (its edge
+their edges); one stored by zone and edge index instead is dropped when the map is read. One that no longer lies on a wall (its edge
 was made open, moved or deleted, its free wall removed) goes at the next save or import (`openings_dropped` in the answer); ids are
 unique and a, b are stored left to right (top to bottom) whatever the page sent (a swapped pair keeps its hinge and leaf: "left" and
 "right" and the side flip with it). "Join neighbour walls" moves the openings with their edge. The page drops an opening whose wall went
@@ -94,7 +98,7 @@ them all to the map, ROOMS_OWNER) and its tab always shows, even empty (an empty
 drawn for it later takes it by its name (its id stays) and it leaves `unplaced`; a PUT of the map keeps `unplaced` as it is. A rename
 (`PUT /api/map/rooms/{id}`) renames the outline or the unplaced entry with the room; a delete (`DELETE /api/map/rooms/{id}`) takes the room and
 its outline away, its devices are in no room after it. "Delete the room" on the map is that delete, at once (not an edit to undo: the question says so), refused while an
-edit is not saved yet (never saved for it), after the question its tab asks too: what still names the room (`GET /api/rooms/{id}/refs`: a rule, a panel, a satellite) is listed in it. With no zone drawn no room goes. Once, at the first start with this, every dashboard room
+edit is not saved yet (never saved for it), after the question its tab asks too: what still names the room (`GET /api/rooms/{id}/refs`: a rule, a panel, a satellite) is listed in it. With no zone drawn no room goes. Once, at the first start of the plug-in, every dashboard room
 the map has no zone for becomes an unplaced room: map.json and the rooms as they were are copied first, with their sha256 in `manifest.txt`, to
 `plugin-state/map/rooms-migration-<UTC>/`, and `plugin-data/map/.rooms-migrated` marks it done (a house it cannot write tries at the next start).
 
@@ -124,6 +128,8 @@ and the toolbar is one row with the rest behind "...". A page that was open befo
 |---|---|
 | `GET /api/map`, `PUT /api/map` | the whole map `{rev, rooms, unplaced, items, links}` in `plugin-data/map/map.json` (and `scheme`: `{w, h}` or null, `load_types`); a PUT with an old `rev` answers 409; its answer is `{rev, kept, zones: [{id, house_room}]}` |
 | `GET /api/map/scheme` | the scheme (SVG) |
+| `GET`, `PUT`, `PATCH`, `DELETE /api/map/underlay` | the plan of the flat: its file, an upload (`?w=&h=`, the body is the file), its place and look, its removal |
+| `POST /api/map/zones/tidy` | "Join neighbour walls" |
 | `PUT /api/map/zones` | the owner's import of the house's zones (replaces them; the rooms follow): an edge the map had (the same ends, to half a unit, either way) keeps its wall mark, a part of one (split, shortened: on its line, overlapping it) takes that edge's mark (the zone's own edge first, then the shortest; two that disagree: open), any other edge is open (never a wall by default); doors and windows keep their place, one left with no wall under it goes (`openings_dropped`); same answer as the PUT of the map |
 | `GET /api/map/parts` | `{primary: [member ids]}` of the merges in `things.json`: the dashboard hides a member from its grids and offers it as a button in the primary's window |
 | `GET /api/map/candidates` | the physical things that may be placed: `[{id, name, category (the kind), room, online, members, detail}]` |
@@ -132,4 +138,4 @@ and the toolbar is one row with the rest behind "...". A page that was open befo
 | `GET /api/map/facts` | `{lines, items: [{text, load, controlled}]}` for the voice model: "<load> (<room>, <type>): controlled by <device> / <channel>", "LED strip <name> ..." |
 
 The dashboard saves with a revision check and, when another tab has saved meanwhile, lays its own changes over the new revision and tries once more.
-The map's history is the house repository's (a change is committed after a minute of quiet by the house's own script, no trailer).
+`plugin-data/map/` is house data: keep it in the house's own git (or its backups) for its history.

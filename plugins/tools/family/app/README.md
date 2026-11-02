@@ -1,16 +1,17 @@
 # Yash! - the Android app of the family plug-in
 
 The app of the people of the house: their devices, a ring that sounds even on silent, the house
-state while away, widgets, a quick-settings tile for the lock, a touchpad for a TV player. Built by
-the dashboard (Family phone -> Build the app, on the build server's app builder) or by
-`build.sh` (in a container, any host with docker) - both with the house's key; the Family card
-offers the APK.
+state while away, widgets, a quick-settings tile for the lock, a touchpad for a TV player, films,
+"Ask the house" by text or voice. Built by the dashboard (Settings -> House -> Family -> App -> Build
+the app, on the build server's app builder) or by `build.sh` (in a container, any host with docker) -
+both with the house's key; the Family page offers the APK.
 
 | file | what |
 |---|---|
 | `build.sh` | builds `app-release.apk` with the house's key and copies it to `plugin-state/family/yash.apk` (or the directory given) |
 | `app/build.gradle.kts` | the app; Firebase only when `app/google-services.json` is there |
-| `app/src/main/java/com/yash/home/` | `SetupActivity` (pairing, test ring), `DashboardActivity`, `RingService` (the alarm), `LiveService` (the house link without Firebase), `PushService` (Firebase pushes), `Cloud` (Firebase side), `HomeApi` (the house's REST and sockets), widgets, lock tile, `MouseActivity` (the touchpad: move, tap, two-finger tap or drag, three-finger tap, Back, Home, Keyboard; its receivers come from the touchmouse plug-in) |
+| `app/src/main/java/com/yash/home/` | `SetupActivity` (pairing, test ring, language), `DashboardActivity`, `RingService` (the alarm), `LiveService` (the house link without Firebase), `Link` (pulls and reports; no service, no heartbeat), `PushService` (Firebase pushes), `Cloud` and `SyncWorker` (Firebase side), `HomeApi` (the house's REST and sockets), `NetInfo` (the network report), `AppUpdate` / `UpdateReceiver` (self-update), widgets (`DeviceWidget`, `DeviceWidgetConfig`, `LockWidget`, `WidgetState`), the lock tile (`LockTileService`, `LockActionActivity`), `MouseActivity` (the touchpad; its receivers come from the touchmouse plug-in), `FilmsActivity` (the player plug-in), `AskActivity` (typed questions and push-to-talk, the voice plug-in), `RecordActivity` and `RecQueue` (wake-phrase samples), `DoorTapActivity` (an NFC door card tapped on the phone) |
+| `tools/` | `svg2vd.py`, `ir_icons_to_vd.py`: icons to Android vector drawables |
 
 ## Two ways a ring reaches the phone
 
@@ -28,8 +29,8 @@ offers the APK.
 ## On the phone, once
 
 1. Allow notifications (the ring's Stop button lives in its notification).
-2. Settings in the app -> Battery: let the app run unrestricted, so Android does not stop the house
-   link or delay a push.
+2. Allow the location permission ("Allow all the time" when asked): the app reads only the Wi-Fi name with it,
+   for "at home"; the location itself is never read or sent.
 3. Test ring / Stop in the app's settings: the alarm sounds on silent and on "Do not disturb" -
    except "Total silence", which mutes alarms too (the settings screen warns then).
 
@@ -58,7 +59,7 @@ moved to a new phone: pair the new phone by a new QR.
   - air conditioner (a `mode` setting plus a power switch): the icon is the current mode, a tap
     switches power.
   Offline or unknown = a dimmed icon.
-- **Lock** (`LockWidget`): the older house-lock widget, kept for widgets already placed.
+- **Lock** (`LockWidget`): the house lock (a switch with payload LOCKED, found once) as a widget.
 
 Fresh state: the app tells the house which channels its widgets show,
 `PUT /api/family/me/widgets {"items":[{"dev":"...","code":"..."}]}` (when a widget is placed or

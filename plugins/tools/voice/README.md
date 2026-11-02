@@ -1,7 +1,21 @@
-# voice
+# voice - the house answers by voice
 
-The house answers by voice. The design, the principle (thin satellites, the wake word on the device, everything else on the server) and
-the plan are in [docs/voice.md](../../../docs/voice.md). This is step 1: the TTS service.
+The design and the principle (thin satellites, the wake word on the device, everything else on the server) are in
+[docs/voice.md](../../../docs/voice.md). This plug-in has the TTS service, the satellites and their cards, the voice
+settings, typed and spoken questions from the app, and the recording of samples. Speech recognition and the wake-word
+check run in the separate voice service (voice-vad, docs/voice.md), which this plug-in talks to.
+
+Setup: turn `voice` on and add `voice` to `COMPOSE_PROFILES`; `make install` / `make update` makes `VOICE_TTS_KEY`.
+Then Settings -> Voice -> Voice (the wake word and answers) and the satellites on the "Voice / Sound" tab.
+
+| file | what |
+|---|---|
+| `__init__.py` | the satellites, say / play / stop / volume, the settings, ask / chat / push-to-talk, the routes below |
+| `_record.py` | background recording and the speaker samples (below) |
+| `ui.js`, `i18n.json` | the cards, the "Voice / Sound" tab, Settings -> Voice -> Voice |
+| `service/tts/` | the TTS service (`server.py`, `numwords.py`, `Dockerfile`) |
+| `setup/compose.yml`, `setup/install.sh`, `setup/update.sh`, `setup/env.example` | the `tts` container and its key |
+| `setup/settings.example.json` | the shape of the settings section |
 
 ## TTS service (`service/tts`, container `tts`)
 
@@ -41,14 +55,15 @@ not on the card but work from the API, from a rule and from MQTT: `home/cmd/<id>
 
 - `POST /api/voice/say {text, target, lang?, voice?}`: the TTS speaks, every player of `target` (a satellite id, a room or `all`)
   plays it. `POST /api/voice/play {url, target}`, `POST /api/voice/stop {target}`, `POST /api/voice/volume {target, value 0..100}`.
-- Settings -> Voice (`GET/PUT /api/voice/config`, the house token; voice-vad reads it every 10 s, no restart): the wake word, how exact
+- Settings -> Voice -> Voice (`GET/PUT /api/voice/config`, the house token; voice-vad reads it every 10 s, no restart): the wake word, how exact
   (`wake_maxdist`, letters: at most (length - 1) // 2 and 3, so 7 letters -> 3, 4 -> 1), the start of the word (`wake_prefix`, 3 letters or
   more, "" = off), how it is also heard (`wake_variants`: a word of 2+ letters, or a stem of 3+ letters and *, "comput*" = any ending), smart answers on/off (`llm`: off = no model is loaded or
   polled), `llm_model`, `big_model` (`POST /api/voice/models` lists what the Ollama hosts have), `llm_timeout`, ask before
   "turn everything off" (`confirm_all_off`), `ask_ttl`. A satellite with `need_wake: true` acts only on a phrase that holds the wake word
   (`need_wake` in the GET = their `peer`s); a save without the field keeps it. voice-vad's first read seeds every field from what it runs
-  (`PUT ?seed=1`, once); a page save before that is refused (409) and the page waits. A satellite added later at an address the env
-  listed in VA_NEEDWAKE_IPS needs the wake word too. `lang` in the GET is the house language (Settings -> General): the answers' language.
+  (`PUT ?seed=1`, once); a page save before that is refused (409) and the page waits. A satellite added later at an address that first read
+  listed as needing the wake word (`need_wake_peers`) needs it too. `lang` in the GET is the house language (Settings -> House ->
+  House language): the answers' language.
   A GET of it that went fine is left out of the access log.
 - A satellite with `quiet_fail: true` ("Silent when not understood" in its settings) gets no reply and no sound for a command that was not understood (a question is still asked): a false wake on the TV stays silent. Saving the settings form keeps the flags it does not show.
 - On a wake the HOUSE stops what the satellite plays (the node decides nothing); it plays the `listening` sound only for a satellite with `wake_chime: true`
@@ -59,3 +74,26 @@ not on the card but work from the API, from a rule and from MQTT: `home/cmd/<id>
 
 The dashboard has a tab "Voice / Sound" with the cards of the satellites; the window of a card has a "Voice settings" section (name, room, the address
 the audio comes from, the voice of the answers, the counters). The wake word is on the device and not set here.
+
+## Questions from the app
+
+The house token or a full-access phone (the core's token check):
+
+- `POST /api/voice/ask {text, speak?}`: a typed command, the same road as a spoken one (`speak`: a satellite or room
+  that also says the answer); a question back carries a `token`, and
+  `POST /api/voice/ask/confirm {token, yes}` answers it.
+- `POST /api/voice/ptt?sat=<id>`: a phrase recorded on the phone (16 kHz mono, 16-bit little endian, as the body), no wake
+  word -> `{text, engine, ok, said, ask, token?, chat?, audio}`.
+- `POST /api/voice/chat {text, history?}`: a chat answer of the house model, streamed as plain text; no devices, no actions.
+- `POST /api/voice/tts {text}`: `{url}`, the speech of a text for a phone that reads a chat answer out.
+- `GET /plugins/voice/tts.tar.gz`: the TTS service's files, for the Speech (TTS) role on a computer.
+
+## Recording (`_record.py`)
+
+- Background recording of a satellite's microphone (voice-vad saves the raw audio; no recognition, no action): `POST
+  /api/voice/background` starts a "quiet" one (1 to 720 minutes from now) or arms a "tv" one (from when the TV turns on until
+  it turns off, two hours at most, once); `GET` shows them, `DELETE` cancels. One records at a time. The house token only.
+- Speaker samples for the recognizer service: `GET /api/voice/record/state`, `/record/available`, `/record/phrases`,
+  `POST /api/voice/record` (a 5 s take on a satellite, the first 3 s kept), `POST /api/voice/record/sample` (1 to 6 s
+  recorded on a phone or in the browser), `POST /api/voice/record/delete`, `GET /api/voice/record/file` (a sample as WAV).
+  A house without the recognizer service has no recording: the screens hide it.

@@ -1,8 +1,8 @@
 # build - the build server
 
 Firmware for the house's own devices (panels, knobs, sensor nodes) is ESPHome: it has to be compiled
-(several GB of toolchain, a few minutes per build) and flashed. The build server does that, on this
-a computer of the house (this one included). Plug-ins that make firmware (`requires: build`) send it jobs; the first
+(several GB of toolchain, a few minutes per build) and flashed. The build server does that, on a
+computer of the house (this one included). Plug-ins that make firmware (`requires: build`) send it jobs; the first
 flash of a new device goes over USB from the browser with the firmware the server built, every later
 one over the air (OTA) from the server.
 
@@ -15,7 +15,8 @@ same code as `server/`) in `/opt/yashome-build`, its port on that computer's loo
 (`127.0.0.1:8795`, no key). Use points the helper's ssh tunnel there (`helper:8795`) and
 the house builds there (settings `build.remote` = that computer); Use on the house's own computer = this
 host's server again. No key and no code exist for it: whoever can reach the port has logged in to that
-computer already. A computer needs 4 GB of memory and 10 GB of disk.
+computer already. Plan for at least 4 GB of memory and 10 GB of disk there (each build container is
+limited to 4 GB).
 
 A job carries the house's Wi-Fi and broker secrets for the firmware: secrets.yaml lives on the server
 only for the time of a job, but ESPHome compiles the secrets into the firmware and its build files, which
@@ -58,3 +59,19 @@ then `artifact(id, "app.apk")`. The project's gradle reads
 The server itself: `GET /v1/info`, `POST /v1/jobs`, `POST /v1/jobs/<id>/go` / `abort`, `GET /v1/jobs/<id>`,
 `GET /v1/jobs/<id>/<artifact>` (no key), see `server/server.py`.
 `server()` -> its address ("" = none), `use_remote(host)` / `in_use()`: the computer in use (plug-in computers).
+
+Routes of the house (the dashboard's token only): `GET /api/build/server` (the computer in use, whether one is set),
+`POST /api/build/server/test` (the server's `/v1/info`), `GET /api/build/jobs/<id>` (a job's state and log),
+`GET /api/build/jobs/<id>/firmware.factory.bin|firmware.ota.bin` (a download). `GET /plugins/build/server.tar.gz` is the
+server's code for the installer.
+
+| file | what |
+|---|---|
+| `__init__.py` | the helpers and routes above |
+| `server/server.py`, `server/Dockerfile` | the build server |
+| `server/install-build-server.sh` | its installer, run on the computer as root (`house` and `apk` / `noapk` arguments) |
+| `apk/Dockerfile` | the app builder's image (Android SDK) |
+| `setup/settings.example.json` | the settings section `build` (`remote`: the computer in use) |
+| `i18n.json` | the plug-in's words |
+
+There is no Settings page of its own: the server is set up on Settings -> Devices -> Computers and servers.

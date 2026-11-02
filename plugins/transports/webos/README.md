@@ -11,7 +11,8 @@ TV (and before the 409 of a TV that is off).
 
 | file | what |
 |---|---|
-| `__init__.py` | the transport, the poller, `POST /api/webos/<id>/pair` |
+| `__init__.py` | the transport, the poller, `POST /api/webos/<id>/pair`, `GET /api/webos/tvs`, `PUT` / `DELETE /api/webos/tvs/<id>` (the house token) |
+| `ui.js`, `i18n.json` | the LG card on Settings -> Devices -> TVs: address, MAC, pairing, inputs and apps; Pairing, Edit, Remove |
 | `_ssap.py` | the SSAP client and Wake-on-LAN; also a command line (see its docstring: pair, status, cmd, lists of inputs and apps, wol) |
 | `host/wol-relay.py` | the Wake-on-LAN relay on the host (`tools/host-sockets.sh` installs it) |
 | `setup/devices.example.json` | a TV: `id`, `name`, `host`, `mac`, `_webos_inputs` (label -> input id), `_webos_apps` (label -> app id), its controls |
@@ -27,13 +28,23 @@ TV (and before the 409 of a TV that is off).
 - `plugin-state/webos/webos_keys.json` (0600): the client key of each paired TV. A file that does not
   parse turns pairing off (503) until it is fixed or removed.
 
+## Setting up a TV
+
+1. Give the TV a fixed address (reserve it in the router) and allow its wake over the network in its settings.
+2. Add its entry to `plugin-data/webos/devices.json` (see `setup/devices.example.json`) and restart
+   the backend (`docker compose restart home`). There is no Add button for an LG TV.
+3. Settings -> Devices -> TVs: its LG card. **Edit** changes its name, address, MAC, inputs and apps
+   (up to 40 lines each, `name = id`); it rewrites the entry in `devices.json`. **Remove** drops the
+   entry and its pairing key; the TV itself is not touched.
+4. Install the Wake-on-LAN relay on the host (see "Wake-on-LAN" below).
+
 ## Pairing
 
-There is no button for it in the dashboard: call
+Settings -> Devices -> TVs -> the LG card -> **Pairing**, or by hand:
 
     curl -X POST -H "Authorization: Bearer <DASHBOARD_TOKEN>" http://<house>:8765/api/webos/<id>/pair
 
-and accept the prompt on the TV within 40 s. The answer is `{ok, paired, persisted}` (and a `warning`
+Then accept the prompt on the TV within 40 s. The answer is `{ok, paired, persisted}` (and a `warning`
 when the key could not be saved; the TV gives a new key only after another prompt). 404: no such TV;
 502 `pair failed: ...` (the message may be empty on a timeout). A command to a TV that is not paired
 answers 400 "TV not paired"; a failed one 502 `webos: ...`.

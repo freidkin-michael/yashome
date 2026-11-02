@@ -19,7 +19,7 @@ stdin; ctl.py talks to mpv's socket and prints the player's state. One ssh conne
 **On the dashboard**: the window of the computer's TV (the TV and input set on the computer's card) has the player: the film
 and where it is, back / on 30 s, pause, stop, the volume, mute, the sound track and subtitles, and a field for an address.
 Play turns the TV on (an LG by Wake-on-LAN), switches it to the computer's input, then mpv opens the address full screen.
-The TV's card shows what plays. Settings -> TVs -> Players lists every player (one at no TV too).
+The TV's card shows what plays. Settings -> Devices -> TVs -> Players lists every player (one at no TV too).
 
 ## API
 
@@ -32,15 +32,15 @@ The TV's card shows what plays. Settings -> TVs -> Players lists every player (o
 
 ## Films: sources
 
-The **Films** tab: a name searches every source at once; a page address pasted from a site (there, or in the field of a
+The **Films** tab (the header's Films button opens it): a name searches every source at once; a page address pasted from a site (there, or in the field of a
 player) goes to the source of that site, which takes it apart. A film's window: translation, season, episode, quality, the
 player ("Watch on", the last one picked on this screen first), Watch / Continue from where it stopped. What a player watches
 is kept in `plugin-state/player/watching.json`: the Continue row, and the next episode starts by itself when one ended past
 90 % (Stop by hand ends it: no next one). A player's card has Next episode.
 
 A **source** is a Python module. The house's own: `plugin-data/player/sources/<name>.py` (the house's repository; read again
-when the file changes, a broken one is listed with its error in Settings -> TVs -> Players), asked first for a pasted address.
-Then the built-in ones: **Files** (the folders of Settings -> TVs -> Players: web listings of a NAS, their sub-folders too)
+when the file changes, a broken one is listed with its error in Settings -> Devices -> TVs -> Players), asked first for a pasted address.
+Then the built-in ones: **Files** (the folders of Settings -> Devices -> TVs -> Players: web listings of a NAS, their sub-folders too)
 and **Link** (a film's own address, or a plain page that shows one: its og:video, `<video>`, `<source>`, an .m3u8 / .mp4 in it;
 a site that refuses programs or hides its stream needs a source of its own). A source has `NAME` and some of:
 
@@ -69,3 +69,14 @@ addresses the sources gave), as the page shows no image from elsewhere.
 - `POST /api/player/{id}/watch {source, id, translation?, season?, episode?, quality?, start?, title?, poster?}` - its TV on and
   on its input, the source's stream there; `POST /api/player/{id}/next` - the next episode
 - `GET /api/player/recent`, `DELETE /api/player/recent?source=&id=` - Continue
+
+## Files
+
+| file | what |
+|---|---|
+| `__init__.py` | the players, the routes above, the next episode, `GET /plugins/player/host.tar.gz` (the host files, for the installer) |
+| `_sources.py` | the sources: the house's own, Files and Link |
+| `ui.js`, `i18n.json` | the player in a TV's window, the Films tab, Settings -> Devices -> TVs -> Players |
+| `host/ctl.py`, `host/yashome-player.service` | what runs on the computer at the TV |
+| `setup/settings.example.json` | the settings section `player` (`folders`: the web folders of Files) |
+| `requires` | `computers` |

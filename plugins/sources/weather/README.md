@@ -8,12 +8,12 @@ public last-hour file, no key) when one is near and fresh, else from the models.
 | file | what |
 |---|---|
 | `__init__.py` | the fetch loop, the models' agreement, the station, `/api/weather`, the settings API, `home/weather`, the health rows |
-| `ui.js` | Settings -> Weather |
+| `ui.js` | Settings -> House -> Weather |
 | `ims_stations.json` | the IMS stations (number, name, place, what they measure), with its source and date in its header |
 | `setup/ims_stations.py` | rebuilds `ims_stations.json` from the IMS public station list |
 | `i18n.json` | the Russian words |
 
-## Settings -> Weather (`plugin-data/weather/settings.json`)
+## Settings -> House -> Weather (`plugin-data/weather/settings.json`)
 
 - **Place of the house**: a city search (Open-Meteo's geocoding) or the latitude and longitude, "On the map" to check it. With
   no place set the house is located once by its public IP (`ipwho.is` over HTTPS) and that guess is saved as a suggestion: the

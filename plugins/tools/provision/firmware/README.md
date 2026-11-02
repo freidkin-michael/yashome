@@ -29,7 +29,8 @@ is an OTA build with the current `HOUSE_WIFI_*` (the plug-in's README, "When the
 
 `provision.yaml` reads `ap_password` from `secrets.yaml` too: an empty key in the command means "this
 node's own key" for a `*-setup` AP, so the shared key never goes on MQTT. A `*-setup` AP is never joined
-open. OTA the relays before updating the core: an old relay fails slowly with the new command.
+open. When this package changes, OTA the relays before updating the core: a relay on a firmware that
+does not know the command fails slowly.
 
 The relay needs ESP32 (it uses `esp_wifi` directly) and the ESPHome `http_request` component. It joins
 the lost node's AP by name and posts nothing unless the AP's MAC is the one the backend saw. The command

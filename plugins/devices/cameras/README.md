@@ -21,7 +21,8 @@ time: its snapshot fetched again every 0.4 s (2 s after an error, a fetch given 
   `multipart/x-mixed-replace` and a boundary (re-framed: only its JPEG frames go out); otherwise one
   stitched from snapshots at `fps` (0.2-10, default 3; outside that range it is clamped, not a number:
   422) - without a `snapshot` to stitch from, 502 "camera has neither stream nor snapshot". At most 6
-  streams at once (then 503); opening the camera's stream may take 30 s. No UI of this repository uses it today; it is there for your own pages.
+  streams at once (then 503); opening the camera's stream may take 30 s. The Cameras tab does not use it;
+  it is there for your own pages.
 
 Errors: 404 unknown camera; 502 when the URL is not http(s), the camera redirects (a redirect is never
 followed), is unreachable, answers 400 or more, answers something that is not an image, too much or too
@@ -33,3 +34,5 @@ The section lives in `plugin-data/cameras/settings.json`: `{"cameras": [{id, nam
 user?, pass?}]}`; `user` / `pass` go to the camera as HTTP Basic auth. Every string value is expanded
 with the environment when the backend starts (`${VAR}` or `$VAR`; an unset one stays as it is written),
 so a password stays in `.env` and the file keeps the placeholder.
+There is no Settings page: write the file by hand (see `setup/settings.example.json`) and restart
+the backend (`docker compose restart home`).

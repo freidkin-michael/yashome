@@ -26,4 +26,12 @@ failed keeps its hold, and a way opened on the Zigbee or Panels page is never cl
 
 What no scan finds stays under "Other ways" in the same window: the `addMenu` rows without `scan: true` (an ESP screen's first
 firmware over USB, pairing a yashGen device by its QR, the family phone, SwitchBot, Touchmouse). The Panels tab's "Connect an Android tablet"
-opens this window too. Without this plug-in the Add button opens the Add menu as before.
+opens this window too. Without this plug-in the Add button opens the Add menu (the same rows, one by one).
+
+| file | what |
+|---|---|
+| `__init__.py` | `POST /api/connect/start`, `/stop`, `/code` (the house token) |
+| `ui.js`, `i18n.json` | the Add / bind window |
+
+Setup: turn `connect` on in Settings -> Maintenance -> Plug-ins and update; it uses the plug-ins of the kinds above that are on.
+There is no Settings page.
