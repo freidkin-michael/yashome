@@ -1,14 +1,14 @@
 # Device description - the house side
 
-Status: design, no code yet. The device side (the topics, the JSON schema v1, the hash, what is never
-inside) is fwgen's `docs/device-description.md`; this page says what the house does with it: where it
-keeps things, when it compares, what the device window shows, how a build is registered.
+Status: implemented in the plug-in `fwdesc` (`plugins/sources/fwdesc/`), with a few parts still planned (end of this page).
+The device side (the topics, the JSON schema v1, the hash, what is never inside) is fwgen's `docs/device-description.md`.
+This page says what the house does with it: where it keeps things, when it compares, what the device window shows, how a
+build is registered.
 
-A device built by fwgen publishes, on every MQTT connect and retained (QoS 1), first its description,
-then its hash:
+A device built by fwgen publishes, on every MQTT connect and retained (QoS 1), its description and its hash:
 
 ```
-<node>/fwgen/description    JSON, schema v1 (a {"enc": "gzip+base64", "data": ...} wrapper when over 2 KB, 16 KB at most)
+<node>/fwgen/description    JSON, schema v1 (a {"enc": "gzip+base64", "data": ...} wrapper when it is large)
 <node>/fwgen/hash           12 hex characters: sha256 of the canonical JSON without build.hash and build.date
 ```
 
@@ -19,107 +19,136 @@ then its hash:
 All under `plugin-data/fwgen/` of the house folder, so a backup has it:
 
 ```
-builds/<hash>.json     a BUILD RECORD, written when fwgen builds: {hash, date, fwgen: {version, commit}, description, svg, registered}
-devices/<node>.json    what the device said last: {node, state, hash, description, received, history: [{hash, received, known}]}
+builds/<hash>.json     a BUILD RECORD, written when fwgen registers a build: {hash, date, fwgen, description, svg, registered}
+devices/<node>.json    what the device said last: {node, state, hash, description, received, seen, mismatch, build_known,
+                       history: [{hash, received, known}], changes, card_gap}
 ```
 
-- `state` is `yash` (a hash topic was seen) or `foreign` (none was, case 3).
-- `description` is the DEVICE'S copy, decoded and checked; the build record never overrides it. The device is
-  always right, the house copy is a mirror.
-- `history` keeps the last five replaced hashes with the time each came and whether a build record knew it.
-- Removing the device in the house clears both retained topics, `<node>/fwgen/description` and `/hash` (an empty retained
-  publish), and drops `devices/<node>.json`; otherwise the old description would come back at the next start. Build
-  records stay (a build is not the device).
+- `description` is the DEVICE'S copy, decoded and checked. The build record never overrides it. The device is always
+  right; the house copy is a mirror.
+- `history` keeps the last five replaced hashes, with the time each came and whether a build record knew it.
+- `changes` lists the channels (state topics) the new description has and the previous one did not, and the reverse.
+- `card_gap` lists the channels of the description that the device's card does not show.
+- Removing the device in the house (`core.DEVICE_REMOVED`) clears both retained topics, `<node>/fwgen/description` and
+  `/hash` (an empty retained publish), clears its Home Assistant discovery configs (`homeassistant/+/<node>/+/config`)
+  and drops `devices/<node>.json`. Otherwise the old description would come back at the next start. Build records stay
+  (a build is not the device).
 - A cleared retained topic does not erase the stored copy (a broker that lost its data is not a changed device).
-- Size: a description is decoded to at most 64 KB; a longer one is refused (a compressed bomb is no description).
+- Size: a message is at most 24 KB on the wire; a description is decoded to at most 64 KB. A longer one is refused (a
+  compressed bomb is no description).
 
-## Reading (one extra subscription, `+/fwgen/#`)
+## Reading (`core.NODE_SUBTOPICS["fwgen"]`)
 
-House nodes' descriptions carry the fwgen VERSION only (no commit): the hash changes when the node or the description's content
-changes, and the builder's version is bumped on purpose when its output changes.
+The core hands every `<node>/fwgen/...` message to the plug-in. A message counts only when:
 
-A message counts only when the topic is exactly `<prefix>/fwgen/hash` or `<prefix>/fwgen/description` with a
-prefix of `[a-z0-9_-]+`, the payload is within the limits, the description is a JSON object with an integer
-`schema` and its `device.topic_prefix` equals that prefix (the device is keyed by `topic_prefix`, never derived from
-`device.name` or from the entities' topics; in house builds it equals the name). A description with `device.mac_suffix: true` (one
-image for many boards, ESPHome `name_add_mac_suffix`) has no `topic_prefix`: the prefix of the topic is taken as the device's when it
-equals `device.name` or matches `<name>-<6 lowercase hex>`. Anything else is dropped
-with one warning per node. A message is handled at most once per 10 s per node. Unknown description fields are
-skipped; a newer `schema` is stored as it is and shown as "newer format, update the house".
+- the topic is exactly `<prefix>/fwgen/hash` or `<prefix>/fwgen/description`, with a prefix of `[a-z0-9_-]` (1-64
+  characters);
+- the hash is 12 lowercase hex characters;
+- the description is a JSON object (or the gzip+base64 wrapper) with an integer `schema`;
+- its `device.topic_prefix` equals the topic's prefix. The device is keyed by `topic_prefix`, never derived from
+  `device.name` or from the entities' topics. A description with `device.mac_suffix: true` (one image for many boards,
+  ESPHome `name_add_mac_suffix`) has no fixed prefix: the topic's prefix counts when it equals `device.name` or matches
+  `<name>-<6 lowercase hex>`, and every entity `state_topic` must start with `~/`;
+- it holds nothing like a secret (see "MQTT access" below).
 
-The description arrives before the hash, so the house remembers the last description seen per node and
-decides when the HASH arrives:
+Anything else is dropped with one warning per node and reason. An unchanged hash is handled at most once per 10 s per
+node.
+
+The description and the hash arrive close together, in either order. The house keeps the last valid description per
+node and decides when the HASH arrives. A description from the same burst (5 s), or one whose own hash matches, goes
+with that hash; else the house waits for the next description.
 
 | case | sign | the house does | the device window says |
 |---|---|---|---|
-| 1. a Yash build, known hash | hash topic equals the stored hash of the node | nothing | "Yash build <hash>, <date>" (the dashboard shows these lines in its language) |
-| 2. a Yash build, new hash | hash topic differs from the stored one (or none stored) | takes the description that came with it, checks that its own sha256 matches the hash (a mismatch is stored and flagged "description does not match its hash"), replaces the copy (the old one into `history`), looks for `builds/<hash>.json` | "description updated from the device, build <hash>, <date>"; with no build record also "build not from this house" |
-| 3. foreign or self-made firmware | no hash topic (30 s after the node is first seen online, and every later start) | expects no description; knows the device only by the topics it already knows (ESPHome MQTT discovery and the card), as today | "firmware not from Yash: no description" |
+| 1. a Yash build, known hash | the stored copy has this hash, received more than 24 h ago | notes the time it was seen | "Yash build <hash>, <date>" |
+| 2. a Yash build, new hash | the hash differs from the stored one (or none is stored); the window shows case 2 for 24 h | checks that the description's own sha256 matches the hash (a mismatch is stored and flagged), replaces the copy (the old hash goes into `history`), looks for `builds/<hash>.json` | "Description updated from the device, build <hash>, <date>"; with no build record also "Build not from this house" |
+| 3. foreign or self-made firmware | no stored copy for the node | nothing | "The firmware was not built in the Yash builder, so its wiring is unknown." |
 
-A device that later starts publishing the hash moves from case 3 to case 2. (A retained hash outlives the firmware that
-published it, so the house cannot see a flash with a foreign build by itself: the window says so only once the node's
-topics stop matching its description, or the person marks it.) One that stops (a node built by fwgen and
-flashed with a foreign build afterwards) keeps its last copy and the window says which build it last had: "last Yash build
-<hash> of <date>, now foreign firmware" (the hash and time come from `history`); its description is shown as of that build.
+A device that starts publishing the hash moves from case 3 to case 2. The dashboard shows these lines in its language.
 
-## Registering a build (new, proposed)
+A node that has a stored description is skipped by the Add ESPHome discovery (`core.DISCOVERY_IGNORE`). So a build that
+also publishes Home Assistant discovery configs never gets a second card.
 
-The builder must tell the house about every build when it makes it, before the device exists:
+## Registering a build
+
+The builder tells the house about every build when it makes it, before the device exists:
 
 ```
 POST /api/fwgen/builds      {hash, date, fwgen: {version, commit}, description, svg}  -> {ok, known}
 GET  /api/fwgen/builds/{hash}                                                        -> the record, 404 when none
 ```
 
-The house recomputes the hash from `description` (canonical JSON: `json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`
-in UTF-8, with the keys `hash` and `date` removed from `build`, `build` itself kept even when empty; sha256, the first 12 hex characters) and answers
-400 when it differs, so a record cannot lie about itself; it runs the same secret guard and size limit as the
-topic reader; the same hash twice is a 200 with `known: true`. Who may call: a token of its own role
-"builder" (only these two routes). fwgen's server runs on the same computer and holds that token itself,
-server-side, and calls the house on its local address, not through nginx; the house token is never given to it.
+The house refuses (400):
 
-## What the device window shows (section "Firmware and hardware", under Details on a phone)
+- a hash that is not 12 hex characters;
+- a description that fails the checks above (no integer schema, a secret inside) or is over 64 KB;
+- a hash that is not the description's own. The house recomputes it: canonical JSON
+  (`json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False)` in UTF-8, with the keys `hash` and `date`
+  removed from `build`, `build` itself kept even when empty), sha256, the first 12 hex characters. So a record cannot lie
+  about itself;
+- an `svg` over 200 KB, one that does not start with `<svg` or `<?xml`, or one with a script, an event handler, an
+  `<image>`, an `<iframe>` or an external reference.
 
-- the line of case 1, 2 or 3 above, with the build time, and for case 2 a "what changed" line (new/removed
-  entities);
-- the wiring picture: the build record carries the SVG that fwgen already drew for this build (`svg`, at most 200 KB,
-  checked to hold no script or external reference) and the window shows it as an image; only when there is no build
-  record (case 2 with an unknown build) the page draws a plain fallback from `modules[].pins`, `modules[].layout`/`variant`,
-  `buses` and `power_from_gpio` (the board's pins, each module with its wires, the pins that power a module marked,
-  "GPIO5 = power of the sht4x VIN"). The dashboard does not grow a second drawing of its own;
-- a table of modules (title, variant, parameters) and of buses;
-- the entities with their roles (temperature, presence ...), the house's channels beside them;
-- for the house's own boards (`house_base`) its profile and the snapshot it came from.
-No section when there is no description (case 3: only the one line).
+The same hash twice is a 200 with `known: true`; the first record stays.
 
-## Pairing and changes
+Who may call: the house token (the dashboard), or the builder with its own token `FWGEN_BUILDER_TOKEN` (`.env`; it
+opens only these two routes). Empty: only the dashboard may register. The builder's host piece gets this token from the
+plug-in `computers` (see its README).
 
-- Settings -> Add device -> ESPHome lists a node that has a description by what it is ("3 sensors, 2 relays"),
-  proposes the card's kind and channels from the entity `role`s (a presence/temperature/humidity role is a
-  reading; `rssi`, `uptime` and the like go under Details as diagnostics) and the room from the description;
-  the person confirms the name and the room, nothing is created before that. A node without a description (case
-  3) keeps today's flow.
-- A new hash whose entities differ from the card does NOT change the card silently (rules and panels point at
-  its channels): a banner on the window and in Settings -> Home status says "firmware changed: +2 channels,
-  -1 channel - update the card?". Confirming adds the new channels; a removed channel that a rule, a schedule, a
-  favourite or a panel still uses is listed first and removed only when the person says so.
-- Rebuild and OTA from a description is a later step with its own page.
+## What the device window shows
+
+A device of the generic MQTT transport has a section "Firmware and hardware" (folded; it loads when opened) with
+`GET /api/devices/{id}/description`:
+
+- the line of case 1, 2 or 3 above, with the build time;
+- "Build not from this house" when there is no build record, and "The description does not match its hash" on a
+  mismatch;
+- "Firmware changed: +N channels, -M channels compared with the previous build" when `changes` is not empty;
+- "The device has N more channels than its card shows", with the list folded, when `card_gap` is not empty. This is an
+  offer, not an alarm: the card may be hand-written;
+- the board (`device.board.id`, else `device.chip`);
+- the wiring: the SVG of the build record as an image; without a build record a plain list from `modules[].pins`,
+  `buses` and `power_from_gpio` ("Powered from pins");
+- the entities with their roles (or domain) and units;
+- the earlier builds from `history`.
+
+Case 3 shows only its one line.
 
 ## MQTT access (the ACL)
 
-No new rule. The device accounts (`MQTT_DEVICE_USERS`) already may publish everything except `home/state/#`,
-`device_readonly` topics and `MQTT_BACKEND_ONLY`, so `<node>/fwgen/description` and `/hash` are allowed; the
-backend account `home` reads them. Panels' `panel-<name>` accounts do not use them. A plug-in's namespace
-(`zigbee2mqtt/`) is not a place for them.
+No new rule. The device accounts (`MQTT_DEVICE_USERS`) may publish everything except `home/state/#`, `home/clock/#`, a
+plug-in's `device_readonly` topics and `MQTT_BACKEND_ONLY` (`tools/mkpasswd.py`). So `<node>/fwgen/description` and
+`/hash` are allowed; the backend account `home` reads them.
 
 Limit to know: the device accounts are shared, so one node could publish under another's prefix. The checks above (a
-description names its own prefix, a hash must match its description, a change never edits the card by itself)
-keep a typo out, not a hostile node on the Wi-Fi; per-node accounts are the next step if that ever matters.
-The house rejects a description that holds a key named like `password`, `token`, `secret`, `psk` or a value
-equal to one in the house's secrets (`.env`, the nodes' `secrets.yaml`); the device side must never send one, this is the guard.
+description names its own prefix, a hash must match its description, a change never edits the card by itself) keep a
+typo out, not a hostile node on the Wi-Fi.
 
-## REST for the window (to add with the code)
+The secret guard: the house refuses a description with a key named like `password`, `passwd`, `token`, `secret`, `psk`,
+`key` or `ssid`, or with a value equal to a secret of the house. The secrets are the values of the house environment
+whose names look like a secret, and the secret-named values of the nodes' `secrets.yaml`. That file is mounted
+read-only from the host path in `ESPHOME_SECRETS` (`.env`). When it cannot be read, Settings -> Overview shows a warning
+and the check runs on the house environment only. The device side must never send a secret; this is the guard.
 
-`GET /api/devices/{id}/description` - the stored description with `state`, `received`, the history and the
-case (1-3); 404 when there is none. The same sign-in as the device's status. Nothing writes it over REST: the
-device is the only author of a description, the builder of a build record.
+## REST
+
+- `GET /api/devices/{id}/description` - for a generic MQTT device: `{case, state, node, hash, description, received,
+  history, mismatch, changes, card_gap, build: {known, date, fwgen, svg}}`; case 3 gives `{case: 3, state: "foreign",
+  node}`. 404 for another transport or an unknown id. The same sign-in as the device's status.
+- `POST /api/fwgen/builds`, `GET /api/fwgen/builds/{hash}` - above.
+
+Nothing writes a description over REST: the device is the only author of a description, the builder of a build record.
+
+## Not implemented yet
+
+- Add device -> ESPHome does not use a description: it does not list a node by what it is, nor propose the card's
+  kind, channels and room from the entity roles.
+- A firmware change does not offer "update the card?": the window shows the difference only. Nothing adds or removes
+  channels from it.
+- No "newer format" message for a `schema` above 1: such a description is stored as it is.
+- No "last Yash build, now foreign firmware" state for a node that stops publishing its hash: it keeps its last copy
+  and shows it.
+- The window does not show the house base profile, a module table with parameters, or the house's channels beside the
+  entities.
+- Per-node broker accounts (see docs/pairing.md for the pairing accounts).
+- Rebuild and OTA from a description.

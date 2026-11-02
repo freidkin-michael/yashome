@@ -1,8 +1,7 @@
 # Device state: live, waiting, offline
 
-**Status: agreed design, being implemented.** Until the code lands, the "Today" sections describe what
-the code does; the other documents (mqtt-contract.md, rules.md, the panels README, rest-api.md) change
-together with the code, so they never describe what it does not do yet. Two features share one model:
+Status: implemented in the core (`core/status.py`, `core/mqtt_devices.py`, `core/timers.py`), the dashboard, the
+Android panel and the ESP screens; groups (D8) are not. Two features share one model:
 dimmers wait for the device instead of showing the sent value, and a device that went away and came
 back shows the state it really has.
 
@@ -36,7 +35,7 @@ A channel can also be waiting on its own: a command was sent and the device has 
 (see "Commands that wait for the device").
 
 Status fields (`GET /api/devices/{id}/status`, the WebSocket frame): `online` is true only when
-live; new: `last_seen` (time of the last report), `offline_since`, `waiting` (`"start"` or
+live; `last_seen` (time of the last report), `offline_since`, `waiting` (`"start"` or
 `"return"`), `waiting_since` (the online word it waits after) and `cmd_wait` (`{code: value sent}`
 while a command to a confirm channel waits for the device; not stored, added when the status is
 read). The mirror's `home/state/<device>/online` follows `online`: false while waiting or offline.
@@ -44,20 +43,13 @@ The channel values in the mirror stay the last reported ones.
 
 ## Commands that wait for the device
 
-**Today:** the core waits: a brightness channel and the switch it dims are confirm channels (below),
-so the cache and the mirror change only on the device's report and `/control` answers
-`waiting: true`; a toggle or a step builds on the newest command still unanswered (below). The
-dashboard, the Android panel and the ESP screen wait too (below).
-
-**Agreed:**
-
 - A brightness channel and the on/off switch it dims are confirm channels, like the lock: the core
   never writes a sent value; the cache, the mirror and every screen change only when the device
   reports. The switch a brightness dims: `<x>` for `<x>_bright` (ESPHome), the switch of the same gang
   for `brightness[_<gang>]` (`state[_<gang>]`, zigbee2mqtt).
 - A channel the device never reports (a generic control with a `command_topic` and no `state_topic`,
-  the colour channel, IR) cannot wait: it stays optimistic, as today.
-- REST answers as before, once the command is sent: `{ok: true, code, waiting: true}` for a confirm
+  the colour channel, IR) cannot wait: it stays optimistic.
+- REST answers once the command is sent: `{ok: true, code, waiting: true}` for a confirm
   channel. It does not block until the report.
 - Dashboard slider (and a dimmer's switch): stays where it was released, drawn as "waiting"; the wait
   ends by the rule below (an echo of the value sent, another value that settled for 1 s) and the
@@ -90,26 +82,26 @@ dashboard, the Android panel and the ESP screen wait too (below).
 - A dimmer whose on/off is a separate channel: each channel waits for its own report.
 - zigbee2mqtt: after a `/set` it publishes the device's new state once the device acknowledged the
   command; that frame counts as the report.
-- Android panel (`view.html`): it already draws nothing itself after a tap; it shows the control as
+- Android panel (`view.html`): it draws nothing itself after a tap; it shows the control as
   waiting until the cache changes or 5 s pass.
 - ESP screen: a tap on a dimmer sends the command without changing its level; the bar dims to show it
   waits and shows the level again when the mirror topic of the device reports it (5 s: back to the last
-  one). The generated firmware changes: the golden test's expected files change with it.
-- The knob already waits for the device's state.
+  one).
+- The knob waits for the device's state.
 
 ## When a device goes away and comes back
 
-**In the core now:** the model above - a report makes a device live (`last_seen`), its own
+**In the core:** the model above - a report makes a device live (`last_seen`), its own
 offline word or a failed poll makes it offline (`offline_since`), back after an outage it waits for
 its report (`waiting: "return"`), the status cache loads every device as waiting (`"start"`; one
 stored offline stays offline) and the waits end as in "The model"; a command never changes any of
 it; the mirror's `online` follows. A periodic device silent past its limit is offline, and
 after a start it waits for its report (not live from the cache). A command to an offline device is
-refused (409; a webOS TV never), rules and timers skip it (D7), Settings -> Health lists the
+refused (409; a webOS TV never), rules and timers skip it (D7), Settings -> Overview lists the
 devices offline for more than 10 min. A device waiting 5 s without a report is asked once per
 wait (zigbee2mqtt `/get`; a generic device with `state_request`).
 
-**The dashboard now:** a card is live, "waiting for report" (dimmed) or offline ("offline since
+**The dashboard:** a card is live, "waiting for report" (dimmed) or offline ("offline since
 HH:MM", greyed, its controls take no tap; the card still opens), what it shows changes once the new
 state held 3 s; the last values stay on it, the tooltip says "last report HH:MM"; the device window
 says online, waiting for report or offline since. A command to a confirm channel changes nothing on
@@ -148,14 +140,14 @@ window regaining focus) keeps the focus where it was and draws the cards of an o
 once. A language switch reloads the page. Not by keyboard yet: the favourite tiles, the Add-device
 rows and the colour row.
 
-**The Android panel now** (`view.html`, it polls each device's status every 3 s, so a change shows
+**The Android panel** (`plugins/devices/panels/static/view.html`, it polls each device's status every 3 s, so a change shows
 within that): a widget of an offline device (an AC and a remote included) is greyed and takes no tap,
 waiting dimmed less, with no caption; after a tap on a confirm channel it pulses while the status
 lists the command in `cmd_wait` (the panel polls every 0.5 s meanwhile, one timer however many taps)
 and says "No answer from <widget>" when the wait ended without the value sent. A status the server
 does not give ends the wait without that message. The panel redraws only when a status changed.
 
-**The ESP screen now** (`firmware/gen.py`): a tap on a dimmer sends the command and leaves the bar as
+**The ESP screen** (`plugins/devices/panels/firmware/gen.py`): a tap on a dimmer sends the command and leaves the bar as
 it is; the bar's fill dims until the device's mirror topic reports (5 s at most, then the fill lights
 up again over the unchanged level); a second tap meanwhile builds on the first one's value. Any
 report of the dimmer ends the wait: a third tap after the first one's echo builds on that echo, and a
@@ -167,20 +159,6 @@ holds no `/` or `#`); it publishes again within a second of a change. Toggles, d
 temperatures are greyed (the device of their first `home/state/<device>/<code>` topic, else their
 command topic); an AC, a remote and a button are not. The knob does not grey.
 
-**Before** (proven against a throwaway broker):
-
-1. Offline (availability `offline`): `online=false`, the old values kept as plain values in the API
-   and the mirror. A command to it was accepted and written as its value; when the device came back,
-   that value was shown as real although the device never applied it. (A lock, and since the dimmers
-   wait a dimmer with an availability topic, is refused with 409.)
-2. Back with the same value: nothing marks the return; the mirror sends nothing (de-duplicated).
-3. A value before the availability `online`: the value alone brings it online; fine.
-4. Backend restart while a device is off: the status cache loads with `stale=true`, which nothing
-   shows; at boot the mirror publishes `online=true` and the cached values first. A device without a
-   retained availability topic stays "online" with yesterday's value for good.
-5. A device without availability topic that falls silent is never marked offline.
-6. The Android panels read the status, the ESP screens `panel/<name>/away` (below).
-
 **How the core learns gone and back:**
 
 | source | gone | back |
@@ -190,7 +168,7 @@ command topic); an AC, a remote and a button are not. The knob does not grey.
 | no availability signal, reports periodically | 10 min of silence (below) | the next report |
 | no availability signal, reports on change only (door, button, battery sensor) | never by silence | - |
 | IR appliance | its blaster | its blaster |
-| webOS TV | unchanged: an unreachable TV is power off, not offline (it sleeps) | - |
+| webOS TV | an unreachable TV is power off, not offline (it sleeps) | - |
 
 **Silence (D1):** learned conservatively - a false offline is worse than a false live. A device
 counts as periodic once its last hour holds at least 10 reports (values within 1 s count once) over
@@ -251,13 +229,13 @@ replay; an empty (cleared) availability message says nothing.
   auto-off up to 30 min, a `for N min` revert and a schedule entry up to 10 min past their time;
   later it is dropped with a log line (never hours later). A schedule entry is caught up only on the
   same day; a missed one (also one a newer entry of the channel replaced) shows in Settings ->
-  Health for a day, also after a restart. At a start a shot waits until its device is known (it
+  Overview for a day, also after a restart. At a start a shot waits until its device is known (it
   looks every 2 s), however late: an online device then gets it. Back and reporting a channel ON
   with an auto-off window and nothing waiting for it, the window starts again.
-- Settings -> Health lists the devices offline for more than 10 min.
+- Settings -> Overview lists the devices offline for more than 10 min.
 
-**Groups (D8), reserved, not implemented:** no transport delivers groups today (zigbee2mqtt groups
-are not loaded). When one does: a group card is offline only when all members are; otherwise a badge
+**Groups (D8), not implemented yet:** no transport delivers groups (zigbee2mqtt groups are not
+loaded). When one does: a group card is offline only when all members are; otherwise a badge
 "n of m offline"; a command skips the offline members and the toast names them.
 
 **Panels:** the Android panel greys a widget whose device is not live and disables it; the ESP screen
@@ -270,25 +248,25 @@ subscribes a topic once, however many widgets read it.
 
 ## Decisions
 
-10 min of silence and the last value shown greyed (Michael); D1-D8 above; and (Michael, 11.10):
+10 min of silence and the last value shown greyed; D1-D8 above; and:
 
 1. `CONFIRM_WAIT_S` = 5 s for every device (a plug-in's `holds` may extend it); no per-device knob.
 2. Groups stay reserved (above): no code and no tests until a transport delivers them.
 3. The learned "periodic" flag is kept in the status cache, written only when it changes (the cache
    is saved at most every 10 s already: no extra writes in a steady house).
 4. The ESP screen reads one retained `panel/<name>/away`, not one `online` topic per device (the
-   inbound queue, "Panels" above): decided in the ESP step (12.10), open to veto.
+   inbound queue, "Panels" above).
 
 ## Tests that prove it
 
-Per transport against a real throwaway broker: on -> offline -> back reporting off shows off; back
-with the same value processes the return; back silently asks exactly once; backend restart with a
-stale cache shows waiting, not on; a door sensor after a restart is live with its last value after
-the grace and a rule on it still fires; flapping; a report before the availability `online`; the rule
-and timer cases; a webOS power-on while the TV is unreachable still goes out. Dimmers: a command shows
-nothing until the report; a ramp (0, 30, 60, 100 over 2 s) ends on 100 without a flicker; a clamp
-(send 100, answer 80) shows 80; a report older than the command does not end it; no report reverts
-in 5 s; offline reverts at once. `tools/stand.py` replays the outage scenarios on a throwaway broker
-(docker, 127.0.0.1:18830) and this checkout's backend (127.0.0.1:18766): `up`, `scenario all`,
-`pub`, `status`, `cmd`, `down`. A headless browser run checks the greyed card, the disabled
-controls, the badge and the tooltip.
+- `tests/test_review_cb.py`: the core model (live, waiting, offline, the asks, the silence rule, confirm channels and
+  their echoes, rules and timers on an offline device).
+- `tests/plugins/test_zigbee.py`: availability, a bridge that is down, devices waiting since the start.
+- `tests/plugins/test_panels.py`, `tests/plugins/test_panels_gen.py`: `panel/<name>/away` and the greyed ESP widgets.
+- `tools/stand.py` replays the outage scenarios on a throwaway broker (docker, 127.0.0.1:18830) and this checkout's
+  backend (127.0.0.1:18766): `up`, `scenario all`, `pub`, `status`, `cmd`, `restart`, `down`.
+
+## Not implemented yet
+
+- Groups (D8).
+- Keyboard use of the favourite tiles, the Add-device rows and the colour row.

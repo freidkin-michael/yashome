@@ -1,219 +1,180 @@
-# Voice in the house - today and the target
+# Voice in the house
 
-Status: design, no code yet. Today the house HEARS (wake word, speech to text, commands); the target is that it also ANSWERS by voice, on
-the satellite that heard you, and that every microphone and every speaker is a card of the house.
+Status: partly implemented. The plug-in `voice` (`plugins/tools/voice/`) has the TTS service, the satellites and their
+cards, say/play/stop/volume, the replies and chimes, "Ask the house", push-to-talk and the sample recorder. Speech
+recognition, the wake-word match and the command logic run in a separate voice service (`voice-vad`) that this
+repository does not ship: the plug-in only talks to it (below). The planned parts are at the end of this page.
 
 ## Principle: everything on the server
 
-A satellite is thin: it sends the microphone stream (after its own wake word), plays the audio it is given, and has a mute and a volume.
-Command logic, TTS, the sounds, routing, per-device settings, timers, retries and confirmations all live in the house. Firmware gets no
-business logic: no baked sounds, no local command list. The wake word stays ON THE DEVICE (micro_wake_word on the ESP satellite, openWakeWord
-on the Android panels): audio goes to the house only after the wake, never as a continuous stream.
+A satellite is thin: it sends the microphone stream (after its own wake word), plays the audio it is given, and has a
+mute and a volume. TTS, the sounds, routing, per-satellite settings and the replies live in the house. Firmware gets no
+business logic: no baked sounds, no local command list. The wake word stays ON THE DEVICE: audio goes to the voice
+service only after the wake, never as a continuous stream.
 
-The whole interface of a satellite (MQTT, under its own node prefix): `<node>/wake` (event), `<node>/say/url` (stop what plays, play this
-WAV/FLAC/MP3 URL), `<node>/stop/command`, `<node>/volume/set` 0..100 (state kept), `<node>/mute/command` ON|OFF and `<node>/listen/command`
-ON|OFF (states retained), `<node>/player/state` playing|idle (retained), `<node>/status` and `<node>/status/i2s` (the boot duplex check).
-ONE audio format everywhere: everything the house sends to a satellite (TTS, the confirmation sounds, any played file) is converted
-ON THE SERVER to WAV PCM 16 kHz, 16-bit, stereo, the native format of the satellite's port; a device resampler is only a safety net.
-A satellite with the flag `lead_in` (the ReSpeaker; tablets and phones have no such gate) gets every WAV (reply or chime, `/say {lead_in}`,
-`/s/<name>_lead.wav`) behind 0.4 s of faint noise (+-100 counts, fixed seed, no fade): the XVF/codec output path mutes on digital zeros and
-opens 60-250 ms after the first non-zero sample, which cost the first syllable or beep. Ear test, 3 beeps: 2 heard with no lead-in or with
-0.6 s of zeros, 3 with the noise. The node firmware stays unchanged.
-On a wake the HOUSE stops the playback (`stop/command`) or turns the volume down: the node does not decide that.
+The interface of a satellite (MQTT, under its own node prefix):
 
-## Today
+| topic | direction | what |
+|---|---|---|
+| `<node>/status` | from the node | `online` / `offline` |
+| `<node>/wake` | from the node | a wake word was heard |
+| `<node>/say/url` | to the node | stop what plays, play this WAV URL |
+| `<node>/stop/command` | to the node | `PRESS`: stop |
+| `<node>/volume/set` | to the node | 0..100 |
+| `<node>/volume/state` | from the node | the volume (another topic with `volume_state`) |
+| `<node>/listen/command`, `<node>/listen/state` | both | `ON` / `OFF`: the microphone listens or is muted |
+| `<node>/listen_once/command` | to the node | seconds: stream once without a wake word (a node with `listen_once`) |
+| `<node>/player/state` | from the node | `playing` / `idle` |
 
-```
- satellite (hears)                           the house host                                       acts through
- -----------------                           --------------                                       ------------
- ESP satellite (e.g. ReSpeaker XVF3800       voice-vad  (container, TCP :8091, python)  --HTTP--> whisper (container, :8090,
-   + XIAO ESP32S3): wake word ON the device    webrtcvad cuts the utterance                        whisper.cpp, a ggml base model)
-   MQTT <node>/wake + status                   peak-normalises, asks whisper
- Android panels (the launcher's Voice):        text -> intent (voice_commands.json,     MQTT  zigbee2mqtt/<switch>/set/state
-   wake word on the device, PCM to :8091       hot-reloaded by mtime)                   MQTT  home/cmd/<device>/<code>
-   (caps: mic, speaker, voice_port)            AC and TV intents: HTTP to the house API HTTP  /api/devices/<ac|tv>/... 
-```
+ONE audio format: everything the house sends to a satellite (TTS and the confirmation sounds) is WAV PCM 16 kHz,
+16-bit, stereo (the mono voice repeated on both channels), made ON THE SERVER. A satellite with `lead_in` gets every
+sound behind 0.4 s of faint noise (+-100 counts, fixed seed): some codec paths mute on digital zeros and open late, which
+cuts the first syllable or beep.
 
-- **Where it lives.** `voice-vad` and `whisper` run from a `voice/` directory of the house data (a `compose.yml`, project `voice`, on the
-  Yashome network). The files are copies of the pre-Yashome stack; they are outside the plug-ins and outside git, so `make update`
-  neither builds nor versions them.
-- **Wake word.** On the satellite, on the device. The server does not check it again for the peers listed in `VA_NOWAKE_IPS` (`*` = all);
-  for any other peer the transcript must start with the wake word (whisper keyword spotting).
-- **The command map** is data (`voice_commands.json`: on/off words, zones -> zigbee2mqtt or `home/cmd`, appliances such as air
-  conditioners with modes and temperature). The pre-Yashome dashboard had a tab to edit it; Yashome has no voice plug-in yet.
-- **The answer.** There is none: the service acts and logs. No audio goes back to any satellite.
-- **The ESP satellite** is not in the Yashome build path: its YAML (mic only: I2S master, `micro_wake_word`, a custom `pcm_tcp_stream`
-  component that streams about 5 s after the wake word with a 500 ms pre-roll) lives in the old stack only.
+On a wake the HOUSE stops the playback (`stop/command`, only when something plays): the node does not decide that.
 
-## Target
+## TTS service (`service/tts`, container `tts`)
 
-1. **TTS on the house, local.** Silero in a container (`tts`, HTTP `POST /say {text, voice} -> WAV`), Russian (v5_ru, default speaker
-   xenia) and English (v3_en, default speaker en_99). CPU only, two threads: a 2 s reply takes 0.04-0.09 s (real-time factor ~0.03), a model
-   loads in about 1 s and the service warms both at start, so the first answer is as fast as the rest; with both models loaded the container
-   holds about 1.1 GB. The models are NOT in the image or the repository: the service downloads `v5_ru.pt` (139 MB) and `v3_en.pt` (54 MB)
-   once into the volume `voice-models`. **Licence: the Silero models are CC BY-NC-SA 4.0, so this feature (and the product with it) is for
-   non-commercial use only** (NOTICE.md). Silero does not read digits: the service writes numbers out in words first (`numwords.py`).
-   The voice is a setting of the player or the room, so it is chosen in the device window.
-2. **Replies go to the satellite that heard the wake word.** `voice-vad` knows the TCP peer: the house keeps a table peer address ->
-   satellite device. After acting it says a short result (done, the new temperature, "I did not understand") on that satellite.
-   Confirmation sounds (listening, done, error) come from the server too: short WAV files the house serves and plays through the same
-   `say/url`, so the firmware carries none.
-3. **One API for every player.** `POST /api/voice/say {text, target, lang?, voice?}`, `POST /api/voice/play {url, target}`,
-   `POST /api/voice/stop {target}`, `POST /api/voice/volume {target, value}`, and the same as MQTT commands
-   `home/cmd/<player>/say|play|stop|volume`, so rules and panels can use them. `target` is a player or a room (then every player of it).
-4. **Players** are driven by a small piece on each: an ESP satellite (ESPHome `speaker`/`media_player` plays the URL the house gives),
-   an Android panel (the launcher plays a URL: a new bridge call), a Linux box (a user service like the touchmouse typing helper: MQTT
-   `<node>/play` -> `pw-play`/`mpv` on its own stream, never the media player in use), a TV (a toast at most, no audio).
-5. **A Yashome plug-in `voice`** owns all of it: the virtual devices and cards below, the API, the command-map editor (the old tab,
-   rebuilt); the compose of `voice-vad`, `whisper` and `tts` moves into the plug-in (`plugins/tools/voice/service/`), so `make update`
-   builds and versions them. The satellite goes into the build path (its own package, with the description package of the house base).
+Silero on the CPU, two threads. Russian (`v5_ru`, default `ru-xenia`) and English (`v3_en`, default `en-en_99`); any
+Silero speaker may be asked for as `<language>-<speaker>`, and the language follows the phrase when none is given. The
+models are NOT in the image or the repository: the service downloads them once into the docker volume `voice-models`.
+Numbers are written out in words first (`numwords.py`). **The Silero models are CC BY-NC-SA 4.0: non-commercial use only**
+(NOTICE.md). The container has `mem_limit: 2g`.
 
-## Devices and cards
+- `POST /say {text, lang?, voice?, lead_in?}` with the header `X-Voice-Key: <VOICE_TTS_KEY>` -> `{url: "/a/<name>.wav",
+  voice, seconds, ms}`. The name is 128 random bits; the file lives 10 minutes. Without a key the service refuses.
+- `GET /a/<name>.wav`, `GET /s/<sound>.wav` (`listening`, `done`, `error`, `thinking`; `<sound>_lead.wav` with the
+  lead-in), `GET /health`.
 
-Microphones: the ESP satellite and every Android panel with a mic. Players: the ESP satellite (after its firmware gets audio out),
-Android panels (speaker), Linux boxes with PipeWire, and a TV only for a toast. IR remotes and TVs that cannot play are not players.
-All of them sit in one device group, "Voice / Sound".
+It runs only with `COMPOSE_PROFILES` containing `voice`, on the compose network only (no port of its own). `make install`
+generates `VOICE_TTS_KEY`. The satellites fetch the files from the dashboard's port:
+`http://<BIND_ADDRESS>:<DASHBOARD_PORT>/plugins/voice/tts/a|s/<name>.wav` (open: a file's random name is its secret).
+Without `BIND_ADDRESS` the house cannot speak to a satellite.
 
-Card rule: the card has the daily control and the state, everything else is in the device window.
+The same service can run on another computer of the house: Settings -> Computers and servers -> Speech (TTS), Install
+and Use (plug-in `computers`). It listens there on loopback only, with no key (`VOICE_TTS_OPEN=1`); the house reaches it
+through the helper's ssh tunnel (settings `voice.tts`) and still hands its files to the satellites.
 
-```
- MICROPHONE card                            PLAYER card
- +-------------------------------+          +-------------------------------+
- | [mic] Bedroom satellite       |          | [spk] Living-room box         |
- |  online                       |          |  playing: <what>  /  idle     |
- |  [ Listening  (o) ]           |          |  volume  ----o-------  40%    |
- |  last wake: 11:20             |          |  [ Stop ]   [ Test sound ]    |
- |  level  ||||||....            |          +-------------------------------+
- +-------------------------------+
- window: wake word, sensitivity, TTS voice, the room it answers for, counters (wakes, commands, errors)
-```
+## Satellites and cards
 
-- **Mic card:** online, a listening/muted toggle, time of the last wake, a level meter only if the device reports it cheaply (else
-  omitted). Muting stops the stream on the device (MQTT `<node>/listen/command`), not only on the server.
-- **Player card:** online, playing/idle and what, a volume slider, Stop, "Test sound".
-- **A device that is both** (an Android panel, the ESP satellite) shows one card per role, a mic card and a player card, over one window.
+`PUT /api/voice/satellites/<id>` (house token) makes or changes one:
+`{node, mic, player, name?, room?, peer?, voice?, volume_state?, lead_in?, chime?, wake_chime?, listen_once?, quiet_fail?,
+need_wake?, panel?, phone?}`.
 
-### A tablet as a satellite
+- `peer` is the address the satellite's audio comes from: the reply goes to the satellite of that address.
+- `voice` is the TTS voice of its answers; `volume_state` the topic of its volume when it is not `<node>/volume/state`.
+- A node name may not be a topic of the house, of a plug-in, of a device or of another satellite (409).
+- `GET` lists them with their counters (wakes, commands, errors, last wake); `DELETE` removes one with its cards.
+- Saved in `settings.json` under `voice.satellites` (`setup/settings.example.json`).
 
-A tablet (the Android launcher) is a satellite like an ESP node, with its own `panel` (the tablet's device id). The house commands it with
-the same four commands (play a URL, stop, volume, listen on/off) as one JSON line on `panel/<id>/voice/cmd`; the panels plug-in queues
-them and the tablet takes them by a long-poll (`GET /api/panels/voice/next`, the tablet's own key; it works through the VPN too). What the
-tablet reports (wake, playing/idle, listen, volume) goes to `POST /api/panels/voice/event` and out again on the topics of an ESP node
-(`panel-<id>/wake`, `.../player/state`, ...), so the voice plug-in sees one kind of satellite. The tablet plays on the alarm stream (a
-do-not-disturb "alarms only" mutes the media stream) and does not listen while it plays, so its own chimes and replies never reach the
-recognizer.
+Each role is a card in the group "voice", on the dashboard tab "Voice / Sound":
 
-**One room, one answer.** When two satellites of a room wake within 1.5 s (a tablet and a speaker in the same room), the house acts on
-the first and the second gets no chime; its stream is dropped by the recognizer.
+- `<id>_mic`: Listening (on / muted, through `<node>/listen/command`, so the device stops streaming), the time of the
+  last wake, and the state of a background recording.
+- `<id>_spk`: what it does now (playing / idle), a Volume slider, Stop and Test sound. The channels `say` (a text) and
+  `play` (an http URL) are under advanced and work from the API, a rule and MQTT: `home/cmd/<id>_spk/say|play|stop|volume`.
+- A device that is both shows a mic card and a speaker card. The window of either has a "Voice settings" section (name,
+  room, the audio address, the voice, the flags, the counters).
 
-## Open decisions
+API (house token): `POST /api/voice/say {text, target, lang?, voice?}`, `POST /api/voice/play {url, target}`,
+`POST /api/voice/stop {target}`, `POST /api/voice/volume {target, value}`. `target` is a satellite id, a room or `all`.
+`GET /api/voice/status` gives the TTS health, the public address and whether the key is set.
 
-1. Decided: Silero is the only TTS (CC BY-NC-SA 4.0, non-commercial use); Russian v5_ru speaker xenia, English v3_en speaker en_99.
-2. Decided: confirmation sounds come from the server (see the principle); nothing is baked into the firmware.
-3. Decided: the README line becomes "no cloud voice assistants" with this feature.
+**A tablet as a satellite.** A satellite with `panel` (the tablet's device id) is driven through the panels plug-in: the
+same commands go as one JSON line on `panel/<id>/voice/cmd`, the tablet takes them by a long-poll
+(`GET /api/panels/voice/next`, the tablet's own key) and reports wake, player, listen and volume to
+`POST /api/panels/voice/event`. Those come out on the topics of a node `panel-<id>`, so the plug-in sees one kind of
+satellite. A command older than 30 s is dropped.
 
-## Recognition
+**One room, one answer.** When two satellites of one room wake within 1.5 s, the house acts only on the first; the
+second gets no stop and no chime.
 
-The command recognizer is Vosk (a small Russian model in a docker volume). Two passes on every utterance: a grammar built from the command
-map (zones, verbs, appliance words, numbers; rebuilt when the map changes), then free recognition. The grammar can invent a command out of
-any speech, so its text counts only when the free pass hears the same words; the log and `voice/heard` say which pass decided.
-A house that wants another recognizer can swap it behind the same interface; whisper.cpp was measured (about 2 s per phrase on this CPU against 0.3-0.5 s for Vosk) and dropped.
+## Replies and chimes
 
-What the recognizer tells the house is one MQTT line `voice/heard {ip, ok, text, engine, reply?, sound?}`; the plug-in answers on the
-satellite whose `peer` is that address: `sound` (for example `thinking`, played while a slow answer is prepared) is only played; else
-`reply` is spoken (also when `ok` is false, for "I did not understand"); else the done or error chime.
+The voice service publishes what it did on `voice/heard`
+`{ip, ok, reply?, sound?, ask?, quiet?}`. The plug-in answers on the satellite whose `peer` is `ip`:
 
-### LLM fallback and "Ask the house"
+- `sound` (for example `thinking`) is only played, when the satellite's `chime` is on;
+- else `reply` is spoken (also when `ok` is false, "I did not understand");
+- else, unless `quiet` (an understood command already confirmed by a beep), the `done` or `error` chime.
+- `quiet_fail` ("Silent when not understood"): a command that was not understood plays nothing; a question is still
+  asked.
+- `wake_chime` (off by default): the `listening` sound after a wake.
 
-A phrase that no rule understood goes to a small local model (Ollama on the host, 4 threads, kept loaded, warmed at start). The prompt is
-built from the live device registry (the house's own device names, rooms, channel names, the command-map words and the glossary aliases),
-so it changes only when the house does. The model answers ONE line of a strict DSL (`<name> <code>=<value>; ...`, `all_off except=<name>`,
-`none`); the house parses it against the registry: an unknown name, code or value drops the whole line ("I did not understand"). The model
-never sees content (news, mail) and has no action rights: it proposes, the house checks and acts.
+**One sound at a time.** The house never cuts its own reply. Per satellite a `listening` or `thinking` sound is dropped
+while anything plays or waits; a reply or a chime queues and goes out when the node reports idle (a node that never
+reports is taken as idle after 10 s). A new wake, Stop, or an explicit play from the API cuts and replaces.
 
-- **Questions.** The house asks first, and acts only on "yes", when the model GUESSED a device the phrase does not name, for every risky
-  device (locks, gates, doors, alarms; never run from memory) and for every "all off". The question names devices with the glossary's
-  human names (a case form each), else the house's own name, never an id. The answer is the next utterance of that satellite within 12 s
-  (a satellite with the listen-once command opens its mic by itself; the others need the wake word first); anything but yes is no.
-- **A question must be heard.** The reply that carries a question is marked; the house expects the satellite to start playing it within
-  6 s, otherwise the question is cancelled with a log line (nothing waits silently for an answer nobody heard). When the question has been
-  played and ends, a satellite that has the listen-once command (`listen_once` in its record) opens its mic once for the answer (6 s).
-- **One sound at a time.** The house never cuts its own reply: per satellite a "listening" or "thinking" sound is dropped while anything plays
-  or waits; a reply or a result chime queues and goes out when the node reports idle (a node that never reports is taken as idle after 10 s).
-  Only a real stop, a new wake or an explicit play from the API cuts and replaces.
-- **Chimes.** A satellite record has `chime` (default on): the "thinking" sound (only when the model takes longer than 1.5 s), the confirm beep ("done") the moment a command is understood and the "error" sound; `wake_chime` (default off) adds the "listening" sound after a wake; `quiet_fail` (default off; "Silent when not understood" in the satellite's settings) plays nothing at all for a command that was not understood (a satellite whose wake fires on the TV), a question still asked. An understood command is silent after its beep unless something went wrong (the reply names the device that did not answer); a phrase that was not understood is answered "Did not understand" aloud with no beep. A node that cannot
-  play while it streams its mic is set to off; the stop on a wake goes out only when something is playing.
-- **Learning.** A confirmed guess is remembered for that exact phrase (house data, validated against the registry again each time).
-- **Settings** (an enum, a number) are driven by voice only on climate devices.
-- **The text box "Ask the house"** (the header, right of the logo: Ask and a field, Enter or Ask sends; on a phone Ask opens the field; the house token) takes the road of a spoken phrase after
-  recognition: phrase map, then the model, then the same checks, with Yes / No buttons for the questions; log `engine=text`. It can say
-  the answer on a chosen speaker. When the model says the text is no command, the box switches to a **chat**: the same model answers
-  conversationally, streamed, with a prompt that has no devices and no actions; a small "i" by the answer says nothing in the house was
-  done, and nothing of its text is ever parsed as a command. The big model thinks first (up to 60 s, "Thinking..." meanwhile; only its
-  answer is shown), the small one answers when it is away. A model that is down or late says so ("The model is not available now",
-  "The model did not answer in time"). The time, the date, the weekday and how a room feels ("is it cold in the bedroom") are answered by
-  the service itself from the house, never by the model.
+**A question must be heard.** With `ask: true` the reply is a question. The satellite must start playing it within 6 s,
+else the house publishes `voice/ask_failed {ip}` and the question is cancelled. When the question has played, a
+satellite with `listen_once` gets `listen_once/command 6`: its mic opens once for the answer.
 
-### State questions
+## The voice service (`voice-vad`, outside this repository)
 
-A question about the state of the house is answered from LIVE state, in words, spoken and in text; it never acts and needs no question
-back. A question is recognized by its words ("is the light on", "who is home", "what is the temperature in the bedroom", "what is open",
-"batteries") BEFORE any command rule runs, because a question shares its stem with a command ("is it switched on" / "switch on"): a
-question can never switch anything. The fast templates answer the common ones in milliseconds; the rest go to the model, which has a
-query form in its one-line language (`ask <device> [code]`, `ask room=<room>`, `ask who_home`, `ask all lights|open|battery|online|on`)
-and so only chooses WHAT to ask: the words of the answer are a template over the registry (switches and lights on/off and brightness,
-climate mode/temperature/room temperature, sensors, locks and doors, players, presence, batteries, devices that are offline or silent
-for hours: "no data N ago"). Device names are the glossary's spoken names, else the house's own.
+The plug-in reaches it at `http://voice-vad:8093` with the header `X-Voice-Key: <VOICE_TTS_KEY>`. It needs these paths:
+`/ask`, `/confirm`, `/chat` (streamed text), `/utter` (raw audio), `/models`, and `/record/*` for the recorder. The
+service reads its settings every 10 s from `GET /api/voice/config` (house token) and publishes `voice/heard`. Without it
+the satellites still play, but nothing is recognized and "Ask the house" answers 503.
 
-Statements ("I am home") get a plain "Understood". The chat never answers about the house, the people or the present time: a question
-or statement with such words is answered by a fixed line before the model is asked, and a chat answer that mentions them is replaced by
-the same line (the chat answer is held until it is checked, so a streamed invention cannot be taken back).
+How it recognizes speech (the recognizer, the command map, the model prompt) is the service's own and is not described
+or tested here.
 
-### Push-to-talk in the Android app
+## Settings -> Voice ("Wake word and answers")
 
-The Yash app has an "Ask the house" screen: the chat of the dashboard's box (typed phrases, Yes / No buttons, the chat mode) and a
-**hold-to-talk button**. The phone is a satellite of its own (`phone: true`, for example `phone_guest`) with one card, the time it was
-last talked to. Holding the button records 16 kHz mono; on release the recording goes up in one request (`POST /api/voice/ptt?sat=<id>`,
-the raw samples as the body, the phone's key; it works through the VPN, nothing new is opened on the house) and the recognizer takes the
-road of a spoken phrase without a wake word: the grammar pass, the free pass, the model, the same checks. The answer is JSON (what was
-heard, what the house did or asks, a token for the Yes / No buttons) and an `audio` address the phone plays: the spoken question or
-reply, else the done or error chime. A chat answer is streamed as text and the phone asks `POST /api/voice/tts` for its speech.
-Who may call these paths: the house token and a full-access phone; a phone with per-device rights and a panel key are refused.
+`GET/PUT /api/voice/config` (house token), saved in `settings.json` under `voice.config`. No restart: the voice service
+reads it every 10 s.
 
-## Backlog
+- `wake`: the wake word (one word); `wake_maxdist`: how many letters a heard word may differ (at most `(length - 1) // 2`
+  and 3: 7 letters -> 3, 4 -> 1); `wake_prefix`: a heard word that starts so wakes (3 letters or more, empty = off);
+  `wake_variants`: how it is also heard (a word of 2+ letters, or a stem of 3+ letters and `*`).
+- `llm` (smart answers on/off: off = no model is loaded or polled), `llm_model`, `big_model` (`POST /api/voice/models`
+  lists what the model hosts have), `llm_timeout`, `confirm_all_off` (ask before "turn everything off"), `ask_ttl`
+  (seconds a question waits for yes / no).
+- A satellite with `need_wake` acts only on a phrase that holds the wake word; the GET lists their `peer`s as
+  `need_wake`. A save without the field keeps it.
+- `lang` in the GET is the house language (Settings -> House language): the answers' language.
+- The voice service's first read seeds every field once from what it runs (`PUT ?seed=1`). A page save before that is
+  refused (409).
 
+## Ask the house
 
-**A custom wake word for every satellite** (one phrase chosen by the household instead of the stock `hey_jarvis`). Not started.
+The header's Ask opens a chat window (house token). A typed phrase goes to the voice service (`POST /api/voice/ask
+{text, speak?}`): it takes the road of a spoken phrase after recognition. When the service asks a question, Yes / No
+buttons send `POST /api/voice/ask/confirm {token, yes}`. "Say the answer aloud" plays the answer on a chosen speaker.
+When the text is no command, `POST /api/voice/chat {text, history}` streams a chat answer of the model as plain text;
+nothing of it is acted on.
 
-1. **Record samples in the house.** A "record samples" mode (a button on the mic card): the satellite streams, the house cuts the
-   utterances and stores them. Needed: the main speaker 50-150 times at different distances and levels, each family member 20-30 times,
-   plus minutes of negatives (TV, talk, kitchen noise).
-2. **Synthetic positives.** The phrase through the TTS with several voices and speeds, mixed with noise and room impulse responses.
-3. **Train.** microWakeWord for the ESP satellite, openWakeWord for the Android panels.
-4. **Live test.** Count false accepts and false rejects at home, one or two tuning rounds.
-5. **Switch all satellites together**, so a phrase never works on some rooms only.
+## Push-to-talk (phones)
 
-**Grammar-constrained model output** (next). The model may emit only valid lines: the device names of the live registry, their codes and
-allowed values, plus `none` and the `ask` forms. Built from the registry on each change (an llama.cpp grammar through the model server's
-format support, or a JSON schema with enums), so an unknown name or value cannot be produced at all instead of being dropped afterwards.
-Measure accuracy and time on the bench phrases against the free-text output before switching.
+A phone is a satellite with `phone: true` (id `phone_<name>`, one mic card with the last talk time). The first talk of
+a phone makes its satellite. `POST /api/voice/ptt?sat=<id>` takes the recording (16 kHz mono 16-bit little endian, at
+most about 20 s) as the body and sends it to the voice service with no wake word. The answer is the service's JSON plus
+`audio`: the address of the spoken reply or question, else the done or error chime. `POST /api/voice/tts {text}` gives the
+speech of a chat answer. A phone is online for an hour after its app last reported (`voice/phone/<uid>/seen`, from the
+family plug-in) or talked. Who may call ask, chat, ptt and tts: the house token and a full-access phone; a phone with
+per-device rights and a panel key are refused.
 
-**A training station** (later). A Windows PC with a 16 GB GPU of a family member, with their consent and in their free time (SSH access
-is set up by the owner): training of the custom wake word (microWakeWord and openWakeWord) and a LoRA fine-tune of the house model
-(about a month of real confirmed phrases plus synthetic variants are collected first). The runtime stays on the house server; the station
-only produces model files.
+## Recording samples
 
-**Personal assistant features** (backlog, not started). Personal and home content ONLY: no work mail, calendar or chat of any employer, ever.
-Order:
-1. **Calendar by voice** ("what do I have today"): the events of a personal calendar through a text template and the TTS; no LLM.
-2. **Morning news digest**: prepared at night by the small local LLM from sites the household chooses, read on request.
-3. **Personal mail and messenger** read aloud, summaries prepared in the background. Which accounts and chats is decided later, one by one.
+The toolbar of the Voice / Sound tab has "Voice recording": samples of the wake phrase and other words, recorded on a
+satellite with `listen_once` and a `peer` (`POST /api/voice/record`: a beep, 5 s of raw audio, the first 3 s kept) or in
+the browser / on a phone (`POST /api/voice/record/sample`). The voice service stores them; `GET /api/voice/record/...`
+lists, plays and `POST /api/voice/record/delete` deletes them.
 
-Hard rules for all three:
-- **The reading and summarising pipeline has NO action rights in the house.** It only produces text for the TTS. House actions come only from
-  the user's own voice, through the same validation as every command (a registry check of the device and the value), so a text inside a mail,
-  a message or a web page can never switch anything (prompt injection).
-- **While the house reads content aloud (news, mail, messages) it accepts no voice command from that satellite or room**: the content
-  audio must never become a command (the stream is not acted on, or its results are dropped, while the content plays).
-- **The only input during reading is stop**, two ways: the Stop button (the speaker card, the panel) and the voice phrase "wake word + stop"
-  (exactly that phrase; nothing else is acted on). After the stop, or when the reading ends, normal commands work again.
+Background recording (`POST/GET/DELETE /api/voice/background`, house token): the raw audio of one satellite's room is
+saved, never recognized or acted on. Two kinds: `quiet` (a given time from now, up to 12 h) and `tv` (armed: it starts
+when the TV of the room turns on and ends when it turns off, at most two hours, once). One session at a time; the
+sessions survive a restart (`plugin-state/voice/background.json`).
+
+## Not implemented yet
+
+- Players other than ESP nodes and tablets: a Linux box (PipeWire) and a TV toast.
+- `voice-vad` and the recognizer as part of this repository (`make update` neither builds nor versions them).
+- The satellite firmware in the build path.
+- A command-map editor in the dashboard.
+- A level meter on the mic card.
+- A custom wake word trained for the house (from the recorded samples) for every satellite.
+- Grammar-constrained model output.
+- Personal assistant features (calendar, news digest, personal mail read aloud). Hard rules for them: the reading
+  pipeline has no action rights in the house; while content is read aloud that satellite accepts no voice command except
+  "stop".

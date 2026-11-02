@@ -13,12 +13,13 @@ phone or runs full-screen on any old tablet. Rules, schedules and auto-off timer
 in the same page.
 
 ![Dashboard](docs/img/dashboard.png)
+The main dashboard on a desktop: rooms, favourites and live tiles.
 
 ## Why another one
 
 | | Yashome | Home Assistant and friends |
 |---|---|---|
-| size | one backend module (`app.py` + `core/`), one page (`index.html` + `web/`), two containers (plus what your plug-ins bring) | a platform with thousands of integrations |
+| size | one backend module (`app.py` + `core/`), one page (`index.html` + `web/`), three containers (plus what your plug-ins bring) | a platform with thousands of integrations |
 | how a device gets in | it publishes to MQTT; a plug-in adds whole families (Zigbee devices appear by themselves) | integration per vendor, config flow, YAML packages |
 | automations | trigger, condition, action; schedule and auto-off per channel, all in the UI | scripts, blueprints, templates |
 | what it takes to read the code | an evening | weeks |
@@ -33,7 +34,7 @@ home they can read end to end, on a Raspberry Pi or an old laptop, with a broker
   state and command topics, or found through ESPHome's MQTT discovery ("Add" -> ESPHome).
 - **Universal command bus.** Every device is reachable as `home/cmd/<device>/<code>` and
   reports on `home/state/<device>/<code>`, whatever it speaks underneath. Scripts and other
-  tools only need this one contract. In a new install only the backend account may publish to
+  tools only need this one contract. By default only the backend account may publish to
   `home/cmd/` (`MQTT_BACKEND_ONLY`): a script uses REST `/control` or the backend account.
 - **Rules without code.** A rule is a trigger (device event, time, sensor threshold), optional
   conditions and actions. Per channel: schedules ("on at 06:00 on weekdays") and auto-off
@@ -53,9 +54,17 @@ home they can read end to end, on a Raspberry Pi or an old laptop, with a broker
   ship with the core; `PLUGINS` in `.env` switches them on. A broken plug-in is
   logged and skipped; the house keeps running.
 
-![A room](docs/img/room.png)
+![Home map](docs/img/map.png)
+The home map: rooms, devices on the plan, the wires between switches and lamps.
+
+![A device window](docs/img/device.png)
+A device window: its channels, settings, schedules and auto-off.
 
 ![Rules](docs/img/rules.png)
+The rule builder: a trigger, conditions and actions.
+
+![Phone](docs/img/mobile.png)
+The same page on a phone.
 
 ## Quick start
 
@@ -115,22 +124,22 @@ system. The installer fills it in like this:
    port if something on the host already uses it.
 4. **`PLUGINS`** names the plug-ins that run (`zigbee,weather`, `*` = all). On the first install
    every plug-in whose `setup/detect.sh` finds its hardware is put there: with a USB stick in
-   `/dev/serial/by-id/` or a network coordinator announced over mDNS, that is `zigbee` (the only one with a `detect.sh` today). Add others by hand; Settings -> Plug-ins lists what is
-   off. **`PLUGINS_EXTRA_DIR`** (default `./plugins-extra`, git-ignored) is for plug-ins of your own.
+   `/dev/serial/by-id/` or a network coordinator announced over mDNS, that is `zigbee` (the only one with a `detect.sh`). Add others by hand; Settings -> Plug-ins and update lists
+   what is off. **`PLUGINS_EXTRA_DIR`** (default `./plugins-extra`, git-ignored) is for plug-ins of your own.
 5. **Each enabled plug-in's keys**: the ones in its `setup/env.example` that `.env` lacks are
    appended, then its `setup/install.sh` fills them (the Zigbee plug-in generates its broker
    password and frontend login and picks the coordinator, a stick or a network one).
 6. Optional and empty by default: **`MQTT_DEVICE_USERS`** (broker accounts for your devices, each
    with `MQTT_<NAME>_PASSWORD`; they may do everything except write the `home/state` mirror,
    publish into a plug-in's bus it marks read-only for devices, or publish what
-   **`MQTT_BACKEND_ONLY`** lists - `home/cmd/#` in a new install, so a node cannot command the house)
+   **`MQTT_BACKEND_ONLY`** lists - `home/cmd/#` by default, so a node cannot command the house)
    and **`EXTRA_PIP`** (Python packages your plug-ins need,
    `name==version`, baked into the image by `make update`).
 7. **`COMPOSE_FILE`** is written for you: `docker-compose.yml` plus every plug-in's
    `setup/compose.yml`, so a plain `docker compose ...` sees the plug-ins' containers too.
 
-Most of it needs no shell: Settings -> Plug-ins switches plug-ins and fills their keys, **Apply**
-runs `make update` for you; Settings -> Update shows what a new version brings (its CHANGELOG lines),
+Most of it needs no shell: Settings -> Plug-ins and update -> Plug-ins switches plug-ins and fills their keys, **Apply**
+runs `make update` for you; the Update tab shows what a new version brings (its CHANGELOG lines),
 makes a backup and updates (`git pull` + `make update`), and **Roll back** returns the code to the
 version before (the house files stay; restore a backup for those). The `helper` container does this:
 it holds the docker socket - root on this host - so it listens only on a network it shares with the
@@ -171,15 +180,16 @@ preferably behind a VPN or an SSO portal; see `docs/security.md`.
 ## Signing in, and HTTPS
 
 The dashboard asks once per device for the house token (`DASHBOARD_TOKEN` in `.env`). Easier: on a
-screen that is signed in already, Settings -> Sign in from another screen shows a 6-digit code (once, 5 minutes,
-5 tries; a new code replaces the one before); type it on the sign-in card the new device shows. Anyone
+screen that is signed in already, Settings -> This screen -> Sign in from another screen shows a 6-digit code (good
+once, for 5 minutes and 5 tries; a new code replaces the one before). Type it on the sign-in card the new device
+shows: it gets the house token. Anyone
 in the network can burn the tries - then show a new code.
 
 Yashome runs on plain HTTP inside the house network. Two things follow: the token travels in clear
 on your Wi-Fi (keep guests on a separate network), and browsers refuse what they keep for secure
-pages - the dashboard is not installable as an app (use "Add to home screen", a shortcut), and a USB
-flash from the browser (when it ships with the panels) needs a secure page: http://localhost on the
-Yashome computer, or an HTTPS name. If you want HTTPS anyway, put a reverse proxy in front, e.g. Caddy
+pages - the dashboard is not installable as an app (use "Add to home screen", a shortcut), and the
+panels' **Flash over USB** from the browser needs a secure page: http://localhost on the Yashome computer,
+or an HTTPS name. If you want HTTPS anyway, put a reverse proxy in front, e.g. Caddy
 with its own certificate authority:
 
     yashome.home.arpa:8443 {
@@ -194,6 +204,56 @@ computer use it (apps do not trust such certificates). The Yash! app (plug-in fa
 http to `:8765` on your own network or VPN; from the internet it needs HTTPS with a publicly trusted
 certificate (a domain of your own) - see plugins/tools/family/README.md.
 
+## Settings
+
+The gear in the header opens Settings full screen: a menu of groups on the left (with a search), the open page beside
+it. A group's subjects are the tabs on top of the page. Every page has its own address (`#settings/<subject>/<tab>`),
+so the browser's Back works.
+
+| group | pages |
+|---|---|
+| Overview | the house checks itself: what is fine and what needs you; each row opens the place that fixes it |
+| House | Home map (the map editor), Family (phones, rights, the app), House language, Weather |
+| Devices | All devices (with Forgotten), Zigbee, IR, TVs, Panels, NFC tags, Computers and servers |
+| Automation | Rules, History, Watchdog |
+| Voice | wake word, smart answers, questions before acting |
+| This screen | Language, Sign-in, Sign in from another screen |
+| Maintenance | Backups, Plug-ins and update, Restart, Firmware builder |
+
+A page comes from the core or from a plug-in; a page whose plug-in is off is not listed. A plug-in's page with no
+subject of its own lands under **Other**. The layout and its rules: [docs/settings-design.md](docs/settings-design.md).
+
+![Settings](docs/img/settings.png)
+Settings full screen: the groups on the left, a page with its tabs on the right.
+
+## Computers and servers
+
+Settings -> Devices -> Computers and servers lists the computers of the house: machines the house's key logs in to over
+SSH (the helper's deploy key, `~/.config/yashome/ssh/id`). **Search the network** finds machines with SSH on the
+house's /24; **Add by address** takes one by hand. Each computer shows which TV and input its screen is.
+
+A computer can take a **role**, a server of the house. Install and Remove are on the computer's card; the Servers tab
+picks the one computer that runs each role:
+
+| role | what |
+|---|---|
+| Build server | builds ESPHome firmware (and, with the Android app builder beside it, the apps) |
+| Speech (TTS) | the voice's text-to-speech |
+| Big model (LLM) | smart answers of the voice; while that computer is off, the house's own small model answers |
+| yashGen firmware builder | the firmware builder of Maintenance -> Firmware builder |
+| Player (mpv), Touchmouse receiver | one on every computer at a TV that wants it, nothing to pick |
+
+The helper runs a fixed install script there; the build and TTS servers listen on that computer's loopback only and
+the house reaches them through the helper's SSH tunnel. Details: [plugins/tools/computers/README.md](plugins/tools/computers/README.md).
+
+## Restricted mode (a public demo)
+
+With `YASHOME_RESTRICTED=1` (or `YASHOME_DEMO=1`) in the backend's environment, the house runs in restricted mode: a
+route runs only when a plug-in names it in `RESTRICTED_ALLOW` (as "view" or "control"), everything else answers 403
+"Not available here". Request bodies are capped (64 KB), one session holds at most 3 WebSockets, and Settings shows
+the pages it cannot use greyed. No shipped plug-in turns it on: a demo brings its own plug-in that fills the table
+and hands out guest sessions. See [docs/security.md](docs/security.md) and [docs/plugins.md](docs/plugins.md).
+
 ## Backups
 
 The backend makes a backup every night (`BACKUP_AT`, default 03:30 in the `TZ` of `.env` - UTC
@@ -202,12 +262,17 @@ without it; `off` for none) into `backups/` and keeps the last 14 (`BACKUP_KEEP`
 coordinator's network key: without it every Zigbee device is paired again) and your own plug-ins.
 Runtime state (pending timers, the status cache) stays out: restored days later it would replay old
 commands. A zigbee2mqtt folder the backend cannot reach, and files it may not read (left out), are
-shown as warnings in Settings. Settings -> Backups shows the age of the last one (red after two
-days), makes one now, downloads them and restores one (from the list or from an uploaded file; the current
-state is backed up first). `make backup` makes one from the shell.
+shown as warnings in Settings. Settings -> Maintenance -> Backups lists them, makes one now, downloads them and
+restores one (from the list or from an uploaded file; the current state is backed up first; the helper runs the
+restore). Overview warns when the last nightly backup is two days old. `make backup` makes one from the shell.
+
+Before two devices are merged into one (docs/devices.md) the backend makes a **light** backup
+(`yashome-backup-<time>-light.tar.gz`): the house files and `.env` only, without the ESPHome build cache and the
+voice recordings. The last 5 light backups are kept apart from the nightly ones and never push one of them out;
+restoring one undoes the merge.
 
 A backup holds every secret of the house: keep a copy on another disk or computer (a USB stick, a
-NAS) - a backup on the disk that dies is no backup. To restore: Settings -> Backups -> Restore, or from
+NAS) - a backup on the disk that dies is no backup. To restore: Settings -> Maintenance -> Backups -> Restore, or from
 the shell (on this computer or a new one with
 this repository checked out; Z2M_DATA_DIR and PLUGINS_EXTRA_DIR come from the backup's .env,
 HOUSE_DIR stays this computer's): `make restore FILE=backups/yashome-backup-<time>.tar.gz`. It stops
@@ -229,15 +294,17 @@ flowchart LR
     P[plug-in containers<br/>e.g. zigbee2mqtt] --> M
     M <--> H[home backend<br/>FastAPI, app.py + plug-ins]
     H <--> D[dashboard<br/>index.html + plug-in ui.js, PWA]
+    H <--> HL[helper<br/>update, restore, restart]
     H -- home/cmd, home/state --> M
 ```
 
-Two containers of the core, plus the plug-ins' own:
+Three containers of the core, plus the plug-ins' own:
 
 | service | what | port |
 |---|---|---|
 | `mosquitto` | the broker; authenticated, one account per client kind | 1883 (LAN, `MQTT_PORT`) |
 | `home` | backend + dashboard; config in JSON files next to it | 8765 (`DASHBOARD_PORT`) |
+| `helper` | runs `make update`, update, roll back, restore and restart for Settings; holds the docker socket | none (the `helper` network only) |
 | a plug-in's, e.g. `zigbee2mqtt` | from the plug-in's `setup/compose.yml` | its own |
 
 The backend keeps its configuration in `settings.json` (names, rooms, rules, favourites) and
@@ -265,7 +332,7 @@ own, rule actions, settings sections; on the dashboard tabs, the "Add" menu, car
 whole card faces, a box in the header, a section of the device modal) and a plug-in registers
 itself on them. A plug-in keeps its own files in `plugin-data/<name>/`, which git ignores: the
 package holds code and empty templates, your house's data never lives in it. Settings ->
-Plug-ins lists what loaded and what failed, with the error. Only a plug-in's `ui.js`,
+Plug-ins and update lists what loaded and what failed, with the error. Only a plug-in's `ui.js`,
 `i18n.json` and `static/` files are served without the token; everything else it adds needs it.
 To write one, start from `plugins/_example/` (copy it as `hello` into `PLUGINS_EXTRA_DIR`, add
 `hello` to `PLUGINS`, `docker compose restart home`); the full contract is in
@@ -274,10 +341,13 @@ Every environment key, the `.env` ones and those the containers set themselves: 
 
 Details: [MQTT contract](docs/mqtt-contract.md), [REST API](docs/rest-api.md),
 [rules engine](docs/rules.md), [plug-ins](docs/plugins.md), [security model](docs/security.md),
-[device state: live, waiting, offline](docs/device-state.md) (agreed design, being implemented),
-[device description: what a firmware built by fwgen tells the house](docs/device-description.md) (design, no code yet),
-[pairing a fwgen device: the house side](docs/pairing.md) (design, no code yet),
-[voice: hearing today, answering as the target](docs/voice.md) (design, no code yet).
+[device state: live, waiting, offline](docs/device-state.md),
+[devices: parts and merging](docs/devices.md),
+[device description: what a firmware built by fwgen tells the house](docs/device-description.md),
+[pairing a fwgen device: the house side](docs/pairing.md),
+[voice](docs/voice.md) (the recognizer service is not in this repository),
+[Settings layout](docs/settings-design.md), [environment keys](docs/environment.md).
+The device state, device description, pairing and voice docs each list what is not implemented yet.
 
 ## What it works with
 
@@ -292,6 +362,13 @@ Details: [MQTT contract](docs/mqtt-contract.md), [REST API](docs/rest-api.md),
 - **Anything else you write a plug-in for** -- a device with its own protocol, a LAN API, a page
   of your own; see [docs/plugins.md](docs/plugins.md).
 - **Not:** anything that lives behind a vendor cloud.
+
+**Wall panels** (the `panels` plug-in): the builder draws a layout of switches, dimmers, sensors, a clock and the
+weather for one wall screen. An Android tablet shows it in a browser; an ESP screen gets it over MQTT, with firmware
+built by the house.
+
+![Panel builder](docs/img/panel-builder.png)
+The panel builder: one layout for an ESP screen or an Android tablet.
 
 ## Tested hardware
 
@@ -397,18 +474,17 @@ Which switch channel feeds what is one fact in one file, `wiring.json` of the ho
 **What it turns on** and a lamp's links are entries with a `load` target (a lamp on the map; `seg` = a part of a strip). The map
 draws them as the **Wires** layer; **IR and radio** is the other one (rules, panels, IR blasters); each layer is kept on or off per
 browser. `GET/PUT /api/wiring` (house key); the core keeps the list (docs/plugins.md).
-The map's links and the IR appliances' power are taken over once, each at the first start its plug-in is on: the files they come from are
-copied with their sha256 (`manifest.txt`) to `backups/wiring-migration-<UTC time>-<plug-in>/` first (a read-only checkout, the
-demo: to `plugin-state/` of the house; neither writable: that plug-in's migration waits for the next start, its old copy stays in
-charge and Health says so in yellow), every entry is kept (one whose device is
-not loaded yet too, merged by key), and `.wiring-migrated` marks that plug-in done; Settings -> Health shows the counts. With the marker there, a lost or
-broken `wiring.json` is never rebuilt from the old copies: the house runs with no wiring, the broken file is kept as
-`wiring.json.bad-<time>`, Health turns red, and changes are refused (409) until the file is put back. A wiring entry goes only when
-its owner removes it (unlinks the lamp, clears **Powered from**, deletes the tile or the lamp), not when a device disappears;
-when a device's key changes (renamed in zigbee2mqtt, a relink), its entries move to the new key.
-A plug-in that was taken over reads `wiring.json` only. Its old fields (`links` in map.json, `power` of an IR appliance) stay as they
-were at the takeover and are not written again. An older version with the wiring list rewrites them from `wiring.json` at its
-start; a version from before the wiring list reads them as they were, so the wiring changes made since are missing there.
+A plug-in that kept such links in its own files (`links` in the map's `map.json`, `power` of an IR appliance) hands
+them over once, at the first start it is on. The files are first copied with their sha256 (`manifest.txt`) to
+`backups/wiring-migration-<UTC time>-<plug-in>/` (or to `plugin-state/` of the house when `backups/` is read-only; when neither is writable, the takeover waits for
+the next start and Overview says so in yellow).
+Every entry is merged by key, also one whose device is not loaded yet. `.wiring-migrated` marks that plug-in done;
+Settings -> Overview shows the counts. From then on the plug-in reads `wiring.json` only.
+A lost or broken `wiring.json` is never rebuilt from the old copies: the house runs with no wiring, the broken file
+is kept as `wiring.json.bad-<time>`, Overview turns red, and changes are refused (409) until the file is put back.
+A wiring entry goes only when its owner removes it (unlinks the lamp, clears **Powered from**, deletes the tile or the
+lamp), not when a device disappears. When a device's key changes (renamed in zigbee2mqtt, a relink, a merge), its
+entries move to the new key.
 
 ## Help
 
@@ -441,16 +517,7 @@ make update    # after editing .env, git pull or a plug-in change: re-derive sec
 ```
 
 `make move-house` moves the house files of this checkout into `HOUSE_DIR` (set it in `.env` first).
-After `git pull` of a checkout of the first 2.0.0 cut (with plug-ins straight in `plugins/`) run
-`make update` before anything else (python3 on the host, as `make check` says): it rewrites
-`COMPOSE_FILE` for the plug-ins' new group folders; the first start then moves the plug-ins'
-settings sections and the nfc / webOS files to their new places by itself.
-Going back to an older core: stop the stack and move `plugin-state/<name>/*` back into
-`plugin-data/<name>/`, and each `plugin-data/<name>/settings.json` section into `settings.json`, removing
-that file (an older core does not read them where they are now; without the nfc counters it refuses
-every tap; a plug-in file left behind would win over what you change on the older core).
-Coming back up again keeps the `plugin-state/` copy of a file; a TV paired while on the older core is
-paired again (its key is kept aside as `webos_keys.json.migrated-<time>`).
+`make hooks` runs `make lint` before every commit in this checkout.
 
 `make lint` (ruff, py_compile, JS syntax, JSON, `sh -n`, and `tools/check_plugins.py`: ASCII, no
 LAN address, MAC or home directory in `plugins/`, none of your house's words, Russian only in
@@ -476,7 +543,10 @@ welcome, but read the code first: the point of the project is that you can.
 ## Brand
 
 The wordmark, icon and palette live in [`branding/`](branding/README.md) (Nunito, OFL); `branding/brand.py`
-regenerates every asset. ![brand sheet](docs/img/brand.png)
+regenerates every asset.
+
+![brand sheet](docs/img/brand.png)
+The brand sheet: wordmark, icon and palette.
 
 ## License
 

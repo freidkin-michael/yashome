@@ -4,8 +4,9 @@ Everything under `/api` needs `Authorization: Bearer <DASHBOARD_TOKEN>` (or the 
 `X-Token`); `/ws` takes it as `?token=` because a browser cannot set headers on a WebSocket.
 The page itself accepts `/?token=<token>&tab=<tab>` once to sign a device in (see security.md).
 Any method but GET, HEAD and OPTIONS with an `Origin` other than the dashboard's host gets 403 (the
-host is `Host` or `X-Forwarded-Host`; `DASHBOARD_ORIGINS` adds names a proxy uses). The page, its script
-and the PWA files are open.
+host is `Host` or `X-Forwarded-Host`; `DASHBOARD_ORIGINS` adds names a proxy uses). The page, its script,
+`/i18n.js`, `/display.js`, the PWA files and `POST /api/signin` are open. In restricted mode
+(`YASHOME_RESTRICTED=1`, security.md) only the routes a plug-in lists answer; every other one is 403.
 
 ## Devices and control
 
@@ -15,9 +16,10 @@ GET    /api/devices/{id}/status                 cached state {online, values, ra
                                                 ("start" | "return"), waiting_since?, offline_since?, cmd_wait?
                                                 {code: value sent, in the device's own units: a raw brightness,
                                                 true/false}, ...}: online = live (docs/device-state.md)
-POST   /api/devices/{id}/control                {code, value} -> {ok, code, value, waiting?} - the only actuation
+POST   /api/devices/{id}/control                {code, value} -> {ok, code, value, waiting?, via?} - the only actuation
                                                 path; waiting: a confirm channel shows the device's report, not
-                                                the value sent; 409 when the device is offline (a webOS TV never);
+                                                the value sent; 409 when the device is offline (never for a device
+                                                marked wakes, a TV; via: a part of it, an IR remote, sent it instead);
                                                 a brightness value is 0-100 % of the full range (home/cmd on the
                                                 bus takes percent of the dim window)
 POST   /api/devices/{id}/rename                 {name}: the display name only
@@ -30,8 +32,9 @@ POST   /api/devices/relink                      {stale, into} -> {ok, id, from, 
                                                 id that is gone onto a live one
 GET    /api/devices/merge-plan?old=&new=        {old, new, moves: {what: count}, codes_only_old}: the dry run of a
                                                 merge (house token; docs/devices.md)
-POST   /api/devices/merge                       {old, new} -> {ok, backup, plan, migrated}: a backup first, then old
-                                                becomes part of new (its alias) (house token)
+POST   /api/devices/merge                       {old, new} -> {ok, backup, plan, migrated}: a light backup first
+                                                (503 and no merge when it fails), then old becomes part of new
+                                                (its alias) (house token)
 GET    /api/devices/forgotten                   {items: [{id, name, data, kept}]}: gone devices still stored (house token);
                                                 data = "kind:where" leftovers, kept = rules and panels naming it
 DELETE /api/devices/{id}/leftovers              {ok, removed, kept}: forget a gone device's data in one step (house
@@ -44,8 +47,8 @@ PUT    /api/wiring                              {entries}: the whole list; a new
                                                 switch channel and an existing dev target (400), 409 while
                                                 wiring.json is lost or broken
 GET    /api/health                              {ok, mqtt, ts} - liveness
-GET    /api/health/report                       {rows: [{id, state, title, detail, fix, args}], worst, ts}: the
-                                                health page (house token)
+GET    /api/health/report                       {rows: [{id, state, title, detail, fix, args}], worst, ts}:
+                                                Settings -> Overview (house token)
 WS     /ws                                      full state snapshot: when a status changed, at most one
                                                 every 0.25 s (the latest), an unchanged one only every 2 s
 ```
@@ -94,7 +97,7 @@ PUT    /api/tile_sizes/{scope}                  {device, w?, h?, col?, hn?} -> {
                                                 (0-8), h min height px (0-2000), col pinned column (-1-32), hn min height
                                                 px on a narrow screen (<= 640 px; absent = kept as stored), clamped;
                                                 all 0 and col -1 = auto, the entry is dropped
-GET    /api/house                               -> {lang, langs}: the house language (Settings -> General) and the ones there are
+GET    /api/house                               -> {lang, langs}: the house language (Settings -> House language) and the ones there are
                                                 (English + every dictionary of i18n.json)
 PUT    /api/house                               {lang} -> {lang, langs}: the house token only; /i18n.js leads with it
                                                 (window.HOUSE_LANG), the default of a screen where nobody picked a language
@@ -139,27 +142,36 @@ POST   /api/backups/upload                      the raw body of a backup file, k
 GET    /api/helper/state                        the update helper's view: plug-ins, keys, versions (house token)
 POST   /api/helper/plugins                      {on: [names]}: the plug-ins to run (house token)
 POST   /api/helper/env                          {key, value}: a key of .env (house token)
-POST   /api/helper/jobs                         {kind: apply | update | rollback | restore, file: a backups/ archive for restore} (house token)
+POST   /api/helper/jobs                         {kind: apply | update | rollback | restore | restart, file: a backups/
+                                                archive for restore} (house token); 404 no such backup
 GET    /api/helper/jobs/current                 the running or last job (house token)
 ```
 
 "House token" here: the dashboard's own token; a phone's token or a panel's key get 403. The
 helper routes answer 503 when the host has no helper (run `make update` once there) or it does not answer.
 
+A merge makes a light backup (`yashome-backup-<date>-<time>-light.tar.gz`): the house's settings and
+data without the ESPHome build cache and the voice recordings. It is listed and restorable like the
+others; the newest 5 stay, and it never counts as the nightly backup. Settings -> Sign in from
+another screen asks for the code; the new screen types it on its sign-in card.
+
 ## Plug-ins
 
 ```
-GET    /api/plugins                             {loaded: [{id, name, version, ui, i18n, group, requires, required_by}], failed: [{id, error}], off: [id], dirs}
+GET    /api/plugins                             {loaded: [{id, name, version, ui, ui_v, i18n, group, requires, icon, menu_group, menu, required_by}], failed: [{id, error}], off: [id], dirs}
 GET    /plugins/{name}/ui.js                    the public files of a loaded plug-in, no token (GET and HEAD)
 GET    /plugins/{name}/i18n.json
 GET    /plugins/{name}/static/{file}            .js .mjs .css .json .png .svg
 ```
 
 Plug-ins add their own routes. They need the token, except the few a plug-in opens itself: pairing
-(`POST /api/family/claim` -> {tok, uid, name}, `POST /api/panels/register`, `GET /api/panels/register/{id}`), the build server's
-installer (`/plugins/build/install.sh`, `server.tar.gz`, `POST /plugins/build/pair`), the apps
-(`/plugins/{family,panels}/*.apk`), `/nfc` and the panel pages (`/panel-view`, `/panel-view.html`, `/panel-builder`). A
-plug-in's README describes its routes; the Zigbee plug-in:
+(`POST /api/family/claim` -> {tok, uid, name}, `POST /api/panels/register`, `GET /api/panels/register/{id}`), the files a
+computer of the house installs (`/plugins/build/server.tar.gz`, `/plugins/player/host.tar.gz`,
+`/plugins/touchmouse/host.tar.gz`, `/plugins/voice/tts.tar.gz`), the satellites' spoken files
+(`/plugins/voice/tts/{kind}/{name}.wav`), the apps (`/plugins/family/yash.apk`, `/plugins/panels/panel.apk`,
+`/plugins/panels/app`: the launcher's version), `/nfc` (GET and POST), the panel pages (`/panel-view`, `/panel-view.html`,
+`/panel-builder`) and zigbee2mqtt's page (`/plugins/zigbee/ui`, with the pass below). A plug-in's README describes its
+routes; the Zigbee plug-in:
 
 ```
 POST   /api/zigbee/pair/start                   permit_join on
@@ -172,6 +184,6 @@ POST   /api/zigbee/device/remove                {id, force?}
 GET    /api/zigbee/gateway                      {port, adapter, coordinator, firmware, ieee, channel, pan_id, ext_pan_id,
                                                 key_set, version, online, since, info_at} (house token)
 GET    /api/zigbee/gateway/key                  {key}: the network key (house token)
-POST   /api/zigbee/gateway/check                {port?} -> {ok, how, args}: a TCP connect to a network coordinator
+POST   /api/zigbee/gateway/check                {port?} -> {ok, how, args}: a TCP connect to a network coordinator (house token)
 POST   /api/zigbee/ui                           {url}: a pass (a cookie for /plugins/zigbee/ui, 12 h) to zigbee2mqtt's page (house token)
 ```

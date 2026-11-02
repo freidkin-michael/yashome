@@ -7,9 +7,10 @@ checked copy: keep it a regular file, not a symlink (a link would be replaced by
 
 Host pieces read env files of their own, `/etc/yashome/<piece>.env` (the SwitchBot bridge:
 `/etc/yashome/switchbot-<id>.env`, one per lock); an example lies next to the piece
-for presence (`host/presence.env.example`), switchbot and provision (only the Wi-Fi card, optional). The Wake-on-LAN
-relay, the provision relay and panel-start read none: `sudo sh tools/host-sockets.sh` installs them on socket files in
-`/run/yashome`, the house's group only (no port, no token).
+for presence (`host/presence.env.example`), switchbot (`host/switchbot.env.example`) and provision
+(`host/provision.env.example`: only the Wi-Fi card, optional). The Wake-on-LAN relay, the provision relay and
+panel-start take no port and no token: `sudo sh tools/host-sockets.sh` installs them on socket files in
+`/run/yashome`, the house's group only.
 The touchmouse receiver reads `TOUCHMOUSE_PORT` (7709) and `TOUCHMOUSE_BIND` from
 `/etc/yashome/touchmouse.env` (see its README); it and its typing helper share `TOUCHMOUSE_TYPE_PORT` (7710, loopback).
 
@@ -20,10 +21,11 @@ documentation:
 | key | where | what |
 |---|---|---|
 | `HOUSE_ROOT` | home | `/house`, the mounted `HOUSE_DIR` |
+| `YASHOME_RESTRICTED` (or `YASHOME_DEMO`) | home | set by a public demo's compose file: `1` = restricted mode, a route runs only when a plug-in allows it (docs/security.md) |
 | `MQTT_HOST_PORT` | home | the broker port nodes on the network connect to (`MQTT_PORT`; host:port allowed) |
 | `HELPER_URL` | home | the update helper (`http://helper:8796`) |
 | `HELPER_PORT`, `HELPER_BIND`, `HELPER_IMAGE` | helper | the code's defaults: 8796, 0.0.0.0 (the helper network only), `yashome-helper:local` |
-| `GIT_SSH_COMMAND` | helper | the deploy key for `git pull` (Settings -> Update) |
+| `GIT_SSH_COMMAND` | helper | the deploy key for `git pull` (Settings -> Plug-ins and update -> Update) |
 | `YASHOME_JOB` | helper's job container | set by the helper: `make` steps that need the host's home skip them |
 | `STATE_DIR` | panels-discover | `/state`: its `pairing.json` / `discovered.json` |
 | `APK_URL`, `BUILD_PORT`, `BUILD_WORK`, `BUILD_MODE`, `ESPHOME_BIN`, `GRADLE_USER_HOME` | build server, app builder (on a computer of the house) | see `plugins/tools/build/README.md` |

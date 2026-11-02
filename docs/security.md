@@ -9,34 +9,44 @@
   is not the dashboard's own host) are refused too, and the page carries a CSP that
   keeps scripts, requests and images on the dashboard's own origin (inline script is allowed,
   the page is built that way). The dashboard asks for it once and keeps it in the
-  browser's local storage; Settings -> This device -> Log out forgets it.
+  browser's local storage; Settings -> This screen -> Sign-in -> Log out forgets it.
+- **Sign in from another screen.** Settings -> This screen -> Sign in from another screen
+  (`POST /api/signin/start`, house token) shows a 6-digit code. The new screen types it on its
+  sign-in card (`POST /api/signin`, no token) and gets the house token. A code works once, for
+  5 minutes, and 5 wrong tries burn it; a new code replaces the old one. Each wrong code and
+  each sign-in is logged with the caller's address.
 - **Authenticated broker with an ACL.** `allow_anonymous false`; accounts and roles through
   mosquitto's dynamic-security plug-in: `home` for the backend (all topics), one account per
   plug-in service that asks for it in its `setup/broker.json` with rights on its own topics only
   (the Zigbee plug-in: `z2m`, `zigbee2mqtt/#`), one account per ESP panel (`panel-<name>`, on its own
   `panel/<name>/#`; a plug-in may make such accounts at runtime), and optional device accounts (`MQTT_DEVICE_USERS`)
-  that may do everything except publish to `home/state/#`, to what a plug-in marks
+  that may do everything except publish to `home/state/#`, `home/clock/#`, to what a plug-in marks
   `device_readonly` (`zigbee2mqtt/#`) and to `MQTT_BACKEND_ONLY` - so a node cannot send what only
   the backend should (permit_join, a relay command). A new install has `MQTT_BACKEND_ONLY=home/cmd/#`:
-  only the backend commands the house; an existing house keeps its value (empty) until the owner sets it. Never give a node the backend account `home`: it
+  only the backend commands the house; `make update` adds the key empty to a `.env` that lacks it, and the owner sets it. Never give a node the backend account `home`: it
   may write everything, the state mirror included - nodes use a device account. `make
   secrets` writes `config/mosquitto/dynamic-security.json` from `.env`; rotate by editing `.env`
   and running `make update` (it restarts the broker).
 - **The helper holds the docker socket.** That is root on the host. It is a container of its own (not the
   backend), on a network it shares only with the backend, every call needs `HELPER_KEY`, and it does a
-  fixed list of things: write `PLUGINS` and the keys a plug-in's `setup/env.example` declares (never the
-  core's own keys, nor a path or a device of the host), run `make update`, `git pull --ff-only` after a
-  backup, roll the code back. The dashboard reaches it with the house token only (not a phone's, nor a
-  panel's). It is always on, so treat the house token as root on the host: whoever holds it - or runs
+  fixed list of things (`helper/README.md`): write `PLUGINS` and the keys a plug-in's `setup/env.example`
+  declares (never the core's own keys, nor a path or a device of the host), run `make update`, a fast-forward
+  `git merge` after a backup, roll the code back, restore a backup, restart the stack. For the computers
+  plug-in it logs in over ssh to the house's other computers with its deploy key, runs a fixed probe there
+  and installs or removes a role (`helper/roles/`). The dashboard reaches it with the house token only (not
+  a phone's, nor a panel's). It is always on, so treat the house token as root on the host: whoever holds it - or runs
   script in the dashboard, or is a plug-in (they run inside the backend) - can switch on a plug-in and
   run `make update`, or point a plug-in's account at a host
   of their own. Update pulls what the remote has, unsigned, with a deploy key of its own, never your
   `~/.ssh`. The host itself (and a plug-in on the host network) can reach the helper's container
   address: there `HELPER_KEY` is the only guard. Its jobs run in a one-shot container, so a job
   survives the helper being recreated.
-- **No outbound connections from the core.** It talks only to your broker and your devices. Of the
-  plug-ins only `weather` goes out (Open-Meteo for the forecast and the city search, the Israel
-  Meteorological Service's public last-hour file, and ipwho.is once when no place is set yet).
+- **No outbound connections from the core.** It talks only to your broker and your devices. Plug-ins
+  that go out: `weather` (Open-Meteo for the forecast and the city search, the Israel Meteorological
+  Service's public last-hour file, and ipwho.is once when no place is set yet), `voice` (the Silero
+  speech models, downloaded once), `family` (Firebase, only when `FAMILY_FIREBASE_DB` is set) and
+  `player` (the addresses you give it). Installing a role on a computer of the house fetches its
+  software (Docker, Ollama).
 
 ## Do not expose the ports directly
 
@@ -100,6 +110,23 @@ It **cannot** (these need the house token, the dashboard's):
 - backups, the update helper, the sign-in codes for new devices, the health report, the ESP MQTT block.
 
 A plug-in that adds a route a phone should use marks it: `@core.use_route` above `@core.app.post(...)`.
+
+## Restricted mode (the public demo)
+
+`YASHOME_RESTRICTED=1` in `.env` (`YASHOME_DEMO=1` is read too) turns on restricted mode. It is meant for
+a public demo house, and a plug-in that runs the demo fills its tables (none ships in `plugins/`):
+
+- A route answers only when `RESTRICTED_ALLOW` lists its method and route path; every other one is 403
+  ("Not available here"). A new route stays closed until it is listed.
+- A route is listed for `view` (anyone signed in to the demo) or `control` (the one guest in control
+  now); a watcher calling a `control` route gets 403.
+- A body over 64 KB is refused (413) before it is parsed; the plug-in's checks may refuse a body (400).
+- One demo session holds at most 3 WebSockets.
+- `GET /api/plugins` names no paths and no errors; the house speaks English only.
+- The page sends a screen that is not signed in to `/try`, and Settings greys a page whose routes are not
+  listed.
+
+See docs/plugins.md (`core.RESTRICTED*`) for the hooks.
 
 A phone with per-device rights reaches only the devices it may see, and controls only those marked control.
 

@@ -24,10 +24,9 @@ home/clock/words                  retained   {key: text, "wx": {code: text}}: th
 ```
 
 Commands arriving on `home/cmd/...` are re-posted to the backend's own `/api/devices/{id}/control`,
-so validation, the confirm rule and the logs apply to MQTT and REST alike. Who may publish them: in a
-new install the backend account `home` only (`MQTT_BACKEND_ONLY=home/cmd/#`); a device account
-(`MQTT_DEVICE_USERS`) is refused. `MQTT_BACKEND_ONLY=` (empty, as an older house keeps it) lets devices
-publish there too.
+so validation, the confirm rule and the logs apply to MQTT and REST alike. Who may publish them: by
+default the backend account `home` only (`MQTT_BACKEND_ONLY=home/cmd/#`); a device account
+(`MQTT_DEVICE_USERS`) is refused. An empty `MQTT_BACKEND_ONLY=` lets devices publish there too.
 
 The `home/state` mirror is pruned at start-up: retained branches of devices that no longer exist
 are removed - once every plug-in that loads its devices from outside said its list is in
@@ -62,7 +61,7 @@ zigbee2mqtt/bridge/request/*                 rename, remove, permit_join (the ba
 Device accounts (`MQTT_DEVICE_USERS`) may read it but not publish into it (`device_readonly` in the
 plug-in's `setup/broker.json`); zigbee2mqtt has an account of its own with rights on it alone.
 Each ESP wall panel has an account of its own on `panel/<name>/#` (made by the panels plug-in when
-the panel is built); screens flashed before share the `panels` account on `panel/#`.
+the panel is built); a screen with no account of its own uses the shared `panels` account on `panel/#`.
 The panels plug-in keeps two retained topics there for each ESP panel: `panel/<name>/layout` and
 `panel/<name>/away` (the panel's devices that are not live: `/<device>#o/<device>#w/`, offline and
 waiting for their report; `/` when all are live; docs/device-state.md).

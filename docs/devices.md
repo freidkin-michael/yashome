@@ -23,11 +23,13 @@ A plug-in that owns a device registers it (`core.register_device`). Another plug
 
 `GET /api/devices/merge-plan?old=&new=` is the dry run: what a merge of `old` into `new` would move, store by store
 (names, rooms, favourites, rules, tab order, tile sizes, room thermometers...) and plug-in by plug-in (`core.MERGE_PLAN`:
-`fn(old, new) -> {what: count}`), and the codes only `old` has. `POST /api/devices/merge {old, new}` makes a backup
-first (its name is in the answer: restoring it is the way back), moves every reference (`core.migrate_device_key` and
+`fn(old, new) -> {what: count}`), and the codes only `old` has. `POST /api/devices/merge {old, new}` makes a light
+backup first (the house files and `.env`, without the ESPHome build cache and the voice recordings; the last 5 light
+backups are kept apart from the nightly ones). Its name is in the answer: restoring it is the way back. When the backup
+fails, the merge does not run (503). Then the merge moves every reference (`core.migrate_device_key` and
 the plug-ins' `ON_RENAME`), tells the plug-ins (`core.DEVICE_MERGED`: `fn(old, new)`, the owner of `old` stops
 registering it) and keeps `old` as an alias of `new` (`core.aliases(new)`, `core.merged(old)`): the history of the
-device reads its former ids too. An MQTT device of the house is never the one merged away. Both routes take the house
+device reads its former ids too. An MQTT device of the house (`mqtt_devices.json`) is never the one merged away (400). Both routes take the house
 token; restricted mode refuses them.
 
 ## The parts the plug-ins add

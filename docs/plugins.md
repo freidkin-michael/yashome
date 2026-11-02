@@ -21,8 +21,9 @@ and recreates what changed); for one without it a restart is enough: `docker com
 Every sub-directory with an `__init__.py` is a plug-in, directly in `plugins/` or in a group
 folder (a directory without `__init__.py`). The shipped ones are grouped by role:
 `transports/` (how devices are reached: zigbee, webos, tizen, ir), `devices/` (a kind of device on the
-dashboard over any transport: climate, tv, cameras), `sources/` (data and events: weather, nfc),
-`tools/` (stats). The group is only a folder: the name is unique across all of them, and
+dashboard over any transport: climate, tv, cameras, panels, switchbot), `sources/` (data and events: weather,
+nfc, presence, fwdesc), `tools/` (the rest: map, voice, family, history, watchdog, player, stats ...;
+`plugins/README.md` lists them all). The group is only a folder: the name is unique across all of them, and
 `PLUGINS`, `plugin-data/<name>/` and `/plugins/<name>/` use the name alone. Names: lowercase letters, digits and `_`,
 starting with a letter, at most 32 characters; names starting with `_` are skipped (helpers and `_example`).
 
@@ -35,16 +36,16 @@ so does a `requires` file that cannot be read or holds anything but one name per
 plug-in whose requirement is off. One resolver, `tools/pluginlib.py`, decides for the backend,
 `make install` / `make update` (python3 on the host, which `make check` asks for) and the broker
 accounts; install and update print why a plug-in stays off. In `/api/plugins` a
-plug-in switched on this way has `required_by`. None of the shipped plug-ins requires another: a
-shared tab is declared by each plug-in that fills it (`tabs` with the same `id` become one tab).
+plug-in switched on this way has `required_by`. Of the shipped plug-ins only `player` requires another
+(`computers`). A shared tab is declared by each plug-in that fills it (`tabs` with the same `id` become one tab).
 
 **Always on: map.** The rooms of the house are the map's (`pluginlib.REQUIRED`): it loads whether
 `PLUGINS` names it or not (`required_by` "core"), Settings shows it ticked and greyed, "always on",
-and the helper's state says `required`. Missing or failing, it is a red row on the health page.
+and the helper's state says `required`. Missing or failing, it is a red row in Settings -> Overview.
 
 They load in alphabetical order after the core, a requirement before what requires it. A plug-in
 that fails to import - or registers something it may not (see "Reserved") - is taken back completely (its hooks, devices, routes, namespace),
-logged, and listed under Settings -> Plug-ins with the error; the rest of the house keeps running.
+logged, and listed under Settings -> Plug-ins and update with the error; the rest of the house keeps running.
 
 ```
 plugins/
@@ -85,8 +86,8 @@ come from the documentation ranges: `192.0.2.x`, `00:11:22:33:44:55`, `/home/som
 import app as core
 
 PLUGIN = {"name": "Hello", "version": "1.0.0", "icon": "puzzle"}   # shown in Settings; icon: a name of the dashboard's set;
-                                                                   # "menu_group": transports | devices | sources | tools moves it in the menu;
-                                                                   # "menu": False keeps it out of the Settings menu
+                                                                   # "menu": False keeps its pages out of the Settings menu;
+                                                                   # "menu_group" is passed on in GET /api/plugins
 ```
 
 | hook | what it does |
@@ -102,32 +103,32 @@ PLUGIN = {"name": "Hello", "version": "1.0.0", "icon": "puzzle"}   # shown in Se
 | `core.NODE_SUBTOPICS[name] = fn(parts, payload, retain)` | what a node says of itself under `<node>/<name>/...`, for ANY node (`parts[0]` is its topic prefix, never `home` or a claimed namespace): the core subscribes `+/<name>/#` with the plug-in topics; the retained replay arrives on every connect |
 | `core.DEVICE_REMOVED.append(fn(device))` | a device left the house: a generic-MQTT one removed (Add ESPHome -> Remove) any plug-in's `remove_device` without `keep_state`, or a Zigbee device unpaired or out of the z2m list for 10 min (a rejoin or a rename brings it back sooner); a relink keeps state and fires nothing; the TV plug-in has no removal: forget what you kept for it, clear its retained topics |
 | `core.WIRING_CHANGED.append(fn(entries))` | the wiring list (README "Wiring") was stored, or read at start; called after it, outside the wiring's lock: re-read what it says |
-| `core.WIRING_MIGRATORS.append({name, files, entries})` | what a plug-in kept before the wiring list, taken over at the first start the plug-in is on (each plug-in by itself, recorded in `.wiring-migrated`): `files` are backed up (with their sha256) before anything is written, `entries()` are merged by key, kept even when a device is not known (yet). Once taken over (`core.wiring_owns(name)`), the plug-in reads `core.wiring()` only and never writes its old copy again: the old fields stay as they were, what an older build would read |
+| `core.WIRING_MIGRATORS.append({name, files, entries})` | what a plug-in kept before the wiring list, taken over at the first start the plug-in is on (each plug-in by itself, recorded in `.wiring-migrated`): `files` are backed up (with their sha256) before anything is written, `entries()` are merged by key, kept even when a device is not known (yet). Once taken over (`core.wiring_owns(name)`), the plug-in reads `core.wiring()` only and never writes its old copy again: the old fields stay as they were |
 | `core.DISCOVERY_IGNORE.append(fn(names))` | `names` = a discovered node's name and the first topic levels of its channels; return True when the node is yours (it has a description or a pairing): the add dialog does not offer it and its retained discovery configs are not read |
 | `core.MQTT_NAMESPACES.add(top)` | claim a whole top-level topic (`zigbee2mqtt`): only you may subscribe or handle under it, a discovered ESPHome node may not point into it (a hand-written `mqtt_devices.json` entry is yours: do not point one there, it would take those frames first). A plug-in that loaded earlier and already subscribes there makes the claim fail. Not the core's own (`home`, `homeassistant`, `$...`), one plain level |
 | `core.MQTT_SHARED_READ.append(filter)` | inside your namespace, topics a generic `mqtt_devices.json` device may read as its state (a screen's own sensors): the device gets the frame and your handler still does; nothing may publish there |
 | `core.TOKEN_CHECKS.append(fn(token, method, path) -> bool)` | accept a token your plug-in issued (a key per kiosk panel, revocable one by one) for THIS request: `method` is the HTTP method (`WS` for the WebSocket), `path` the URL path - admit only what that client needs; only an exact `True` admits, an exception refuses. The master token never reaches your check |
 | `core.WS_FILTERS.append(fn(websocket, payload) -> payload)` | trim the /ws snapshot ({device id: status}) for the caller behind `websocket` (its headers and query, where a browser puts the token) - return the dict to send; runs for every frame built (at most every 0.25 s, shared by the connections whose headers and query are equal), keep it cheap. It must depend on the headers and the query only (not on `websocket.client` or other state): the shared frame is keyed on them |
 | `core.is_house_token(headers) -> bool` | the request carries the house token itself, not a token a plug-in issued (a phone, a panel): guard what only the dashboard may do |
-| `core.RESTRICTED`, `core.RESTRICTED_ALLOW[(method, path)] = "view" \| "control"`, `core.RESTRICTED_ROLE.append(fn(token, method, path) -> "view" \| "control" \| None)`, `core.restricted_role(headers, query, method, path)`, `core.RESTRICTED_CHECKS.append(fn(method, path, params, body) -> why \| None)`, `core.RESTRICTED_REFUSED`, `core.RESTRICTED_BODY_MAX`, `core.RESTRICTED_WS_MAX` | restricted mode (`YASHOME_RESTRICTED=1`, the older `YASHOME_DEMO=1` too; the public demo plug-in turns it on and fills the table): a route runs only when `RESTRICTED_ALLOW` names its method and route path (`WS` for a WebSocket); "control" ones only for the guest in control; every other route answers 403 `RESTRICTED_REFUSED`, so a new route is refused until it is listed. A body over `RESTRICTED_BODY_MAX` is 413 before it is parsed; a `RESTRICTED_CHECKS` answer is 400 (an exception refuses too); `GET /api/plugins` names no paths and no errors. `RESTRICTED_ROLE` tells whose demo session a token is; in demo mode `is_house_token` is true for the guest in control, and for a watcher only on a route listed "view"; a session holds at most `RESTRICTED_WS_MAX` WebSockets; the house has English only. In the page `window.RESTRICTED` is true and the map is read-only; a plug-in lets one session edit it with `window.RESTRICTED_EDIT = () => true` while it may, firing `restricted-role` on `window` when that changes |
+| `core.RESTRICTED`, `core.RESTRICTED_ALLOW[(method, path)] = "view" \| "control"`, `core.RESTRICTED_ROLE.append(fn(token, method, path) -> "view" \| "control" \| None)`, `core.restricted_role(headers, query, method, path)`, `core.RESTRICTED_CHECKS.append(fn(method, path, params, body) -> why \| None)`, `core.RESTRICTED_REFUSED`, `core.RESTRICTED_BODY_MAX`, `core.RESTRICTED_WS_MAX` | restricted mode (`YASHOME_RESTRICTED=1`, `YASHOME_DEMO=1` is read too; the public demo plug-in turns it on and fills the table): a route runs only when `RESTRICTED_ALLOW` names its method and route path (`WS` for a WebSocket); "control" ones only for the guest in control; every other route answers 403 `RESTRICTED_REFUSED`, so a new route is refused until it is listed. A body over `RESTRICTED_BODY_MAX` is 413 before it is parsed; a `RESTRICTED_CHECKS` answer is 400 (an exception refuses too); `GET /api/plugins` names no paths and no errors. `RESTRICTED_ROLE` tells whose demo session a token is; in demo mode `is_house_token` is true for the guest in control, and for a watcher only on a route listed "view"; a session holds at most `RESTRICTED_WS_MAX` WebSockets; the house has English only. In the page `window.RESTRICTED` is true and the map is read-only; a plug-in lets one session edit it with `window.RESTRICTED_EDIT = () => true` while it may, firing `restricted-role` on `window` when that changes |
 | `core.ON_EVENT.append(fn(event))` | called inline with every event of the house: `{kind: state | command | rule | offline | online | ..., device, code, old, new, source, ts}`; keep it fast, it must not raise (the history plug-in uses it) |
 | `core.ON_REPORT.append(fn(dev_id, values, ts))` | called inline with every report a device makes itself (not a command's echo): the channels it carries and their values now, and when; keep it fast, it must not raise (the watchdog learns from it how fast each channel answers its commands) |
-| `core.room_reading(room id, "temperature" \| "humidity") -> {dev, code, value} \| None`, `core.room_sensor_order(room id, kind) -> {pick, order}` | a room's temperature or humidity as the dashboard shows it: the owner's hand choice alone (silent: None, Health says why), else auto - the room's channels of that kind but never a module's own board (`advanced`, an AC's built-in one), a sensor outdoors (a device marked `outdoor`, or one with a wind or rain channel) nor a copy of a sensor the room has; an AC's room channel with no value is no option; marked `preferred` first, then by id. `order` is what is tried, the first live one reads |
+| `core.room_reading(room id, "temperature" \| "humidity") -> {dev, code, value} \| None`, `core.room_sensor_order(room id, kind) -> {pick, order}` | a room's temperature or humidity as the dashboard shows it: the owner's hand choice alone (silent: None, Settings -> Overview says why), else auto - the room's channels of that kind but never a module's own board (`advanced`, an AC's built-in one), a sensor outdoors (a device marked `outdoor`, or one with a wind or rain channel) nor a copy of a sensor the room has; an AC's room channel with no value is no option; marked `preferred` first, then by id. `order` is what is tried, the first live one reads |
 | ui.js `deviceSettings: [{category, transport, label, list(), card(item, box, reload), actions?(box, reload)}]` | a kind's own settings of its devices on one page per category: Settings -> TVs draws a card per TV with the kind in its title (the TV plug-in) |
 | a device's `virtual: "person" \| "presence" \| "tag"` | no thing in the house: All devices does not list it, its window says what it is and opens its page (Family, NFC), with no room, favourite, press log or answer time |
 | `core.extend_device(dev_id, part, channels, transport, info=None, cfg=None, map=None)`, `core.drop_part(dev_id, part)`, `core.PARTS` | a part of a device another plug-in owns (an IR remote of a TV, a tablet's microphone and speaker): docs/devices.md |
 | `core.MERGE_PLAN.append(fn(old, new) -> {what: count})`, `core.DEVICE_MERGED.append(fn(old, new))`, `core.merge_plan(old, new)`, `core.aliases(dev_id)`, `core.merged(old)` | merging two devices of one thing: a plug-in's own references in the dry run, its move after the merge (the owner of old stops registering it), the former ids (docs/devices.md) |
-| `core.HEALTH_CHECKS.append(fn() -> [row])` | rows for Settings -> Health: `core.health_row(id, state, title, detail="", fix="", args=(), link="", cmd="")`, state `ok` / `warn` / `bad`, link a Settings place (`devices/forgotten`) the row opens, cmd host commands shown under More (never translated); title, detail and fix are English words the dashboard translates (`{0}`... take `args`, numbered across the three). Keep it quick: all checks share a 5 s budget, a slow one becomes a "did not answer" row |
+| `core.HEALTH_CHECKS.append(fn() -> [row])` | rows for Settings -> Overview: `core.health_row(id, state, title, detail="", fix="", args=(), link="", cmd="")`, state `ok` / `warn` / `bad`, link a Settings place (`devices/forgotten`) the row opens, cmd host commands shown under More (never translated); title, detail and fix are English words the dashboard translates (`{0}`... take `args`, numbered across the three). Keep it quick: all checks share a 5 s budget, a slow one becomes a "did not answer" row |
 | `core.mqtt_command(dev_id, code, payload, topic="")` | run one command in the `home/cmd` payload language (`true`/`false`/`on`/`off`/`toggle`/`up`/`down`/number, bytes) through the device control like the core bus does - for a plug-in that relays commands from its own topics after checking who may send them |
 | `core.ON_MQTT_CONNECT.append(fn(cli))` | called after every (re)connect to the broker, once the subscriptions are in: republish retained topics of your own (a layout a device reads); an exception is logged |
-| `core.STARTUP_TASKS.append(fn)` | started once the broker is up, before the timers are replayed (nothing waits for it); a coroutine function runs as a task, a plain callable in a thread of its own - either may loop forever; errors, `sys.exit` included, are logged and shown on the health page, and the task starts again (5 s, doubling up to 5 min; one that returns stays ended). Iterate `core.DEVICES` over a snapshot (`list(core.DEVICES.values())`): the MQTT thread adds and drops devices meanwhile. Timers of your devices may fire before your task has run: a transport that is not ready yet should raise (the core logs it and retries) |
+| `core.STARTUP_TASKS.append(fn)` | started once the broker is up, before the timers are replayed (nothing waits for it); a coroutine function runs as a task, a plain callable in a thread of its own - either may loop forever; errors, `sys.exit` included, are logged and shown in Settings -> Overview, and the task starts again (5 s, doubling up to 5 min; one that returns stays ended). Iterate `core.DEVICES` over a snapshot (`list(core.DEVICES.values())`): the MQTT thread adds and drops devices meanwhile. Timers of your devices may fire before your task has run: a transport that is not ready yet should raise (the core logs it and retries) |
 | `core.SETTINGS_SECTIONS[key] = fn()` | a settings section the plug-in owns (must be JSON: dict, list, str, number; not a core key), kept in its own `plugin-data/<name>/settings.json` - a file name the core reserves - (a section of a loaded plug-in left in `settings.json` moves there at the next start; if both copies exist and differ, the plug-in's file wins and both are kept as `*.pre-split-<time>`; a section found in two plug-ins' files stops all saves until one is removed; a section another plug-in takes over leaves the old owner's file); read it back with `core.cfg_section(key, default)`. `setup/settings.example.json` shows its shape. A route of yours that writes it should call `core.save_settings()` like the core does |
 | `core.BINDING_ACTIONS[a] = {validate, run, describe}` | a rule action other than switching a device - see below |
 | `core.DEVICE_FIELDS.append(key)` | an extra device key `GET /api/devices` passes to the dashboard |
 | a device's `wakes: true` (with `DEVICE_FIELDS.append("wakes")`) | a device that sleeps and is woken over the network (a TV: Wake-on-LAN): a command to it is never refused as offline, and the TV card holds an "on" 12 s while it wakes |
 | a device's `no_enforce: [code, ...]` | channels whose state may change by itself (a TV that wakes on its own): the watchdog neither re-sends a command to them nor reports one as not taken |
 | `core.plugin_data(name)` | the directory for your house's configuration files (device lists, builds): `HOUSE/plugin-data/<name>/`, created on first use - keep nothing of yours next to the core's files |
-| `core.plugin_state(name)`, `core.plugin_state_file(name, file, merge=None)` | the directory for what the plug-in writes itself (paired keys, anti-replay counters): `HOUSE/plugin-state/<name>/`, outside a house's git; `plugin_state_file` also moves an older copy from `plugin-data/<name>/` there once |
+| `core.plugin_state(name)`, `core.plugin_state_file(name, file, merge=None)` | the directory for what the plug-in writes itself (paired keys, anti-replay counters): `HOUSE/plugin-state/<name>/`, outside a house's git; `plugin_state_file` also moves a copy found in `plugin-data/<name>/` there once |
 | `@core.open_route` | above `@core.app.post(...)`: that one route of yours (not other paths of the same function) is served without the token (a device pairing before it has one); only a route the plug-in adds itself, decided after routing. Guard it yourself (a pairing window) |
 | `@core.use_route` | above `@core.app.post(...)`: that one route of yours is using the house (a device, a rule, the player, a question), not setting it up: a key that is not the house token (a full-access phone) may call it. Every other route that changes something stays with the house token. `core.is_use_route(method, path)` answers for a request |
 | `core.request_token(headers, query=None)` | the key a request carries: `Authorization: Bearer`, else `X-Token`, else `?token=` when `query` is given (a WebSocket). A plug-in that issues keys of its own (panels, family) reads them with it |
@@ -210,7 +211,7 @@ devices of zigbee2mqtt's retained `bridge/devices`) uses these on top:
 | `core.ROOM_REFS.append(fn(rid) -> [{kind, name}])` | what of yours names a room (a panel hangs in it, a satellite stands in it): `GET /api/rooms/{id}/refs` lists it before a delete |
 | `core.NAME_OWNERS.append(fn(id, name) -> bool)` | your plug-in keeps the display names of its devices (an IR tile in its record): store the new one and return True; the core then keeps no override for it |
 | `core.take_name_override(id) -> str or None` | at start, take over a rename saved in the overrides before you kept names yourself: returned and dropped there |
-| `core.house_lang() -> str` | the house language (Settings -> General, a code like `"ru"`, see `GET /api/house` "langs"): what a plug-in speaks or prints for the whole house |
+| `core.house_lang() -> str` | the house language (Settings -> House language, a code like `"ru"`, see `GET /api/house` "langs"): what a plug-in speaks or prints for the whole house |
 | `core.wait_registry(timeout) -> bool` | blocks (a thread, not the event loop) until every plug-in's device list is in (`registry_ready`); False on timeout |
 
 Device ids come from the other system, so register them as they are (see `register_device`) and
@@ -288,7 +289,11 @@ HomePlugins.register({
   modalSections: [{match(device), html(device) -> string, wire?(box, device, later), update?(box, device, state), hideCodes?: [code]}],
   holds:       [(device, code, value) => ms],
   hides:       [(device) => true],                 /* shown elsewhere: not in the tab grids */
-  settings:    [{title, expl?, render(box)}],   /* a page of Settings, drawn each time it opens; expl = its one line in the menu */
+  settings:    [{subject?, title, expl?, icon?, tab?, tabs?, needs?, render(box)}],   /* a tab of a Settings page, drawn each time it opens;
+                                               subject: the id of a core page (rooms, family, weather, zigbee, ir, tv, panels, nfc,
+                                               computers, history, watchdog, voice, fwgen ...: ST_SUBJECTS in web/js/35-settings.js)
+                                               it joins as a tab; without one it gets a page of its own in the group Other;
+                                               expl = its one line in the menu; needs: ["METHOD /path"] it greys in restricted mode */
   help:        [{id, screen, sel, title, text, more?, at?: 'label', screenName?}],   /* README "Help"; screen: 'tab:p:<id>', 'settings:<English title of your page>', 'device', or a name of your own window with screenName (its title in the sheet) */
 });
 ```
@@ -299,7 +304,7 @@ HomePlugins.register({
 - `addFlow`: one window that replaces the Add menu (the `connect` plug-in: every way at once); `Home.openAdd()` opens
   whichever the Add button opens.
 - `tabs` with `cats: [...]` and no `render`: a device grid of those categories, like a core tab
-  (the "Other" tab no longer shows them). `compact: true` packs small tiles. With `cats` AND
+  (they are not on the "Other" tab). `compact: true` packs small tiles. With `cats` AND
   `render` the categories still leave "Other": your `render` has to show those devices itself.
 - `header`: each entry gets a `<span>` of its own, drawn once after the plug-ins loaded; `brand`
   sits next to the name, `conn` at the right end of the header, before "Add device". Keep it live from `onState`.

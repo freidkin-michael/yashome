@@ -39,7 +39,7 @@ not exist), and an NFC tap "Not done". A timer that comes due while its
 device is offline waits for it, retried every 15 s: an auto-off up to 30 min past its time, a `for`
 revert and a schedule entry up to 10 min; later it is dropped with a log line (never hours later);
 a schedule entry is caught up only on the same day. A missed schedule entry (also one a newer entry of
-the same channel replaced while it waited) shows in Settings -> Health for a day, with its channel,
+the same channel replaced while it waited) shows in Settings -> Overview for a day, with its channel,
 also after a restart. A shot that waits costs no write to disk: `pending_timers.json` keeps its first
 time. At a start, a shot of a device not known yet (waiting for its first report or availability)
 waits until it is known, however late the shot is (the start grace ends that within 35 s): an online
