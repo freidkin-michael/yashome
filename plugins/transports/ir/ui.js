@@ -46,6 +46,7 @@ function isBlasterCard(d){
   return !!d.ir_blaster;
 }
 
+window.irHostedAppliances = id => hostedAppliances(id);   // the TV's remote (plug-in tv) takes their keys
 const FACED = ['tv', 'climate'];   // hosts whose card has its own face: the IR part is in their window
 // a device an IR tile may extend: its own face, no IR tile itself, no blaster card
 function isHostCard(d){
@@ -1096,7 +1097,8 @@ HomePlugins.register({
   }, {
     match: d => !d.ir_appliance && hostedAppliances(d.id).length > 0,
     html: () => `<h3>${escapeHtml(i18n('IR control'))}</h3><div class="bindcaption">${escapeHtml(i18n('The IR remote that switches this device on when it is off, and the blaster that sends it.'))}</div><div data-ir="host"></div>`,
-    wire(box, d){ appendHostedIr(box.querySelector('[data-ir="host"]'), d.id, {buttons: FACED.includes(d.category), foot: true}); },
+    // a TV: its keys are in the TV's one remote (plug-in tv), here only which IR remote and blaster
+    wire(box, d){ appendHostedIr(box.querySelector('[data-ir="host"]'), d.id, {buttons: FACED.includes(d.category) && d.category !== 'tv', foot: true}); },
   }],
   hides: [d => isHostedAppliance(d) || isBlasterCard(d)],
   // the help sheet and the header's dragged "?" (README "Help"); icon buttons with a title are in the sheet only

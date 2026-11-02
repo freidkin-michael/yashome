@@ -64,7 +64,7 @@ const HomePlugins = {
   // a device a plug-in shows elsewhere (buttons drawn on another card): not in the tab grids
   hidden(d){ return d.transport === 'presence' || this.hides.some(f => this.safe(f, d) === true); },   // presence lives on the home strip
   cardFace(d){ return this.cardFaces.find(f => typeof f.render === 'function' && this.safe(f.match, d)); },
-  sectionsFor(d){ return this.modalSections.filter(s => typeof s.html === 'function' && this.safe(s.match, d)); },
+  sectionsFor(d){ return this.modalSections.filter(s => typeof s.html === 'function' && this.safe(s.match, d)).sort((a, b) => (a.order || 0) - (b.order || 0)); },   // order: lower first, else as registered
   // how long an optimistic value is shown before the device must confirm it: the longest asked for
   holdMs(d, code, value){
     const asked = this.holds.map(h => Number(this.safe(h, d, code, value))).filter(n => Number.isFinite(n) && n > 0);

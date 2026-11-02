@@ -45,6 +45,55 @@ def test_commands_reach_the_tv(ssap):
     assert calls == [("192.0.2.10", "test-client-key", "input", "HDMI_1"), ("wol", "00:11:22:33:44:55")]
 
 
+def test_the_remote_s_keys_are_tv_key_presses_that_reach_the_pointer_socket(ssap, monkeypatch):
+    pressed = []
+
+    async def button(ip, key, name):
+        pressed.append((ip, name))
+    monkeypatch.setattr(me.webos, "button", button)
+    tv = core.DEVICES["tv_test"]
+    keys = {x["code"]: x for x in tv["controls"] if x["kind"] == "tv_key"}
+    assert {"key_up", "key_ok", "key_back", "key_home"} <= set(keys) and "key_source" not in keys     # inputs: the input list
+    old = {"id": "x", "controls": [{"kind": "setting_enum", "code": "media", "range": ["play"]}]}      # a devices.json of before
+    assert me._with_keys(old)["controls"][0]["range"] == ["play", "pause", "stop", "rewind", "fast_forward"]
+    assert old["controls"][0]["range"] == ["play"]                                                       # the entry is not touched
+    asyncio.run(me._webos_control(tv, "key_ok", True))             # the core's press (CONTROL_KINDS tv_key): test_tv
+    assert pressed == [("192.0.2.10", "ENTER")]
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(me._webos_control(tv, "key_eject", True))
+    assert e.value.status_code == 400
+
+
+def test_a_button_goes_through_the_pointer_socket_the_tv_hands_out(monkeypatch):
+    import json
+    import websockets
+    got = []
+
+    async def go():
+        async def pointer(ws):
+            got.append(await ws.recv())
+
+        async def main(ws):
+            async for msg in ws:
+                m = json.loads(msg)
+                if m["type"] == "register":
+                    await ws.send(json.dumps({"type": "registered", "payload": {"client-key": "k"}}))
+                elif m["uri"].endswith("getPointerInputSocket"):
+                    await ws.send(json.dumps({"type": "response", "payload": {"socketPath": f"ws://127.0.0.1:{pp}/x"}}))
+        async with websockets.serve(pointer, "127.0.0.1", 0) as ps, websockets.serve(main, "127.0.0.1", 0) as ms:
+            pp = ps.sockets[0].getsockname()[1]
+            monkeypatch.setattr(me.webos, "PORT", ms.sockets[0].getsockname()[1])
+            await me.webos.button("127.0.0.1", "k", "ENTER")
+            for _ in range(50):
+                if got:
+                    break
+                await asyncio.sleep(0.02)
+    asyncio.run(go())
+    assert got == ["type:button\nname:ENTER\n\n"]
+    with pytest.raises(ValueError):
+        asyncio.run(me.webos.button("127.0.0.1", "k", "rm -rf"))
+
+
 def test_unpaired_and_unknown_are_refused(ssap):
     with pytest.raises(HTTPException) as e:
         asyncio.run(me._webos_control(core.DEVICES["tv_unpaired"], "power", False))

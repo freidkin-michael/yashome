@@ -26,6 +26,10 @@ KEYS = {"power": "KEY_POWER", "volume_up": "KEY_VOLUP", "volume_down": "KEY_VOLD
         "channel_up": "KEY_CHUP", "channel_down": "KEY_CHDOWN"}
 MEDIA = {"play": "KEY_PLAY", "pause": "KEY_PAUSE", "stop": "KEY_STOP", "fast_forward": "KEY_FF", "rewind": "KEY_REWIND",
          "volume_up": "KEY_VOLUP", "volume_down": "KEY_VOLDOWN", "channel_up": "KEY_CHUP", "channel_down": "KEY_CHDOWN"}
+# the remote's keys (the dashboard's TV remote, the tv_key controls): our name -> the TV's key
+REMOTE = {"up": "KEY_UP", "down": "KEY_DOWN", "left": "KEY_LEFT", "right": "KEY_RIGHT", "ok": "KEY_ENTER", "back": "KEY_RETURN",
+          "home": "KEY_HOME", "menu": "KEY_MENU", "exit": "KEY_EXIT", "info": "KEY_INFO",
+          "vol_up": "KEY_VOLUP", "vol_down": "KEY_VOLDOWN", "ch_up": "KEY_CHUP", "ch_down": "KEY_CHDOWN"}
 _KEY = re.compile(r"KEY_[A-Z0-9_]{1,30}")
 
 

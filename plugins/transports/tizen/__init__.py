@@ -14,6 +14,7 @@ from fastapi import HTTPException
 import app as core
 
 from . import _tv as tv
+from .. import tv as tv_plugin         # the remote's keys (file requires: tv)
 
 PLUGIN = {"name": "Samsung TV", "version": "1.0.0", "icon": "tv", "menu_group": "devices"}
 TRANSPORT = "tizen"
@@ -74,6 +75,7 @@ def _device(t: dict) -> dict:
         ctrls.append({"kind": "setting_enum", "code": "input", "label": "Input", "range": list(inputs)})
     if apps:
         ctrls.append({"kind": "setting_enum", "code": "app", "label": "App", "range": list(apps)})
+    ctrls += tv_plugin.key_controls(tv.REMOTE)
     return {"id": t["id"], "name": t.get("name") or t["id"], "category": "tv", "transport": TRANSPORT, "model": "Samsung Tizen TV",
             "wakes": True, "no_enforce": ["power"], "controls": ctrls}
 
@@ -205,6 +207,8 @@ def _value(t: dict, code: str, val):
         if str(val) not in tv.MEDIA:
             raise HTTPException(400, f"{name}: media is one of {', '.join(sorted(tv.MEDIA))}, not {val!r}")
         return str(val)
+    if code.startswith("key_") and code[4:] in tv.REMOTE:
+        return True
     if code in ("input", "app"):
         known = t.get("inputs" if code == "input" else "apps") or {}
         if str(val) in known:
@@ -301,7 +305,8 @@ async def _control(cfg: dict, code: str, val):
             else:
                 if not token:
                     raise HTTPException(400, f"{name}: not paired (Settings -> TVs -> Pair)")
-                await tv.keys(host, token, tv.MEDIA[val] if code == "media" else t["inputs"][val])
+                await tv.keys(host, token, tv.REMOTE[code[4:]] if code.startswith("key_")
+                              else tv.MEDIA[val] if code == "media" else t["inputs"][val])
     except HTTPException:
         raise
     except tv.Unauthorized:

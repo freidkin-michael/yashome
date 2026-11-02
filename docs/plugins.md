@@ -289,7 +289,7 @@ HomePlugins.register({
                                                examples: strings dropped under the empty field, a click sends one */
   onState:     [(STATE) => { /* after every state frame and every sendControl */ }],
   cardFaces:   [{match(device), render(cardElement, device), update?(cardElement, device, state)}],
-  modalSections: [{match(device), html(device) -> string, wire?(box, device, later), update?(box, device, state), hideCodes?: [code]}],
+  modalSections: [{match(device), html(device) -> string, wire?(box, device, later), update?(box, device, state), hideCodes?: [code], order?: number}],
   holds:       [(device, code, value) => ms],
   hides:       [(device) => true],                 /* shown elsewhere: not in the tab grids */
   settings:    [{subject?, title, expl?, icon?, tab?, tabs?, needs?, render(box)}],   /* a tab of a Settings page, drawn each time it opens;
@@ -317,7 +317,7 @@ HomePlugins.register({
 - `modalSections`: a `<section>` of the device modal after the controls; `wire(box, device, later)`
   once when the modal opens - `later(async fn)` queues a save that the modal's OK button runs
   (in order; a throw keeps the modal open and shows the error; closing with x drops it), `update` on every frame; `hideCodes` removes those channels from the core's
-  Readings and Settings lists (the section shows them its own way).
+  Readings and Settings lists (the section shows them its own way); `order` (default 0, lower first) places it among the sections.
 - `holds`: how long (ms) a value sent from the dashboard is shown before the device must
   confirm it; the longest answer wins, at least the core's 4 s, at most 60 s (a TV waking up).
 

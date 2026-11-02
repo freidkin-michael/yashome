@@ -130,7 +130,65 @@
     for(const p of provs) if(typeof p.actions === 'function') HomePlugins.safe(p.actions, foot, reload);
   }
 
+  // The TV's one remote, the same for every TV: each key over the network when the TV has it (its tv_key controls, the
+  // media keys), else through its IR remote (a part of the TV or an IR appliance on its card); a key neither has is not drawn.
+  // Power and the inputs stay in the core's rows above (power: the network, or the IR on key the plug-in knows).
+  const MEDIA_KEY = {play: 'play', pause: 'pause', stop: 'stop', rewind: 'rew', fast_forward: 'ff'};
+  function remoteKeys(d){
+    const out = [], have = new Set(), PW = window.PW || {};
+    for(const c of d.controls || []) if(c.kind === 'tv_key' && c.key && !have.has(c.key)){
+      have.add(c.key); out.push({code: 'n|' + c.code, icon: c.key, label: i18n(c.label || c.key)});
+    }
+    const media = (d.controls || []).find(c => c.code === 'media' && Array.isArray(c.range));
+    for(const v of (media && media.range) || []) if(MEDIA_KEY[v] && !have.has(MEDIA_KEY[v])){
+      have.add(MEDIA_KEY[v]); out.push({code: 'm|' + v, icon: MEDIA_KEY[v], label: i18n(v)});
+    }
+    const net = code => (d.controls || []).some(c => c.code === code), netPower = net('power'), netInput = net('input');
+    if(net('mute')) have.add('mute');                                               // its switch in the rows above
+    const aps = typeof window.irHostedAppliances === 'function' ? window.irHostedAppliances(d.id) : [];
+    for(const ap of aps){
+      const hide = ap.ir_hide || [];
+      for(const c of (ap.controls || []).filter(x => x.kind === 'ir_press')){
+        const label = c.group && c.label && c.label.startsWith(c.group + ' \u00b7 ') ? c.label.slice(c.group.length + 3) : (c.label || c.code);
+        const k = PW.irKey ? PW.irKey(c.code, label, c.icon) : '';
+        if(k && have.has(k)) continue;                                              // the network has it
+        if(netPower && ['power', 'on', 'off'].includes(k)) continue;                // the power row above
+        if(netInput && /hdmi|source|input/i.test(c.code + ' ' + (c.button || ''))) continue;   // the inputs above
+        if(PW.irGroup && hide.includes(PW.irGroup(k, false))) continue;            // hidden in the IR tab
+        if(k) have.add(k);
+        out.push({code: 'i|' + ap.id + '|' + c.code, icon: c.icon, label});
+      }
+    }
+    return out;
+  }
+  function drawRemote(box, d){
+    box.innerHTML = '';
+    const keys = remoteKeys(d), PW = window.PW || {};
+    if(!keys.length){ box.closest('section') && (box.closest('section').hidden = true); return; }
+    const html = PW.remoteHtml ? PW.remoteHtml(keys, {all: true}) : '';
+    const wrap = Home.el('div', 'acpanel', html || '');
+    if(!html){                                          // too few known keys for the layout: a row of buttons
+      const row = Home.el('div', 'acrow');
+      for(const k of keys){ const b = Home.el('button', 'acbtn', Home.escapeHtml(k.label)); b.dataset.code = k.code; row.append(b); }
+      wrap.append(row);
+    }
+    for(const b of wrap.querySelectorAll('button[data-code]')) b.onclick = ev => {
+      stop(ev);
+      const [how, a, b2] = b.dataset.code.split('|');
+      b.style.opacity = '.45';
+      const sent = how === 'n' ? Home.sendControl(d.id, a, true) : how === 'm' ? Home.sendControl(d.id, 'media', a) : Home.sendControl(a, b2, true);
+      Promise.resolve(sent).finally(() => { b.style.opacity = ''; });
+    };
+    box.append(wrap);
+  }
+
   HomePlugins.register({
+    modalSections: [{
+      match: d => d.category === 'tv', order: -1,      // above the IR remote's line
+      hideCodes: ['media'],                              // its keys are on the remote
+      html: () => `<h3>${Home.escapeHtml(i18n('Remote'))}</h3><div data-tvrc></div>`,
+      wire(box, d){ const b = box.querySelector('[data-tvrc]'); if(b) drawRemote(b, d); },
+    }],
     settings: [{subject: 'tv', title: 'TVs', render: tvPage}],
     tabs: [{id: 'tech', label: 'Appliances', cats: ['tv', 'media'], after: 'button'}],
     cardFaces: [{match: d => d.category === 'tv', render, update}],

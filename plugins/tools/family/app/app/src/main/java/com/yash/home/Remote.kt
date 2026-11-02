@@ -37,9 +37,14 @@ object Remote {
     private fun icon(ctx: Context, key: String): Int =
         ctx.resources.getIdentifier("ir_$key", "drawable", ctx.packageName)
 
-    /** Slot id of a button: by its id (ir_<id>) when we have an icon for it, else by its label. */
+    /** A TV's player key on its remote: code "media:<value>" is the value of its media control. */
+    const val MEDIA_PREFIX = "media:"
+    private val MEDIA_SLOT = mapOf("play" to "play", "pause" to "pause", "stop" to "stop", "rewind" to "rew", "fast_forward" to "ff")
+
+    /** Slot id of a button: by its id (ir_<id>, a TV's key_<id>) when we have an icon for it, else by its label. */
     fun key(ctx: Context, b: Key): String {
-        val id = b.code.removePrefix("ir_")
+        if (b.code.startsWith(MEDIA_PREFIX)) return MEDIA_SLOT[b.code.removePrefix(MEDIA_PREFIX)] ?: ""
+        val id = b.code.removePrefix("ir_").removePrefix("key_")
         if (icon(ctx, id) != 0 || id == "power" || Regex("^d\\d$").matches(id)) return id
         val l = b.label.trim().lowercase()
         return names(ctx)[l] ?: if (Regex("^\\d$").matches(l)) "d$l" else ""

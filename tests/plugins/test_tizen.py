@@ -12,6 +12,7 @@ import threading
 
 import pytest
 import websockets
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import app as core
@@ -174,6 +175,22 @@ def test_each_control_reaches_the_tv(fake, caplog):
     assert TOKEN not in caplog.text                                 # the URL with it is never logged, not even at DEBUG
     for code, val in (("app", "Netflix"), ("input", "HDMI 9"), ("media", "eject")):        # the core clamps a volume itself
         assert c.post("/api/devices/tv_t/control", headers=HOUSE, json={"code": code, "value": val}).status_code == 400
+
+
+def test_the_remote_s_keys_are_tv_key_presses_that_reach_the_tv(fake):
+    c = TestClient(core.app)
+    _add(c)
+    keys = {x["code"]: x for x in core.DEVICES["tv_t"]["controls"] if x["kind"] == "tv_key"}
+    assert {"key_up", "key_ok", "key_back", "key_home"} <= set(keys) and "key_source" not in keys and keys["key_ok"]["key"] == "ok"
+    me._tokens["tv_t"] = TOKEN
+    fake.tokens.add(TOKEN)
+    me._store("tv_t", True, {})
+    for code in ("key_up", "key_ok", "key_back"):                  # the core's press (CONTROL_KINDS tv_key): test_tv
+        asyncio.run(me._control(core.DEVICES["tv_t"], code, True))
+    assert fake.keys == ["KEY_UP", "KEY_ENTER", "KEY_RETURN"]
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(me._control(core.DEVICES["tv_t"], "key_eject", True))
+    assert e.value.status_code == 400
 
 
 def test_power_off_is_one_key_only_while_on_and_a_bad_token_says_pair_again(fake):

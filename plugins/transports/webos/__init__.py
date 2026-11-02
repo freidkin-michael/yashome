@@ -13,6 +13,7 @@ from pydantic import Field
 import app as core
 
 from . import _ssap as webos
+from .. import tv as tv_plugin         # the remote's keys (file requires: tv)
 
 PLUGIN = {"name": "LG webOS TV", "version": "1.0.0", "icon": "tv", "menu_group": "devices"}
 
@@ -47,6 +48,14 @@ def _load_keys():
 _webos_keys, _keys_broken = _load_keys()
 
 
+def _with_keys(d: dict) -> dict:
+    """The device as registered: its devices.json entry plus the remote's keys and every player key (never written to the file)."""
+    d = dict(d)
+    d["controls"] = [dict(c, range=[m for m in webos.MEDIA if not m.startswith("volume")]) if c.get("code") == "media" else c
+                     for c in d.get("controls") or [] if c.get("kind") != "tv_key"] + tv_plugin.key_controls(webos.BUTTONS)
+    return d
+
+
 def _register_tvs() -> list:
     """Every webos entry of devices.json; a bad one is skipped with a log line, not all TVs."""
     static = _read_json(DEVICES_PATH, [])
@@ -55,7 +64,7 @@ def _register_tvs() -> list:
         if not (isinstance(d, dict) and d.get("transport") == "webos"):
             continue
         try:
-            out.append(core.register_device(d))
+            out.append(core.register_device(_with_keys(d)))
         except (ValueError, TypeError) as e:
             core.log.error(f"[webos] devices.json entry {str(d.get('id'))[:40]!r} skipped: {e}")
     return out
@@ -218,6 +227,8 @@ async def _webos_control(cfg, code, val):
             await webos.command(ip, key, "app", (cfg.get("_webos_apps") or {}).get(str(val), str(val)))
         elif code in ("volume", "mute", "media"):
             await webos.command(ip, key, code, val)
+        elif code.startswith("key_") and code[4:] in webos.BUTTONS:
+            await webos.button(ip, key, webos.BUTTONS[code[4:]])
         else:
             raise HTTPException(400, f"unknown webos code {code}")
     except HTTPException:
@@ -258,6 +269,10 @@ def _webos_value(cfg: dict, code: str, val):
         if isinstance(val, bool) or s in _ON | _OFF:
             return val if isinstance(val, bool) else s in _ON
         raise HTTPException(400, f"{name}: mute is on or off, not {val!r}")
+    if code.startswith("key_"):
+        if code[4:] not in webos.BUTTONS:
+            raise HTTPException(400, f"{name}: no remote key {code[4:]!r}")
+        return True
     if code == "media" and str(val) not in webos.MEDIA:
         raise HTTPException(400, f"{name}: media is one of {', '.join(sorted(webos.MEDIA))}, not {val!r}")
     return val
@@ -358,7 +373,7 @@ def webos_tv_put(dev_id: str, body: TvBody, request: Request):
             elif c.get("code") == "app":
                 c["range"] = list(apps)
         core.atomic_json_dump(DEVICES_PATH, entries, indent=1, ensure_ascii=False)
-        core.update_device(dict(d))
+        core.update_device(_with_keys(d))
     return {"tv": _row(core.DEVICES[dev_id])}
 
 

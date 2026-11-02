@@ -485,7 +485,9 @@ class DashboardActivity : AppCompatActivity() {
 
     private fun irCtls(d: JSONObject): List<JSONObject> {
         val c = d.optJSONArray("controls") ?: return emptyList()
-        return (0 until c.length()).map { c.getJSONObject(it) }.filter { it.optString("kind") == "ir_press" }
+        val all = (0 until c.length()).map { c.getJSONObject(it) }
+        val tv = all.any { it.optString("kind") == "tv_key" }                 // a TV's whole remote: its keys and its player keys
+        return all.filter { it.optString("kind") in setOf("ir_press", "tv_key") || (tv && it.optString("code") == "media") }
     }
 
     private fun findCtl(d: JSONObject, code: String): JSONObject? {
@@ -516,9 +518,17 @@ class DashboardActivity : AppCompatActivity() {
             val v = st.optJSONObject(id)?.optJSONObject("values")
             tint(box, v != null && switches.any { truthy(v.opt(it.optString("code"))) })
         }
-        // IR buttons are one remote, not a column of rows; in edit mode it is starred as a whole ("*ir")
-        val irKeys = ctls.filter { it.optString("kind") == "ir_press" }
-        val plain = ctls.filter { it.optString("kind") != "ir_press" }
+        // IR buttons are one remote, not a column of rows; in edit mode it is starred as a whole ("*ir").
+        // A TV with remote keys over the network (tv_key) gets the same remote whatever its make: those keys and its
+        // player keys; its IR keys stay the house's way to switch it on and are not drawn (as on the dashboard)
+        val netKeys = ctls.filter { it.optString("kind") == "tv_key" }
+        val tvRemote = netKeys.isNotEmpty()
+        val media = if (tvRemote) ctls.firstOrNull { it.optString("code") == "media" } else null
+        val irKeys = if (tvRemote) netKeys + (0 until (media?.optJSONArray("range")?.length() ?: 0)).map { i ->
+            val v = media!!.getJSONArray("range").getString(i)
+            JSONObject().put("kind", "media").put("code", Remote.MEDIA_PREFIX + v).put("label", tr(v))
+        } else ctls.filter { it.optString("kind") == "ir_press" }
+        val plain = ctls.filter { it.optString("kind") !in setOf("ir_press", "tv_key") && it !== media }
         for (ctl in plain) controlRow(id, ctl, if (single) "" else ctl.optString("label", ctl.optString("code")))?.let { row ->
             if (!editing || myIndex >= 0) { box.addView(row); return@let }
             val star = pickBox(id to ctl.optString("code"), null)
@@ -533,7 +543,7 @@ class DashboardActivity : AppCompatActivity() {
             }
             box.addView(Remote.build(this, irKeys.map { Remote.Key(it.optString("code"), it.optString("label", it.optString("code"))) }) { code, v ->
                 v.alpha = 0.45f; v.postDelayed({ v.alpha = 1f }, 350)
-                send(id, code, true)
+                if (code.startsWith(Remote.MEDIA_PREFIX)) send(id, "media", code.removePrefix(Remote.MEDIA_PREFIX)) else send(id, code, true)
             })
         }
         if (editing && myIndex >= 0) box.addView(LinearLayout(this).apply {

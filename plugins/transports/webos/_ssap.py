@@ -9,6 +9,7 @@ CLI (for bring-up, inside the dashboard container, which has `websockets`, from 
     python3 plugins/transports/webos/_ssap.py status <ip> <key>
     python3 plugins/transports/webos/_ssap.py cmd    <ip> <key> <code> [value]   # power_off|volume|mute|input|app|media (play|pause|stop|volume_up|volume_down)
     python3 plugins/transports/webos/_ssap.py lists  <ip> <key>                  # dump real inputs + apps
+    python3 plugins/transports/webos/_ssap.py button <ip> <key> <BUTTON>         # a remote key: UP|DOWN|ENTER|BACK|HOME|INFO...
     python3 plugins/transports/webos/_ssap.py wol    <mac>
 """
 import asyncio
@@ -69,10 +70,17 @@ URIS = {
     "app":       ("ssap://system.launcher/launch", lambda v: {"id": str(v)}),
 }
 MEDIA = {"play": "ssap://media.controls/play", "pause": "ssap://media.controls/pause",
-         "stop": "ssap://media.controls/stop",
+         "stop": "ssap://media.controls/stop", "rewind": "ssap://media.controls/rewind",
+         "fast_forward": "ssap://media.controls/fastForward",
          # relative steps: over HDMI ARC only these reach a sound bar (CEC volume keys);
          # setVolume changes the TV number and leaves the bar where it was
          "volume_up": "ssap://audio/volumeUp", "volume_down": "ssap://audio/volumeDown"}
+
+# the remote's keys (the dashboard's TV remote, the tv_key controls): our name -> the button of the TV's
+# pointer-input socket (no input key there: the inputs are the input list)
+BUTTONS = {"up": "UP", "down": "DOWN", "left": "LEFT", "right": "RIGHT", "ok": "ENTER", "back": "BACK", "home": "HOME",
+           "menu": "MENU", "exit": "EXIT", "info": "INFO", "vol_up": "VOLUMEUP", "vol_down": "VOLUMEDOWN",
+           "ch_up": "CHANNELUP", "ch_down": "CHANNELDOWN"}
 
 
 def _load_wol():
@@ -167,6 +175,32 @@ async def command(ip, key, code, value=None):
 
 
 @bounded(20)
+async def button(ip, key, name):
+    """Press one remote button (a BUTTONS value) through the TV's pointer-input socket, the one its own app uses."""
+    if name not in BUTTONS.values():
+        raise ValueError(f"not a button: {name!r}")
+    ws, key = await _open(ip, key)
+    try:
+        path = str((await _request(ws, "ssap://com.webos.service.networkinput/getPointerInputSocket")).get("socketPath") or "")
+        if not path.startswith(("ws://", "wss://")):
+            raise RuntimeError("the TV gave no pointer-input socket")
+        ctx = None
+        if path.startswith("wss://"):              # newer firmware: its own self-signed certificate, on the house's LAN
+            import ssl
+            ctx = ssl.create_default_context()
+            ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+        pws = await asyncio.wait_for(websockets.connect(path, ping_interval=None, proxy=None, ssl=ctx,
+                                                        open_timeout=8, close_timeout=1), 8)
+        try:
+            await pws.send(f"type:button\nname:{name}\n\n")
+            await asyncio.sleep(0.1)               # let it leave before the close
+        finally:
+            await _close(pws)
+    finally:
+        await _close(ws)
+
+
+@bounded(20)
 async def lists(ip, key):
     """Real external-input + launch-point lists, as {id: label} maps."""
     ws, key = await _open(ip, key)
@@ -215,6 +249,8 @@ if __name__ == "__main__":
         print(json.dumps(asyncio.run(status(a[1], a[2])), ensure_ascii=False)); sys.exit(0)
     if op == "lists":
         print(json.dumps(asyncio.run(lists(a[1], a[2])), ensure_ascii=False, indent=2)); sys.exit(0)
+    if op == "button":
+        asyncio.run(button(a[1], a[2], a[3])); print("pressed"); sys.exit(0)
     if op == "cmd":
         v = a[4] if len(a) > 4 else None
         print(json.dumps(asyncio.run(command(a[1], a[2], a[3], v)), ensure_ascii=False)); sys.exit(0)

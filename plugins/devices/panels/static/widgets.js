@@ -561,5 +561,5 @@ function dimPercent(w, raw, devices) {
   return Math.round(n);
 }
 const irIconSets = () => IR_ICON_SETS.map(([g, ks]) => [g, ks.filter(k => IR_ICON[k])]);
-window.PW = {dimPercent, irGroup, irVisible, irIconSets, wxHtml, wxMode, wxFs, wxSvg, wxKind, acMarkup, acApply, acSlide, acFs, acIcon, irIcon, remoteHtml, rmHtml, rmFs, sampleWeather, SAMPLE_AC};
+window.PW = {dimPercent, irKey, irGroup, irVisible, irIconSets, wxHtml, wxMode, wxFs, wxSvg, wxKind, acMarkup, acApply, acSlide, acFs, acIcon, irIcon, remoteHtml, rmHtml, rmFs, sampleWeather, SAMPLE_AC};
 })();
