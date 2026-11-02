@@ -180,7 +180,7 @@ preferably behind a VPN or an SSO portal; see `docs/security.md`.
 ## Signing in, and HTTPS
 
 The dashboard asks once per device for the house token (`DASHBOARD_TOKEN` in `.env`). Easier: on a
-screen that is signed in already, Settings -> This screen -> Sign in from another screen shows a 6-digit code (good
+screen that is signed in already, Settings -> This screen -> Sign-in -> Another browser shows a 6-digit code (good
 once, for 5 minutes and 5 tries; a new code replaces the one before). Type it on the sign-in card the new device
 shows: it gets the house token. Anyone
 in the network can burn the tries - then show a new code.
@@ -217,7 +217,7 @@ so the browser's Back works.
 | Devices | All devices (with Forgotten), Zigbee, IR, TVs, Panels, NFC tags, Computers and servers |
 | Automation | Rules, History, Watchdog |
 | Voice | wake word, smart answers, questions before acting |
-| This screen | Language, Sign-in, Sign in from another screen |
+| This screen | Language, Sign-in (and a code for another browser) |
 | Maintenance | Backups, Plug-ins and update, Restart, Firmware builder |
 
 A page comes from the core or from a plug-in; a page whose plug-in is off is not listed. A plug-in's page with no

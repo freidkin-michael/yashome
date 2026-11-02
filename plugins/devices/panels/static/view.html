@@ -905,7 +905,7 @@ async function boot() {
   } catch (e) {
     const denied = e.status === 401 || e.status === 403;
     err(denied && !TOKEN
-      ? T('Not signed in: sign this browser in on the dashboard (Settings -> Sign in from another screen) and open the panel from Panels -> Open, or bind this tablet (Panels -> Connect a tablet).')
+      ? T('Not signed in: sign this browser in on the dashboard (Settings -> This screen -> Sign-in -> Another browser) and open the panel from Panels -> Open, or bind this tablet (Panels -> Connect a tablet).')
       : denied ? T('No access: bind this tablet again on the dashboard (Panels -> Connect a tablet).')
       : T('Failed to load: {0}', e.message));
   }

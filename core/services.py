@@ -105,7 +105,7 @@ def _house_token_only(request: Request):
         raise HTTPException(403, "only the dashboard does this")
 
 
-# ---- sign in a new device by a one-time code (Settings -> Sign in from another screen): 6 digits, 5 min ----
+# ---- sign in a new device by a one-time code (Settings -> This screen -> Sign-in -> Another browser): 6 digits, 5 min ----
 _signin = {"code": "", "until": 0.0, "tries": 0}
 _signin_lock = threading.Lock()
 

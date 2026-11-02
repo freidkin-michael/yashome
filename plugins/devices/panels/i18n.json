@@ -285,7 +285,6 @@
     "too many devices waiting: try again in a minute": "слишком много устройств ждут: попробуй через минуту",
     "this id was just registered from another address": "этот id только что зарегистрировали с другого адреса",
     "unknown room": "неизвестная комната",
-    "Not signed in: sign this browser in on the dashboard (Settings -> Sign in from another screen) and open the panel from Panels -> Open, or bind this tablet (Panels -> Connect a tablet).": "Нет входа: войди в этом браузере через дашборд (Настройки -> Войти с другого экрана) и открой панель из Панели -> Открыть, или привяжи этот планшет (Панели -> Подключить планшет).",
     "panel name: 1-32 latin letters, digits, - or _": "имя панели: 1-32 латинские буквы, цифры, - или _",
     "Unknown panel: {0}": "Нет такой панели: {0}",
     "No panels yet. A panel comes with its screen: connect a tablet running the panel launcher, or an ESP screen (see the panels plug-in README).": "Панелей пока нет. Панель появляется вместе со своим экраном: подключи планшет с лаунчером панели или ESP-экран (см. README плагина panels).",
@@ -532,6 +531,7 @@
     "Deletes the panel and what is on it; its tablet must be connected again.": "Удаляет панель и всё, что на ней; планшет придётся подключить заново.",
     "What this tablet shows: a new panel, or a panel the house has.": "Что показывает этот планшет: новую панель или панель, которая уже есть в доме.",
     "new tablets and screens are not found by themselves": "новые планшеты и экраны не находятся сами",
-    "Restart the house; if it stays, the panel finder needs the computer's own network": "Перезапустите дом; если не помогло - поиску панелей нужна сеть самого компьютера"
+    "Restart the house; if it stays, the panel finder needs the computer's own network": "Перезапустите дом; если не помогло - поиску панелей нужна сеть самого компьютера",
+    "Not signed in: sign this browser in on the dashboard (Settings -> This screen -> Sign-in -> Another browser) and open the panel from Panels -> Open, or bind this tablet (Panels -> Connect a tablet).": "Нет входа: войди в этом браузере через дашборд (Настройки -> Этот экран -> Вход -> Другой браузер) и открой панель из Панели -> Открыть, или привяжи этот планшет (Панели -> Подключить планшет)."
   }
 }

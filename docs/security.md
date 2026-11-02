@@ -10,7 +10,7 @@
   keeps scripts, requests and images on the dashboard's own origin (inline script is allowed,
   the page is built that way). The dashboard asks for it once and keeps it in the
   browser's local storage; Settings -> This screen -> Sign-in -> Log out forgets it.
-- **Sign in from another screen.** Settings -> This screen -> Sign in from another screen
+- **Another browser (a one-time code).** Settings -> This screen -> Sign-in -> Another browser
   (`POST /api/signin/start`, house token) shows a 6-digit code. The new screen types it on its
   sign-in card (`POST /api/signin`, no token) and gets the house token. A code works once, for
   5 minutes, and 5 wrong tries burn it; a new code replaces the old one. Each wrong code and

@@ -8,7 +8,7 @@ if(_qs.get('token')){ localStorage.setItem(TOKEN_KEY, _qs.get('token').trim()); 
 if(_qs.get('tab')){ rememberTab(_qs.get('tab')); }
 if(_qs.has('token') || _qs.has('tab') || _qs.has('lang')){ _qs.delete('token'); _qs.delete('tab'); _qs.delete('lang'); history.replaceState(null, '', location.pathname + (_qs.toString() ? '?' + _qs : '') + location.hash); }   // the hash stays: #settings/...
 let TOKEN = localStorage.getItem(TOKEN_KEY) || '';
-// a one-time sign-in code from a signed-in screen (Settings -> Sign in from another screen), typed at the prompt
+// a one-time sign-in code from a signed-in screen (Settings -> This screen -> Sign-in -> Another browser), typed at the prompt
 async function signinWithCode(code){
   try {
     const r = await fetch('/api/signin', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -31,7 +31,7 @@ function askToken(msg){
   const conn = $('#conn'); if(conn){ conn.textContent = i18n('not signed in'); conn.classList.remove('live'); }
   $('#app').innerHTML = `<div class="signin"><div class="signin-card">
       <h2>${i18n('Sign in to the house')}</h2>
-      <p>${i18n('On a screen that is already signed in, open Settings -> Sign in from another screen: it shows a 6-digit code. Type it here (or the house access token).')}</p>
+      <p>${i18n('On a screen that is already signed in, open Settings -> This screen -> Sign-in -> Another browser: it shows a 6-digit code. Type it here (or the house access token).')}</p>
       <input id="si-code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${i18n('6-digit code or token')}">
       <button class="dlg-btn primary" id="si-go">${i18n('Sign in')}</button>
       <div class="signin-err" id="si-err">${msg ? escapeHtml(msg) : ''}</div>

@@ -25,14 +25,13 @@ const ST_SUBJECTS = [
   {id: 'voice', group: 'voice', icon: 'mic', title: 'Voice', expl: 'Wake word, answers, satellites'},
   {id: 'lang',    group: 'screen', icon: 'globe', title: 'Language', expl: 'The language of this screen', core: true},
   {id: 'device',  group: 'screen', icon: 'key', title: 'Sign-in', expl: 'Sign-in of this screen and the app shortcut', core: true},
-  {id: 'signin', group: 'screen', icon: 'key', title: 'Sign in from another screen', expl: 'Let another phone, tablet or computer of this network in', core: true, needs: ['POST /api/signin/start']},
   {id: 'backups', group: 'service', icon: 'archive', title: 'Backups', expl: 'Nightly archives of the house\'s settings and data; one now, downloads', core: true, needs: ['GET /api/backups']},
   {id: 'plugins', group: 'service', icon: 'puzzle', title: 'Plug-ins and update', expl: 'What is switched on and what each is; new versions', core: true, needs: ['GET /api/helper/state'],
    tabs: [{id: 'list', title: 'Plug-ins'}, {id: 'update', title: 'Update'}]},
   {id: 'restart', group: 'service', icon: 'switch', title: 'Restart', expl: 'When something stays stuck: every service of the house started anew', core: true, needs: ['POST /api/helper/jobs']},
   {id: 'fwgen', group: 'service', icon: 'chip', title: 'Firmware builder', expl: 'Open the yashGen firmware builder'},
 ];
-const ST_ALIAS = {general: 'houselang', health: 'overview', build: 'computers'};    // pages that were merged: an old link opens where it went
+const ST_ALIAS = {general: 'houselang', signin: 'device', health: 'overview', build: 'computers'};    // pages that were merged: an old link opens where it went
 // a page: its subject, the core's tab(s), then each plug-in entry naming it as a tab; one with no tab is not listed.
 // An entry naming no subject (a plug-in of someone else) gets a page of its own under "Other".
 function ST_PAGES(){
@@ -258,11 +257,14 @@ function stRenderCore(cur, box, tab, quiet){
     `<button class="dlg-btn ${own === k ? 'primary' : ''}" onclick="setLang('${k}')">${escapeHtml(v)}</button>`).join(' ');
   const bodies = {
     device: `<section>
-        <div class="row"><span class="rlabel">${i18n('Signed in to the house')}<br><span class="bindcaption">${i18n('Log out: this browser forgets the sign-in; other screens are not touched.')}</span></span>
+        <div class="row" id="st-front" hidden><span class="rlabel">${i18n('Signed in through the front door')}<br><span class="bindcaption">${i18n('The house\'s web address signs every browser in by itself (its own login page): nothing to do here.')}</span></span></div>
+        <div class="row" id="st-out-row"><span class="rlabel">${i18n('Signed in to the house')}<br><span class="bindcaption">${i18n('Log out: this browser forgets the sign-in; other screens are not touched.')}</span></span>
           <button class="dlg-btn" id="st-logout" onclick="logout()">${i18n('Log out')}</button></div>
         <div class="row" id="st-install-row" hidden><span class="rlabel">${i18n('Install as an app')}<br><span class="bindcaption">${i18n('A shortcut on the home screen that opens full-screen, without the browser bar.')}</span></span>
           <button class="dlg-btn primary" id="st-install">${i18n('Install')}</button></div>
         <div class="row" id="st-install-no"><span class="rlabel bindcaption">${i18n('To put the dashboard on the home screen use the browser\'s menu: Install app / Add to Home screen.')}</span></div>
+        <div class="row" id="st-code-row"><span class="rlabel">${i18n('Another browser')}<br><span class="bindcaption">${i18n('A one-time code for the dashboard in another browser of this network (5 minutes). A phone app joins on Family, a tablet panel on Panels.')}</span></span>
+          <button class="dlg-btn" id="st-signin">${i18n('Show code')}</button></div><div id="st-signin-out"></div>
       </section>`,
     houselang: `<section>
         <div class="row" id="st-house-row"><span class="rlabel">${i18n('House language')}<br><span class="bindcaption">${i18n('Voice answers, clocks and panels speak it; a screen with no language of its own shows it too (This screen -> Language).')}</span></span><span class="enum" id="st-house-lang"></span></div>
@@ -274,10 +276,6 @@ function stRenderCore(cur, box, tab, quiet){
     restart: `<section>
         <div class="row"><span class="rlabel">${i18n('Full restart')}<br><span class="bindcaption">${i18n('Every service of the house is made anew, about a minute without the house. For when something stays stuck after a network drop: Zigbee does not come back, devices do not answer. The page reloads by itself.')}</span></span>
           <button class="dlg-btn" id="st-restart">${i18n('Restart the house')}</button></div><div id="st-restart-out"></div>
-      </section>`,
-    signin: `<section>
-        <div class="row"><span class="rlabel">${i18n('Show code')}<br><span class="bindcaption">${i18n('A 6-digit code, good once for 5 minutes: type it on the sign-in card of the other screen (same network). Only for your own devices.')}</span></span>
-          <button class="dlg-btn primary" id="st-signin">${i18n('Show code')}</button></div><div id="st-signin-out"></div>
       </section>`,
     backups: `<section><div class="bindcaption" style="margin-bottom:8px">${i18n('Back up now makes one at once. Download keeps a copy on another disk too.')}</div><div id="st-backups"></div></section>`,
     plugins: `<section><h3 id="st-h-plugins">${i18n('Plug-ins')}</h3><div class="bindcaption" style="margin-bottom:8px">${i18n('Tick what should run, then Apply (the dashboard restarts). Each plug-in\'s keys are on its own page.')}</div>
@@ -314,7 +312,11 @@ function stRenderCore(cur, box, tab, quiet){
     if(ib && ib.dataset.ready && ir){ ir.hidden = false; if(no) no.hidden = true; box.querySelector('#st-install').onclick = () => ib.click(); }
   }
   if(cur.id === 'plugins') renderHelper(box.querySelector('#st-helper'), box.querySelector('#st-update'));
-  if(cur.id === 'signin') box.querySelector('#st-signin').onclick = async () => {
+  if(cur.id === 'device' && !TOKEN){                       // no token of its own, yet signed in: a proxy signs browsers in
+    box.querySelector('#st-front').hidden = false;
+    ['#st-out-row', '#st-code-row'].forEach(q => { const e = box.querySelector(q); if(e) e.remove(); });
+  }
+  if(cur.id === 'device' && box.querySelector('#st-signin')) box.querySelector('#st-signin').onclick = async () => {
     const out = box.querySelector('#st-signin-out');
     try {
       const r = await api('/api/signin/start', {method: 'POST'});

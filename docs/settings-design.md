@@ -39,7 +39,7 @@ The menu (`ST_GROUPS` and `ST_SUBJECTS` in `web/js/35-settings.js`; "core" = the
 - **This screen**
   - Language (core) - the language of this screen.
   - Sign-in (core) - the sign-in of this screen and the app shortcut.
-  - Sign in from another screen (core) - a one-time code that lets another phone, tablet or computer in.
+  - Sign-in (core) also gives a one-time code for the dashboard in another browser; it is hidden where a proxy signs browsers in.
 - **Maintenance**
   - Backups (core) - the nightly backups, one now, downloads, restore.
   - Plug-ins and update (core) - tab Plug-ins: what is on, each plug-in's keys, Apply. Tab Update: a new version, Roll back.

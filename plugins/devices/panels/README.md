@@ -31,7 +31,7 @@ move and the reports below serve a launcher of your own that supports them; the 
 Panels -> **Build the app** builds it on the build server's app builder (Settings -> Devices -> Computers
 and servers: a computer with the Android app builder) with the house's key and offers it at `/plugins/panels/panel.apk` (open: a tablet has
 no key before it pairs). A tablet can also show a panel in its browser: sign the browser in on the
-dashboard (Settings -> Sign in from another screen) and open `/panel-view.html?panel=<name>`.
+dashboard (Settings -> This screen -> Sign-in -> Another browser) and open `/panel-view.html?panel=<name>`.
 
 `GET /plugins/panels/app` (open) names the published launcher: `{code, name, package, size, sha256, path}`, read
 from the APK's own manifest. A launcher that updates itself asks it, downloads `/plugins/panels/panel.apk` when
