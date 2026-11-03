@@ -198,7 +198,7 @@ PLUGIN_API = {
 
 
 __all__ = sorted(PLUGIN_API) + ["app", "log", "DEVICES", "get_status", "get_rooms", "served_room", "served_devices", "room_reading", "room_sensor_order", "rooms_edit", "set_room_locked", "ROOM_LOCKED", "ROOM_ZONED", "ROOM_HIDDEN", "register_device", "update_device",
-                                "remove_device", "set_device_name", "check_name", "take_name_override", "house_lang", "health_row", "plugin_data", "plugin_state", "plugin_state_file",
+                                "remove_device", "set_device_name", "check_name", "take_name_override", "own_names", "house_lang", "health_row", "plugin_data", "plugin_state", "plugin_state_file",
                                 "open_route", "use_route", "is_use_route", "request_token", "Body", "OPEN_PATHS", "is_house_token", "is_admin_request", "migrate_device_key", "mqtt_command",
                                 "RESTRICTED", "RESTRICTED_REFUSED", "RESTRICTED_BODY_MAX", "RESTRICTED_WS_MAX", "restricted_role",
                                 "node_broker_host", "node_broker_port", "registry_pending", "registry_ready", "VIRTUAL_PREFIXES", "forgotten",

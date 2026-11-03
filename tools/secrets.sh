@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 . tools/envlib.sh
 plugin_dirs >/dev/null || exit 1
 house_check || exit 1
-mkdir -p "$(house_dir)"    # before compose mounts it (docker would create it as root)
+mkdir -p "$(house_dir)/plugin-state"    # before compose mounts them (docker would create them as root)
 # the helper sees the checkout, the house, your plug-ins and zigbee2mqtt's data at their real paths (its
 # jobs run docker compose and git from there; one inside the checkout is mounted with it) and a deploy key
 mkdir -p .helper/none

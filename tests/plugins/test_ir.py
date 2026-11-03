@@ -271,7 +271,8 @@ def test_one_name_per_appliance_and_blaster(ir, monkeypatch):
     r = me.ir_remote_add(me.RemoteBody(name="Lamp"))
     me.APPLIANCES.append({"id": "lamp", "name": "Lamp", "remote": r["id"], "blaster": "t-1"})
     monkeypatch.setitem(core.DEVICES, "hub_card", {"id": "hub_card", "name": "Hub card", "ir_blaster": "t-1", "controls": []})
-    me._one_name_each()                                     # at start: the saved rename moves into the record
+    me._own_name.adopt()                                    # at start: the saved rename moves into the record
+    me._one_name_each()
     me._sync()
     assert me._appliance("lamp")["name"] == "Ceiling lamp" and core._name_overrides == {"other": "Kept"}
     assert "name" not in me._blaster("t-1") and me._blaster("t-2")["name"] == "Blaster 2"

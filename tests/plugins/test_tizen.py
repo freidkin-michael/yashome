@@ -444,6 +444,20 @@ def test_a_tv_name_is_a_device_name_and_one_name(fake, monkeypatch):
 
 
 
+def test_a_rename_on_the_dashboard_is_the_tv_s_own_name(fake, monkeypatch):
+    c = TestClient(core.app)
+    assert _add(c, name="TV bedroom").status_code == 200
+    monkeypatch.setitem(core._name_overrides, "tv_t", "TV Samsung")          # a rename saved before the TV kept its name
+    me._own_name.adopt()
+    assert me._tv("tv_t")["name"] == "TV Samsung" and "tv_t" not in core._name_overrides
+    assert c.post("/api/devices/tv_t/rename", headers=HOUSE, json={"name": "Bedroom TV"}).status_code == 200
+    assert me._tv("tv_t")["name"] == "Bedroom TV" and core.DEVICES["tv_t"]["name"] == "Bedroom TV"
+    assert "tv_t" not in core._name_overrides
+    assert c.get("/api/tizen", headers=HOUSE).json()["tvs"][0]["name"] == "Bedroom TV"     # Settings -> TVs shows it
+    assert _add(c, name="Salon TV").status_code == 200                                     # its Edit: the same one name
+    assert core.DEVICES["tv_t"]["name"] == "Salon TV" and "tv_t" not in core._name_overrides
+
+
 def test_the_ir_on_key_follows_a_rename_or_a_merge(monkeypatch):
     tz = sys.modules["yashome_plugins.tizen"]
     monkeypatch.setattr(tz, "TVS", [{"id": "s1", "ir_on": {"device": "tv_ir", "code": "ir_power_on"}}, {"id": "s2"}])

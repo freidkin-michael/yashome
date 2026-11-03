@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- core: one `discover` container (host network, no privileges, read-only code) runs the enabled plug-ins' discovery
+  modules (`discover.py`, `run(ctx)`, docs/plugins.md), each in its own thread, restarted alone when it fails; it replaces
+  `computers-discover` and `panels-discover` (same ports and files). `make update` removes the two old containers.
+- computers: `LLM_LISTEN` - the big model's tunnel and health also listen there (a Docker bridge's gateway), no relay needed.
 - bathshower removed: a plain humidity sensor and a rule's condition do what it did (the light stays on while the bath is steamy).
 - nfc: Settings -> Devices -> NFC tags: every tag with the rules its tap starts, "+ Rule" on a tag, Remove (with its rules); a
   tag is added by tapping it (a sticker of ours not on the list is offered, its counter kept) or by its UID; the list is

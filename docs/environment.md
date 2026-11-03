@@ -27,7 +27,7 @@ documentation:
 | `HELPER_PORT`, `HELPER_BIND`, `HELPER_IMAGE` | helper | the code's defaults: 8796, 0.0.0.0 (the helper network only), `yashome-helper:local` |
 | `GIT_SSH_COMMAND` | helper | the deploy key for `git pull` (Settings -> Plug-ins and update -> Update) |
 | `YASHOME_JOB` | helper's job container | set by the helper: `make` steps that need the host's home skip them |
-| `STATE_DIR` | panels-discover | `/state`: its `pairing.json` / `discovered.json` |
+| `STATE_ROOT` | discover | `/state`: the house's `plugin-state/`; each discovery module gets its `<plug-in>/` folder |
 | `APK_URL`, `BUILD_PORT`, `BUILD_WORK`, `BUILD_MODE`, `ESPHOME_BIN`, `GRADLE_USER_HOME` | build server, app builder (on a computer of the house) | see `plugins/tools/build/README.md` |
 | `MQTT_HOST` | home | the broker inside the compose network: `mosquitto` (the stand sets its own) |
 | `HOST_SOCKETS_DIR` | home | the folder of the house's helpers on its host (`tools/hostsock.py`): `/run/yashome`; the stand and the tests point it elsewhere so a copy of a house reaches no real tablet or wake |

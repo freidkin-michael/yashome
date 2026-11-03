@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-"""One broadcast tells the house what runs where: "? yashome 1" to UDP 7708 every INTERVAL seconds; every computer's
+"""Discovery module of the computers plug-in (run by the core's `discover` container, host network).
+One broadcast tells the house what runs where: "? yashome 1" to UDP 7708 every INTERVAL seconds; every computer's
 hello responder (helper/roles/hello-install.sh) answers {"yashome": 1, "name", "servers": [...], "ports": {...}}.
-Who answered goes to STATE_DIR/discovered.json (read by the computers plug-in and by the plug-ins of those servers,
-e.g. touchmouse). Asks from UDP 7707: a host firewall lets the LAN in there. Runs in the host's network: a broadcast from the dashboard's bridge network reaches nobody.
-"""
+Who answered goes to plugin-state/computers/discovered.json (read by this plug-in and by the plug-ins of those
+servers, e.g. touchmouse). Asks from UDP 7707: a host firewall lets the LAN in there."""
 import json
 import os
 import re
@@ -17,8 +16,6 @@ FROM_PORT = int(os.environ.get("YASHOME_DISCOVER_PORT") or 7707)   # asked from 
 INTERVAL = 30
 LISTEN_S = 3                       # answers are taken this long after a broadcast
 TTL = 300                          # a computer that stopped answering is dropped after this
-STATE = os.environ.get("STATE_DIR", "/state")
-OUT = os.path.join(STATE, "discovered.json")
 BCAST = "255.255.255.255"
 NAME = re.compile(r"^[A-Za-z0-9._-]{1,40}$")
 SERVER = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
@@ -37,51 +34,51 @@ def parse(data: bytes):
     return {"name": p["name"], "servers": sorted(set(servers)), "ports": ports}
 
 
-def flush(seen: dict):
+def flush(seen: dict, state):
     now = time.time()
     fresh = sorted((dict(v) for v in seen.values() if now - v["seen"] < TTL), key=lambda d: d["host"])
-    fd, tmp = tempfile.mkstemp(dir=STATE, prefix=".discovered.")
+    fd, tmp = tempfile.mkstemp(dir=state, prefix=".discovered.")
     with os.fdopen(fd, "w") as f:
         json.dump({"hosts": fresh, "updated": now}, f)
     os.chmod(tmp, 0o644)
-    os.replace(tmp, OUT)
+    os.replace(tmp, os.path.join(state, "discovered.json"))
 
 
-def main():
+def ask(seen: dict):
+    """One broadcast and the answers of LISTEN_S seconds into seen, by address."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("", FROM_PORT))
+        s.sendto(b"? yashome 1", (BCAST, PORT))
+        end = time.time() + LISTEN_S
+        while (left := end - time.time()) > 0:
+            s.settimeout(left)
+            try:
+                data, addr = s.recvfrom(2048)
+            except socket.timeout:
+                break
+            p = parse(data)
+            if p:
+                seen[addr[0]] = dict(p, host=addr[0], seen=time.time())
+
+
+def run(ctx):
     seen = {}
-    print(f"computers-discover: port {PORT}, every {INTERVAL} s, state {STATE}", flush=True)
-    while True:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ctx.log(f"port {PORT}, every {INTERVAL} s")
+    while not ctx.stop.is_set():
         try:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(("", FROM_PORT))
-            s.sendto(b"? yashome 1", (BCAST, PORT))
-            end = time.time() + LISTEN_S
-            while (left := end - time.time()) > 0:
-                s.settimeout(left)
-                try:
-                    data, addr = s.recvfrom(2048)
-                except socket.timeout:
-                    break
-                p = parse(data)
-                if p:
-                    seen[addr[0]] = dict(p, host=addr[0], seen=time.time())
+            ask(seen)
         except OSError as e:
-            print(f"computers-discover: {e}", flush=True)
-        finally:
-            s.close()
+            ctx.log(str(e))
         for k in [k for k, v in seen.items() if time.time() - v["seen"] > TTL]:
             seen.pop(k)
         if len(seen) > 64:
             for k in sorted(seen, key=lambda k: seen[k]["seen"])[:len(seen) - 64]:
                 seen.pop(k)
         try:
-            flush(seen)
+            flush(seen, ctx.state)
         except OSError as e:
-            print(f"computers-discover: {OUT}: {e}", flush=True)
-        time.sleep(INTERVAL)
-
-
-if __name__ == "__main__":
-    main()
+            ctx.log(f"discovered.json: {e}")
+        if ctx.wait(INTERVAL):
+            return

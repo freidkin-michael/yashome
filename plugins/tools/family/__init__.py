@@ -1475,6 +1475,12 @@ def _person_id(uid: str) -> str:
     return "person_" + uid
 
 
+def _member_of(data: dict, dev: str):
+    """The record of the member a person device stands for, or None."""
+    rec = data.get(dev[len("person_"):]) if dev.startswith("person_") else None
+    return rec if isinstance(rec, dict) else None
+
+
 def _presence_tick(now: float):
     """Register a device per paired phone (drop the revoked), publish home / not home and the event."""
     data = _load()
@@ -1567,3 +1573,4 @@ def _health():
 
 
 core.HEALTH_CHECKS.append(_health)
+_own_name = core.own_names(lambda: {u: dict(d) if isinstance(d, dict) else d for u, d in _load().items()}, _member_of, _save, _lock)   # one name: the member's

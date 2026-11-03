@@ -4,6 +4,7 @@
 # llm.json {host, user, wsl, serve}, written by Settings -> Devices -> Computers -> Use; the .path unit restarts this one when it
 # changes. serve: the command that runs the model server there for the tunnel's lifetime (a WSL one), empty = it runs by itself.
 # No computer in use: it waits. Key and known hosts: the house's (YASHOME_SSH_DIR/id, the helper's hosts_known_hosts).
+# LLM_LISTEN: more addresses for :11435 (IPv4, comma separated; never 0.0.0.0), e.g. a Docker bridge's gateway.
 set -eu
 HOUSE_DIR="${HOUSE_DIR:?the house folder}"
 KEY="${YASHOME_SSH_KEY:-$HOME/.config/yashome/ssh/id}"
@@ -16,8 +17,13 @@ CMD=""
 if [ -n "$SERVE" ]; then
     if [ -n "$WSL" ]; then CMD="wsl -d ${WSL%/*} -u ${WSL#*/} -- $SERVE"; else CMD="$SERVE"; fi
 fi
-echo "big model: $RUSER@$HOST${WSL:+ (WSL $WSL)} -> 127.0.0.1:11435"
+FWD="-L 127.0.0.1:11435:127.0.0.1:11434"
+for a in $(printf '%s' "${LLM_LISTEN:-}" | tr ',' ' '); do
+    case "$a" in *[!0-9.]*|0.0.0.0) echo "LLM_LISTEN: $a is not one IPv4 address of this host" >&2; exit 1;; esac
+    [ "$a" = 127.0.0.1 ] || FWD="$FWD -L $a:11435:127.0.0.1:11434"
+done
+echo "big model: $RUSER@$HOST${WSL:+ (WSL $WSL)} -> 127.0.0.1:11435${LLM_LISTEN:+ and $LLM_LISTEN}"
 set -- -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=10 \
     -o IdentitiesOnly=yes -i "$KEY" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN" \
-    -L 127.0.0.1:11435:127.0.0.1:11434 -l "$RUSER"
+    $FWD -l "$RUSER"
 if [ -n "$CMD" ]; then exec ssh "$@" "$HOST" "$CMD"; else exec ssh -N "$@" "$HOST"; fi

@@ -414,6 +414,7 @@ def _health() -> list:
 
 tv_plugin.KNOWN_HOSTS.append(lambda: {t.get("host"): t.get("name") or t["id"] for t in TVS})   # the tv plug-in's Add a TV
 core.SETTINGS_SECTIONS["androidtv_tvs"] = lambda: TVS
+_own_name = core.own_names(lambda: TVS, lambda _t, did: _tv(did), lambda _t: core.save_settings(), _lock)   # one name: the TV's entry
 core.TRANSPORTS[TRANSPORT] = lambda cfg, code, val, kind: _apply(cfg, code, val)
 core.ASYNC_CONTROL[TRANSPORT] = _control
 core.HEALTH_CHECKS.append(_health)

@@ -6,7 +6,7 @@ screen. The builder draws it; a tablet shows it in a browser; an ESP screen gets
 | part | where | what |
 |---|---|---|
 | this plug-in | the core | layouts, the Panels tab (by room) and the same page in Settings -> Devices -> Panels, the builder `/panel-builder`, the kiosk page `/panel-view.html?panel=<name>`, pairing of Android tablets, Add -> "ESP screen: its first firmware over USB" |
-| `discover/` | the `panels-discover` container, in the host's network | invites tablets by a UDP broadcast (port 51823) while pairing is open |
+| `discover.py` | the discovery module, run by the core's `discover` container in the host's network | invites tablets by a UDP broadcast (port 51823) while pairing is open; writes the host's neighbour table (`arp.json`) |
 
 Files: the layouts are configuration, `plugin-data/panels/layouts.json` (kept in the house's git);
 `plugin-state/panels/` holds the bound tablets (`paired.json`), the pairing window and who answered.
@@ -217,7 +217,7 @@ either. Flashing, binding and confirming a screen need the dashboard's own token
 panel's key). It cannot reach devices no ESP panel commands, the core's `home/cmd`, settings or rules.
 
 A flash goes only to the address the panel's MAC has on the network (the host's neighbour table, read
-by the `panels-discover` container), checked again right before the upload; never to an address a broker
+by `discover.py` in the core's `discover` container), checked again right before the upload; never to an address a broker
 client claims. A panel gets its MAC by the bind with the code, or - one made in the builder or bound
 before - from a human: its card shows the MAC and address its screen reports, **Yes, this is it**. A new
 screen is flashed only when its announced address belongs to its MAC; two new screens with one code are

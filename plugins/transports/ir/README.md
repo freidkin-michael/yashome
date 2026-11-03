@@ -59,7 +59,7 @@ show is what was SENT: the last key of each group of two keys or more (`sent_<gr
 is a toggle and says nothing); it is cleared when the switch goes off. The map shows such a fixture as one lamp: lit from the
 switch, the badge the keys last sent, a tap opens its window; a dashed line from the switch is drawn by itself.
 
-One name each: an appliance's or a toggle's name is in its record only (`core.NAME_OWNERS`), so the tile's pencil and the
+One name each: an appliance's or a toggle's name is in its record only (`core.own_names`), so the tile's pencil and the
 card's rename change the same name, shown on the tile, the card, in voice and on the map; at start, a rename found in the
 core's `settings.json` "names" moves into the record. A blaster fronted by a device (its card) is named by that device and
 keeps no name in `ir_blasters`; a blaster without one is named there.

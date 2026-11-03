@@ -73,6 +73,11 @@ def _register_tvs() -> list:
 WEBOS_DEVICES = _register_tvs()
 
 
+def _entry(entries, dev_id: str):
+    """The devices.json entry of an LG TV, or None."""
+    return next((e for e in entries if isinstance(e, dict) and e.get("id") == dev_id and e.get("transport") == "webos"), None) if isinstance(entries, list) else None
+
+
 def _tvs():
     return [d for d in list(core.DEVICES.values()) if d.get("transport") == "webos"]
 
@@ -316,7 +321,7 @@ def _learn_mac(dev_id: str, mac: str):
     """A TV added without a MAC: the one it told at its pairing goes into its entry (power-on needs it)."""
     with _lock:
         entries = _read_json(DEVICES_PATH, [])
-        d = next((e for e in entries if isinstance(e, dict) and e.get("id") == dev_id and e.get("transport") == "webos"), None) if isinstance(entries, list) else None
+        d = _entry(entries, dev_id)
         if d is None or d.get("mac"):
             return
         d["mac"] = mac
@@ -384,7 +389,7 @@ def webos_tv_put(dev_id: str, body: TvBody, request: Request):
     inputs, apps = _pairs(body.inputs, "inputs"), _pairs(body.apps, "apps")
     with _lock:
         entries = _read_json(DEVICES_PATH, [])
-        d = next((e for e in entries if isinstance(e, dict) and e.get("id") == dev_id and e.get("transport") == "webos"), None) if isinstance(entries, list) else None
+        d = _entry(entries, dev_id)
         if d is None:
             raise HTTPException(404, "unknown LG TV")
         d.update(name=core.check_name(body.name), host=body.host.strip(), mac=body.mac.strip().lower(), _webos_inputs=inputs, _webos_apps=apps)
@@ -466,4 +471,6 @@ def webos_tv_delete(dev_id: str, request: Request):
 core.TRANSPORTS["webos"] = lambda cfg, code, val, kind: _webos_apply(cfg, code, val)
 core.ASYNC_CONTROL["webos"] = _webos_control
 core.STARTUP_TASKS.append(_webos_poller)
+_own_name = core.own_names(lambda: _read_json(DEVICES_PATH, []), _entry,                  # one name: the TV's entry
+                           lambda entries: core.atomic_json_dump(DEVICES_PATH, entries, indent=1, ensure_ascii=False), _lock)
 tv_plugin.KNOWN_HOSTS.append(lambda: {d.get("host"): d.get("name") or d["id"] for d in _tvs()})   # the tv plug-in's Add a TV: "already added"

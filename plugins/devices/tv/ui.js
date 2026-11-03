@@ -99,29 +99,40 @@
     const lists = await Promise.all(provs.map(p => Promise.resolve().then(() => p.list()).catch(e => ({error: e.message || String(e)}))));
     box.innerHTML = '';
     const seen = new Set();
-    const card = (title, kind) => {
-      const sc = Home.el('section', 'tvset');
-      const tag = kind && !String(title).toLowerCase().includes(String(kind).toLowerCase()) ? `<span class="bindcaption">${E(kind)}</span>` : '';   // no "(Samsung) Samsung"
-      sc.innerHTML = `<h3 style="margin:0 0 6px;display:flex;gap:8px;align-items:baseline">${E(title)}${tag}</h3><div></div>`;
-      box.append(sc); return sc.lastElementChild;
+    if(!document.getElementById('tv-compact')) document.head.insertAdjacentHTML('beforeend', `<style id="tv-compact">
+      .tvset{border-top:1px solid var(--line);padding:4px 0}.tvset:first-child{border-top:0}
+      .tvset .row{padding:4px 0;min-height:0;border-top:0}.tvset .rlabel .bindcaption{font-style:normal;margin:0;font-size:12px}</style>`);
+    const card = () => { const sc = Home.el('section', 'tvset'); sc.innerHTML = '<div></div>'; box.append(sc); return sc.lastElementChild; };
+    const head = (into, title, id, plug, ip) => {                // the first row's label: the name over where, plug-in, address, state
+      const lb = into.querySelector('.row .rlabel'), was = lb ? lb.innerHTML.trim() : '';
+      const meta = E([Home.roomOf(id), plug, ip].filter(Boolean).join(' \u00b7 ')) + (was ? ' \u00b7 ' + was : '');
+      const html = `<b style="font-size:16px">${E(title)}</b><br><span class="bindcaption">${meta}</span>`;
+      if(lb){ lb.classList.remove('bindcaption'); lb.innerHTML = html; }
+      else into.insertAdjacentHTML('afterbegin', `<div class="row"><span class="rlabel">${html}</span></div>`);
     };
     provs.forEach((p, i) => {
       const l = lists[i];
-      if(l && l.error){ card(i18n(p.label), i18n(p.label)).textContent = l.error; return; }
+      if(l && l.error){
+        const e = card(); e.innerHTML = `<div class="row"><span class="rlabel bindcaption">${E(l.error)}</span></div>`;
+        head(e, i18n(p.label), '', p.transport, ''); return;
+      }
       for(const t of l || []){
         seen.add(t.id);
-        const into = card(t.name || t.id, i18n(p.label));
+        const dev = Home.devices().find(d => d.id === t.id) || {};                       // the house's name is the one shown
+        const into = card();
         HomePlugins.safe(p.card, t, into, reload);
-        const ir = ((Home.devices().find(d => d.id === t.id) || {}).parts || {}).ir;     // its IR remote, a part of the same TV
+        head(into, dev.name || t.name || t.id, t.id, p.transport, t.live_host || t.host);
+        const ir = (dev.parts || {}).ir;                                                  // its IR remote, a part of the same TV
         if(ir) into.insertAdjacentHTML('beforeend', `<div class="row"><span class="rlabel bindcaption">${E(i18n('IR remote: {0}, through {1}', ir.remote_name || ir.remote || '\u2014', (Home.devices().find(x => x.id === ir.blaster || x.ir_blaster === ir.blaster) || {}).name || ir.blaster || '\u2014'))}</span>
           <button class="dlg-btn" data-tvir="1">${E(i18n('Keys'))}</button></div>`);
         const go = into.querySelector('[data-tvir]'); if(go) go.onclick = () => openSettings('ir');
       }
     });
     for(const d of Home.devices().filter(d => d.category === 'tv' && !seen.has(d.id))){       // a TV no transport sets up here: IR
-      const b = card(d.name, d.transport === 'ir' ? i18n('IR') : d.transport);
+      const b = card();
       b.innerHTML = `<div class="row"><span class="rlabel bindcaption">${E(i18n(d.transport === 'ir' ? 'Its remote and keys are on the IR page.' : 'Nothing to set up here.'))}</span>
         ${d.transport === 'ir' ? `<button class="dlg-btn" data-tvir="1">${E(i18n('Open'))}</button>` : ''}</div>`;
+      head(b, d.name, d.id, d.transport || 'ir', d.host);
       const go = b.querySelector('[data-tvir]'); if(go) go.onclick = () => openSettings('ir');
     }
     if(!box.querySelector('.tvset')) box.insertAdjacentHTML('afterbegin', `<div class="bindcaption">${E(i18n('No TV yet.'))}</div>`);

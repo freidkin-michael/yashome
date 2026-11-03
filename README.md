@@ -19,7 +19,7 @@ The main dashboard on a desktop: rooms, favourites and live tiles.
 
 | | Yashome | Home Assistant and friends |
 |---|---|---|
-| size | one backend module (`app.py` + `core/`), one page (`index.html` + `web/`), three containers (plus what your plug-ins bring) | a platform with thousands of integrations |
+| size | one backend module (`app.py` + `core/`), one page (`index.html` + `web/`), four containers (plus what your plug-ins bring) | a platform with thousands of integrations |
 | how a device gets in | it publishes to MQTT; a plug-in adds whole families (Zigbee devices appear by themselves) | integration per vendor, config flow, YAML packages |
 | automations | trigger, condition, action; schedule and auto-off per channel, all in the UI | scripts, blueprints, templates |
 | what it takes to read the code | an evening | weeks |
@@ -296,16 +296,18 @@ flowchart LR
     M <--> H[home backend<br/>FastAPI, app.py + plug-ins]
     H <--> D[dashboard<br/>index.html + plug-in ui.js, PWA]
     H <--> HL[helper<br/>update, restore, restart]
+    DI[discover<br/>plug-ins' discovery modules, host network] -- plugin-state files --> H
     H -- home/cmd, home/state --> M
 ```
 
-Three containers of the core, plus the plug-ins' own:
+Four containers of the core, plus the plug-ins' own:
 
 | service | what | port |
 |---|---|---|
 | `mosquitto` | the broker; authenticated, one account per client kind | 1883 (LAN, `MQTT_PORT`) |
 | `home` | backend + dashboard; config in JSON files next to it | 8765 (`DASHBOARD_PORT`) |
 | `helper` | runs `make update`, update, roll back, restore and restart for Settings; holds the docker socket | none (the `helper` network only) |
+| `discover` | the enabled plug-ins' discovery modules (`discover.py`: broadcasts, the host's neighbour table), one thread each, in the host's network; no privileges, no docker socket, the code read-only, each module in its own `plugin-state/<plug-in>/`; idle when no module is on (`discover/runner.py`, docs/plugins.md) | the modules' own (UDP 7707 computers, 51823 panels) |
 | a plug-in's, e.g. `zigbee2mqtt` | from the plug-in's `setup/compose.yml` | its own |
 
 The backend keeps its configuration in `settings.json` (names, rooms, rules, favourites) and

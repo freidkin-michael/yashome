@@ -56,6 +56,7 @@ plugins/
       ui.js           # optional, public: the dashboard side
       i18n.json       # optional, public: {"ru": {"English text": "translation"}}
       static/         # optional, public: icons, css, pages ... (.js .mjs .css .json .png .svg .html)
+      discover.py     # optional, never served: a discovery module for the core's discover container
       setup/          # optional, never served: containers, broker account, secrets, install steps
       anything_else   # private: source, templates - never served
 ```
@@ -215,6 +216,7 @@ devices of zigbee2mqtt's retained `bridge/devices`) uses these on top:
 | `core.ROOMS_OWNER.update(create=fn(name) -> room, rename=fn(rid, name) -> room, delete=fn(rid))` | the rooms are yours (the map): `POST`, `PUT` (a new name) and `DELETE /api/rooms` call these instead of changing the rooms themselves; raise HTTPException for a refusal. Without an owner the core keeps the rooms itself and logs a warning |
 | `core.ON_ROOM_MOVE.append(fn(dev_id, old_room_names, new_room_name))` | after a device came into a room (moved, placed on the map, its room renamed): the zigbee plug-in renames a device whose name is still the automatic one |
 | `core.ROOM_REFS.append(fn(rid) -> [{kind, name}])` | what of yours names a room (a panel hangs in it, a satellite stands in it): `GET /api/rooms/{id}/refs` lists it before a delete |
+| `core.own_names(load, find, save, lock=None) -> owner` | your devices' names live in your own records (a TV's entry, an IR tile): one call makes them the one stored name. `load()` -> your data, `find(data, id)` -> the record (a dict with "name") or None, `save(data)` stores it; a rename (the card's pencil) lands in the record, and at the call a rename already in the overrides moves into it (`owner.adopt()` again). Call it once your settings section is registered |
 | `core.NAME_OWNERS.append(fn(id, name) -> bool)` | your plug-in keeps the display names of its devices (an IR tile in its record): store the new one and return True; the core then keeps no override for it |
 | `core.take_name_override(id) -> str or None` | at start, take over a rename saved in the overrides before you kept names yourself: returned and dropped there |
 | `core.house_lang() -> str` | the house language (Settings -> House language, a code like `"ru"`, see `GET /api/house` "langs"): what a plug-in speaks or prints for the whole house |
@@ -222,6 +224,33 @@ devices of zigbee2mqtt's retained `bridge/devices`) uses these on top:
 
 Device ids come from the other system, so register them as they are (see `register_device`) and
 never re-key them silently: a rename there is a rename here, through `migrate_device_key`.
+
+## Discovery module
+
+What must run in the host's network - a UDP broadcast, the host's neighbour table - is a discovery
+module, not a container of its own: a broadcast from the backend's bridge network reaches nobody. A
+plug-in ships `discover.py` next to its `__init__.py`; the core's `discover` container
+(`docker-compose.yml`, `discover/runner.py`, always there) runs the module of every enabled plug-in
+(`PLUGINS` and `requires`, resolved by `tools/pluginlib.py` as for the backend). Turning the plug-in
+on or off and `make update` (Settings: Apply) recreates the container with the new set; none on: it idles.
+
+| part | what |
+|---|---|
+| `run(ctx)` | the module's only entry point; it loops until `ctx.stop` is set, then returns |
+| `ctx.name` | the plug-in's name |
+| `ctx.state` | `Path` of `plugin-state/<name>/` (made before the start): the files it writes for the backend, which reads them with `core.plugin_state(name)` |
+| `ctx.stop` | a `threading.Event`, set when the container stops |
+| `ctx.wait(s)` | sleeps up to `s` seconds; True = stopping, return now |
+| `ctx.log(msg)` | one line in `docker compose logs discover`, prefixed `discover[<name>]` |
+
+Each module runs in a thread of its own and is read again at every start. One that raises or returns is
+logged and started again after 5 s, the pause doubling up to 5 minutes (back to 5 s after a run of a
+minute or more); the other modules go on. The module is standard library only (`python:3.12-alpine`), never
+imports the backend (`app`, `core`) and reads its settings from the environment the container has
+(`PLUGINS`, `DASHBOARD_PORT`, `TZ`); the container runs as the house's user with no capabilities, a
+read-only root, the code read-only and `plugin-state/` as the only writable folder. Ports and wire formats
+are the module's own; keep them fixed, the devices on the network expect them. Examples:
+`plugins/tools/computers/discover.py`, `plugins/devices/panels/discover.py`.
 
 ## Setup: containers, broker account, secrets, install steps
 

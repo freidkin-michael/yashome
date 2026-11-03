@@ -50,8 +50,8 @@ TTS_PORT = 8092
 LLM_TARGET = core.plugin_data("computers") / "llm.json"   # the computer of the big model: the host's tunnel follows this file (host/)
 YASHGEN_TARGET = core.plugin_data("computers") / "yashgen.json"   # the computer yashGen runs on: likewise (host/yashgen-tunnel.sh)
 
-DISCOVERED = core.plugin_state("computers") / "discovered.json"   # discover/discoverd.py: who answered the house's broadcast
-DISCOVERED_STALE_S = 600           # the companion rewrites it every 30 s: older means it stopped
+DISCOVERED = core.plugin_state("computers") / "discovered.json"   # discover.py: who answered the house's broadcast
+DISCOVERED_STALE_S = 600           # discover.py rewrites it every 30 s: older means it stopped
 
 
 def discovered() -> list:

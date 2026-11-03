@@ -21,6 +21,49 @@ from fastapi.testclient import TestClient  # noqa: E402
 TOKEN = "names-test-token-0123456789"
 
 
+
+class OwnNames(unittest.TestCase):
+    """core.own_names: a plug-in's records hold the one name; a rename lands there, an older override moves in."""
+    def setUp(self):
+        self.recs = [{"id": "on_tv", "name": "TV bedroom"}]
+        self.saved = []
+        self.keep = dict(app._name_overrides)
+        app._name_overrides.update(on_tv="TV Samsung", on_other="Kept")
+        app.DEVICES["on_tv"] = {"id": "on_tv", "name": "TV Samsung", "controls": [], "_ctl": {}}
+        self.owner = app.own_names(lambda: self.recs, lambda recs, did: next((r for r in recs if r["id"] == did), None),
+                                   lambda recs: self.saved.append([dict(r) for r in recs]))
+
+    def tearDown(self):
+        app.NAME_OWNERS.remove(self.owner)
+        app._name_overrides.clear()
+        app._name_overrides.update(self.keep)
+        app.DEVICES.pop("on_tv", None)
+        app.BY_ID_NAME.pop("on_tv", None)
+        app.BY_ID_NAME.pop("on_other", None)
+
+    def test_an_override_moves_into_the_record_at_the_call(self):
+        self.assertEqual(self.recs[0]["name"], "TV Samsung")
+        self.assertEqual(self.saved, [[{"id": "on_tv", "name": "TV Samsung"}]])
+        self.assertNotIn("on_tv", app._name_overrides)
+        self.assertEqual(app._name_overrides["on_other"], "Kept")           # not this plug-in's: left where it is
+        self.assertIn(self.owner, app.NAME_OWNERS)
+
+    def test_a_rename_is_stored_in_the_record_and_nowhere_else(self):
+        app.set_device_name("on_tv", "TV salon")
+        self.assertEqual(self.recs[0]["name"], "TV salon")
+        self.assertEqual((app.DEVICES["on_tv"]["name"], app.BY_ID_NAME["on_tv"]), ("TV salon", "TV salon"))
+        self.assertNotIn("on_tv", app._name_overrides)
+        app.set_device_name("on_other", "Other")                            # no record holds it: the override
+        self.assertEqual(app._name_overrides["on_other"], "Other")
+
+    def test_adopt_again_moves_only_what_is_left(self):
+        self.owner.adopt()
+        self.assertEqual(len(self.saved), 1)                                # nothing left: nothing saved
+        app._name_overrides["on_tv"] = "Late"
+        self.owner.adopt()
+        self.assertEqual((self.recs[0]["name"], len(self.saved)), ("Late", 2))
+        self.assertNotIn("on_tv", app._name_overrides)
+
 class CheckName(unittest.TestCase):
     def fails(self, code, text, *a, **k):
         with self.assertRaises(HTTPException) as e:

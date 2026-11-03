@@ -1,4 +1,4 @@
-# Yashome: the broker and the backend. Settings come from .env (see secrets.env.example);
+# Yashome: the broker, the backend, the helper and discover. Settings come from .env (see secrets.env.example);
 # `make install` fills it in. A plug-in's own containers (zigbee2mqtt) come from its
 # setup/compose.yml, which `make update` lists in COMPOSE_FILE.
 name: yashome
@@ -81,6 +81,35 @@ services:
       - ${YASHOME_Z2M_ABS:-./.helper/none-z2m}:${YASHOME_Z2M_ABS:-/srv/no-z2m}
       # git over ssh: the deploy key and its known_hosts only (README)
       - ${YASHOME_SSH_DIR:-./.helper/none-ssh}:/run/yashome-ssh:ro
+
+  # discover: the plug-ins' discovery modules (their discover.py: broadcasts, the host's neighbour table) in one
+  # process in the host's network - a broadcast from the bridge network reaches nobody. No privileges, no socket,
+  # the code read-only; it writes only plugin-state/<plug-in>/ (discover/runner.py, docs/plugins.md).
+  discover:
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here or pinned: an updater must not pull or replace it
+    image: python:3.12-alpine
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 3s
+    network_mode: host
+    user: "${PUID:-1000}:${PGID:-1000}"
+    mem_limit: 32m                     # two modules use about 9 MiB
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["python3", "-u", "/app/discover/runner.py"]
+    environment:
+      - PLUGINS=${PLUGINS:-}           # the enabled set, as the backend resolves it: a change recreates this container
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-8765}
+      - PYTHONDONTWRITEBYTECODE=1
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./discover:/app/discover:ro
+      - ./tools:/app/tools:ro
+      - ./plugins:/app/plugins:ro
+      - ${PLUGINS_EXTRA_DIR:-./plugins-extra}:/app/plugins-extra:ro
+      - ${HOUSE_DIR:-.}/plugin-state:/state
 
   mosquitto:
     labels:

@@ -456,8 +456,8 @@ def _load_file(name, path):
     return mod
 
 
-def test_the_discover_companion_takes_only_well_formed_answers():
-    d = _load_file("computers_discoverd", Path(__file__).resolve().parents[2] / "plugins/tools/computers/discover/discoverd.py")
+def test_the_discovery_module_takes_only_well_formed_answers():
+    d = _load_file("computers_discover", Path(__file__).resolve().parents[2] / "plugins/tools/computers/discover.py")
     ok = d.parse(json.dumps({"yashome": 1, "name": "bedroom", "servers": ["player", "touchmouse", "Bad One", 5],
                              "ports": {"touchmouse": 7709, "x": 70000}}).encode())
     assert ok == {"name": "bedroom", "servers": ["player", "touchmouse"], "ports": {"touchmouse": 7709}}
@@ -524,3 +524,43 @@ def test_llm_health_restarts_only_the_model_s_own_wsl_and_reads_n_a(monkeypatch,
     m._heal["at"] = 0.0
     out["nvidia"] = "90, 6000, 8000"                    # the owner works on the card: no restart under her
     assert m.check()["reason"] == "cpu_fallback" and not any(c.startswith("wsl") for c in ran)
+
+
+def test_the_big_model_tunnel_also_listens_on_llm_listen(tmp_path):
+    """LLM_LISTEN (the voice service's bridge gateway): one more -L for :11435, so no relay; loopback stays."""
+    import os
+    import subprocess
+    house, bin_ = tmp_path / "house", tmp_path / "bin"
+    (house / "plugin-data" / "computers").mkdir(parents=True)
+    (house / "plugin-data" / "computers" / "llm.json").write_text('{"host": "192.0.2.61", "user": "tester"}')
+    _fake_bin(bin_)
+    calls = tmp_path / "calls.log"
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "CALLS": str(calls), "HOME": str(tmp_path),
+           "HOUSE_DIR": str(house), "YASHOME_HOSTS_KNOWN": str(tmp_path / "known")}
+    for listen, extra in (("", []), ("192.0.2.1", ["192.0.2.1"]), ("192.0.2.1,127.0.0.1", ["192.0.2.1"])):
+        calls.unlink(missing_ok=True)
+        r = subprocess.run(["sh", str(HOST / "llm-tunnel.sh")], env={**env, "LLM_LISTEN": listen},
+                           capture_output=True, text=True, timeout=20)
+        assert r.returncode == 0, r.stderr
+        line = calls.read_text().splitlines()[-1]
+        fwd = [a for a in line.split() if a.endswith(":11435:127.0.0.1:11434")]
+        assert fwd == ["127.0.0.1:11435:127.0.0.1:11434"] + [f"{a}:11435:127.0.0.1:11434" for a in extra]
+    calls.unlink()
+    r = subprocess.run(["sh", str(HOST / "llm-tunnel.sh")], env={**env, "LLM_LISTEN": "0.0.0.0;id"},
+                       capture_output=True, text=True, timeout=20)
+    assert r.returncode == 1 and "not one IPv4 address" in r.stderr and not calls.exists()
+    r = subprocess.run(["sh", str(HOST / "llm-tunnel.sh")], env={**env, "LLM_LISTEN": "0.0.0.0"},
+                       capture_output=True, text=True, timeout=20)
+    assert r.returncode == 1 and not calls.exists()                                  # never the whole network
+    assert "LLM_LISTEN=$(get LLM_LISTEN)" in (HOST / "install.sh").read_text()        # the units get it from .env
+
+
+def test_llm_health_listens_on_loopback_and_llm_listen(monkeypatch, tmp_path):
+    import pytest
+    m = _llm_health(monkeypatch, tmp_path)
+    assert m.listen("") == ["127.0.0.1"]
+    assert m.listen("192.0.2.1, 127.0.0.1 192.0.2.2") == ["127.0.0.1", "192.0.2.1", "192.0.2.2"]
+    with pytest.raises(ValueError):
+        m.listen("0.0.0.0;id")
+    with pytest.raises(ValueError):
+        m.listen("0.0.0.0")

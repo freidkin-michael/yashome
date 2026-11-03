@@ -424,3 +424,38 @@ def take_name_override(dev_id: str):
         if name is not None:
             _save_settings()
         return name if isinstance(name, str) and name else None
+
+
+def own_names(load, find, save, lock=None):
+    """A plug-in whose records hold its devices' names keeps the one name there (NAME_OWNERS): load() -> its data,
+    find(data, dev_id) -> the record (a dict, "name") or None, save(data) stores it. A rename already in the overrides
+    moves into its record now: call it once the plug-in's settings section is registered. Returns the owner fn;
+    its adopt() moves the overrides in again."""
+    lock = lock or contextlib.nullcontext()
+
+    def owner(dev_id: str, name: str) -> bool:
+        with lock:
+            data = load()
+            rec = find(data, dev_id)
+            if rec is None:
+                return False
+            rec["name"] = name
+            save(data)
+        return True
+
+    def adopt() -> None:
+        with lock:
+            data = load()
+            moved = False
+            for dev_id in list(_name_overrides):
+                rec = find(data, dev_id)
+                name = take_name_override(dev_id) if rec is not None else None
+                if name:
+                    rec["name"], moved = name, True
+            if moved:
+                save(data)
+
+    adopt()
+    owner.adopt = adopt
+    NAME_OWNERS.append(owner)
+    return owner

@@ -140,7 +140,7 @@ def allowed_commands(name: str) -> set:
 
 
 def _arp() -> dict:
-    """IPv4 -> MAC of the host's network, from the discover companion (it runs in the host's network)."""
+    """IPv4 -> MAC of the host's network, from this plug-in's discovery module (the core's discover container)."""
     try:
         d = json.loads((core.plugin_state("panels") / "arp.json").read_text())
         age = time.time() - float(d.get("updated"))
@@ -157,7 +157,7 @@ def _target(name: str, lay: dict) -> str:
     or from a human who confirmed it on the panel's card, never from what a broker client publishes."""
     arp = _arp()
     if not arp:
-        raise HTTPException(503, "no view of the network: the panels-discover container is not running")
+        raise HTTPException(503, "no view of the network: the discover container is not running")
     mac = str(lay.get("mac") or "").lower()
     if not mac:
         raise HTTPException(409, f"panel {name}: confirm its screen first (its card shows the MAC and address)")
@@ -640,7 +640,7 @@ def bind_esp(body: BindEspBody, request: Request):
         raise HTTPException(409, "the new screen did not report its address")
     arp = _arp()
     if not arp:
-        raise HTTPException(503, "no view of the network: the panels-discover container is not running")
+        raise HTTPException(503, "no view of the network: the discover container is not running")
     if arp.get(d["ip"]) != mac:
         raise HTTPException(409, "the new screen's address does not belong to its MAC: not flashing there")
     prof = gen.profiles().get(d.get("hw"))
@@ -717,7 +717,7 @@ core.ON_MQTT_CONNECT.append(lambda _cli: _words_sent.update(txt=None))       # a
 def _health():
     rows = [core.health_row("panels-discover", "ok", "Panel discovery") if _arp() else
             core.health_row("panels-discover", "bad", "Panel discovery", "new tablets and screens are not found by themselves",
-                            "Restart the house; if it stays, the panel finder needs the computer's own network", link="panels", cmd="make update; docker compose logs panels-discover")]
+                            "Restart the house; if it stays, the panel finder needs the computer's own network", link="panels", cmd="make update; docker compose logs discover")]
     db = P._db()                       # reads paired.json again: a fixed file clears its mark first
     for path, why in list(P._BROKEN.items()):
         rows.append(core.health_row("panels-file:" + path.rsplit("/", 1)[-1], "bad", "Panels",

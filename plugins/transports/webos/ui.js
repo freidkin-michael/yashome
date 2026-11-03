@@ -7,8 +7,7 @@
 
   function card(t, box, reload){                                     // one LG TV on the TVs page
     box.innerHTML = `<div class="row" data-lg-tv="${esc(t.id)}" style="flex-wrap:wrap"><span class="rlabel bindcaption">${
-        esc(i18n(t.paired ? 'paired' : 'not paired: press Pairing with the TV on'))}<br>${
-        esc(i18n('Inputs'))}: ${esc(Object.keys(t.inputs).join(', ') || '\u2014')}<br>${esc(i18n('Apps'))}: ${esc(Object.keys(t.apps).join(', ') || '\u2014')}</span>
+        esc(i18n(t.paired ? 'paired' : 'not paired: press Pairing with the TV on'))}</span>
       <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button class="dlg-btn" data-lg="pair">${esc(i18n('Pairing'))}</button>
         <button class="dlg-btn" data-lg="edit">${esc(i18n('Edit'))}</button>

@@ -2,7 +2,7 @@
 
 A layout is configuration (plugin-data/panels/layouts.json); an ESP panel gets it retained on
 panel/<name>/layout. An Android tablet runs the kiosk launcher: it finds the server through the
-discover companion, shows a code, a human binds it on the dashboard, and the launcher collects
+discovery module (discover.py), shows a code, a human binds it on the dashboard, and the launcher collects
 a key of its own (`ypk_...`, only its sha256 is kept). The key opens only what a panel needs.
 """
 import asyncio
@@ -751,7 +751,7 @@ class PairingBody(core.Body):
 
 @core.app.post("/api/panels/pairing")
 def pairing(body: PairingBody):
-    """The discover companion invites panels while this window is open; the word ties answers to it."""
+    """The discovery module (discover.py) invites panels while this window is open; the word ties answers to it."""
     until = 0 if body.off else time.time() + max(1, min(30, body.minutes)) * 60
     _pair_save(PAIR_FLAG, {"until": until, "magic": "" if body.off else secrets.token_hex(8)}, 0o644)
     return {"ok": True, "seconds": max(0, int(until - time.time()))}

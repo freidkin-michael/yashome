@@ -41,10 +41,10 @@ test:           ## the core's unit tests inside the home image + a smoke test (p
 	sh tools/smoke.sh
 
 lint:           ## ruff, py_compile, JS syntax, JSON, sh -n (what CI runs)
-	$(RUFF) check app.py core helper tools/*.py tools/yashctl plugins tests
+	$(RUFF) check app.py core helper discover tools/*.py tools/yashctl plugins tests
 	python3 tools/core_source.py | $(RUFF) check --stdin-filename core_as_one.py -
 	python3 -c 'import sys; compile(open("tools/yashctl").read(), "tools/yashctl", "exec")'
-	python3 -m py_compile app.py core/*.py helper/helper.py tools/*.py
+	python3 -m py_compile app.py core/*.py helper/helper.py discover/runner.py tools/*.py
 	python3 tools/check_plugins.py
 	python3 tools/check_js.py index.html sw.js i18n.js
 	for f in $$(git ls-files '*.json' 2>/dev/null || ls *.json examples/*.json); do python3 -m json.tool "$$f" >/dev/null || exit 1; done

@@ -1,8 +1,8 @@
 #!/bin/sh
 # The house's big model on this host (plug-in computers, role LLM): the tunnel to the computer in use and its health, as
 # user units of the house's owner. Run it as that user (not root) from the checkout: sh plugins/tools/computers/host/install.sh
-# It reads HOUSE_DIR and YASHOME_DIR from .env. The voice service reaches 127.0.0.1:11435 / :11436 through its relays (the
-# house's voice/compose.yml). Again after an update of these files: it rewrites them.
+# It reads HOUSE_DIR, YASHOME_DIR and LLM_LISTEN from .env: the tunnel and the health also listen on LLM_LISTEN (e.g. the
+# gateway of the voice service's Docker bridge, so it needs no relay). Again after an update of these files: it rewrites them.
 # With YASHGEN_SRC in .env (the yashGen builder's folder on this host) also yashGen where the house uses it (yashgen-tunnel.sh).
 set -eu
 cd "$(dirname "$0")/../../../.."
@@ -20,6 +20,7 @@ cat > "$CONF/llm.env" <<EOF
 HOUSE_DIR=$HOUSE_DIR
 YASHOME_SSH_KEY=$CONF/ssh/id
 YASHOME_HOSTS_KNOWN=$YDIR/.helper/hosts_known_hosts
+LLM_LISTEN=$(get LLM_LISTEN)
 EOF
 cat > "$UNITS/yashome-llm-tunnel.service" <<EOF
 [Unit]

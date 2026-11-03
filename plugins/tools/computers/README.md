@@ -18,14 +18,14 @@ an input renamed on the TV ("PC") is picked by hand.
 
 Every computer that got a server from its card also gets the hello responder (`helper/roles/hello-install.sh`, run by
 the helper after each install or remove; not in WSL: its NAT hides it): the system unit `yashome-hello`, UDP 7708,
-private askers only. The companion `computers-discover` (`setup/compose.yml`, host network) broadcasts `? yashome 1`
+private askers only. This plug-in's discovery module `discover.py` (run by the core's `discover` container, host network) broadcasts `? yashome 1`
 there every 30 s; each computer answers `{"yashome": 1, "name", "servers": [...], "ports": {"touchmouse": 7709}}`,
 and who answered is `plugin-state/computers/discovered.json` (`discovered()`, dropped 5 min after the last answer).
 The plug-ins of those servers take it from there: touchmouse lists every receiver found so, without a hand entry.
 Keep 7708/udp closed to everything but the house's LAN: where ufw is active the installer opens it to the computer's own
-LAN only. The companion asks from UDP 7707 and the answers come back there: on the house's host with ufw,
+LAN only. The module asks from UDP 7707 and the answers come back there: on the house's host with ufw,
 `sudo ufw allow from <LAN>/24 to any port 7707 proto udp` (a reply to a broadcast matches no connection the firewall knows).
-The ports are fixed in practice; tests move them with `YASHOME_HELLO_PORT` (7708, both ends) and `YASHOME_DISCOVER_PORT` (7707, the companion).
+The ports are fixed in practice; tests move them with `YASHOME_HELLO_PORT` (7708, both ends) and `YASHOME_DISCOVER_PORT` (7707, the module).
 
 ## Servers (roles)
 
@@ -69,9 +69,10 @@ points the tunnel there; the card shows whether it is up. The helper keeps its t
   `-L 127.0.0.1:11435:127.0.0.1:11434`, running `serve` there for a WSL one), `yashome-llm-health` (`llm-health.py`,
   `127.0.0.1:11436/health`: available / busy / off; an NVIDIA card's owner gets it back at once) and
   `yashome-llm-follow.path` (llm.json changed: the tunnel restarts). Their environment (`~/.config/yashome/llm.env`):
-  `HOUSE_DIR`, `YASHOME_SSH_KEY` (the house's key), `YASHOME_HOSTS_KNOWN` (the helper's known hosts); `LLM_JOBS_DIR`: a
-  file `job.<name>` there = a training job of ours owns the card (busy). Ollama is never opened to the network. The voice
-  service reaches :11435 and :11436 through its relays.
+  `HOUSE_DIR`, `YASHOME_SSH_KEY` (the house's key), `YASHOME_HOSTS_KNOWN` (the helper's known hosts), `LLM_LISTEN` (from
+  `.env`: more IPv4 addresses for :11435 and :11436, e.g. the gateway of the voice service's Docker bridge, so a container
+  there reaches both without a relay; a host firewall must let that bridge in); `LLM_JOBS_DIR`: a file `job.<name>` there =
+  a training job of ours owns the card (busy). Ollama is never opened to the network.
 
 - **yashGen firmware builder** (Linux only, not a WSL): Install (`helper/roles/yashgen-install.sh`) prepares
   `/opt/yashome-yashgen` (docker, rsync, a compose.yml on the official ESPHome image of the builder's version - start.sh
@@ -104,10 +105,9 @@ The arguments reach a script inside it (`set -- ...` at its top), never on a com
 |---|---|
 | `__init__.py` | the list (`plugin-data/computers/computers.json`), `/api/computers` (list, add, edit, remove, check, scan, roles, forget-key), a check of every computer every 5 minutes |
 | `ui.js` | the Settings page |
-| `setup/env.example` | `COMPUTERS_SSH_USER`; `YASHGEN_*` for the host piece (`YASHGEN_RESPEAKER`: a folder of node YAMLs outside the house that also goes to the builder) |
+| `setup/env.example` | `COMPUTERS_SSH_USER`; `LLM_LISTEN` and `YASHGEN_*` for the host piece (`YASHGEN_RESPEAKER`: a folder of node YAMLs outside the house that also goes to the builder) |
 | `host/` | the host piece: `install.sh`, the big model's tunnel and health, yashGen's tunnel and stop, `llm-target.py` (reads `llm.json` / `yashgen.json` for the tunnels) |
-| `discover/discoverd.py`, `setup/compose.yml` | the `computers-discover` companion (the broadcast above) |
-| `setup/secrets.sh` | makes the companion's `plugin-state/computers/` folder as the house's user |
+| `discover.py` | the discovery module (the broadcast above), run by the core's `discover` container |
 | `i18n.json` | the page's words |
 
 A computer found at another address with the same host name moves there when its old address does not answer.

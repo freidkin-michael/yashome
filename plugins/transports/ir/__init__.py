@@ -1103,28 +1103,23 @@ def _sync_locked():
         _sync()
 
 
-def _own_name(dev_id: str, name: str) -> bool:
-    """NAME_OWNERS: an appliance's or a toggle's name lives in its record here, nowhere else."""
+def _named(_data, dev_id: str):
+    """The record that holds a device's name: an appliance's, a toggle's, a blaster's (its own device)."""
     rec = _appliance(dev_id) or next((t for t in TOGGLES if t["id"] == dev_id), None)
     if rec is None and _own_blaster(dev_id):
-        rec = _blaster(dev_id[len(BLASTER_PREFIX):])  # a blaster's device: the name is the blaster's
-    if rec is None:
-        return False
-    with _lock:
-        rec["name"] = name
-        _save()
-        _sync()
-    return True
+        rec = _blaster(dev_id[len(BLASTER_PREFIX):])
+    return rec
+
+
+def _save_named(_data):
+    _save()
+    _sync()
 
 
 def _one_name_each():
-    """At start: a rename saved in the core's overrides moves into the record, and a blaster a device fronts
-    keeps no name of its own (the device's is the one), so no two stored names can disagree."""
+    """At start: a blaster a device fronts keeps no name of its own (the device's is the one), so no two stored
+    names can disagree (the records' own names: core.own_names)."""
     moved = False
-    for rec in APPLIANCES + TOGGLES:
-        name = core.take_name_override(rec["id"])
-        if name:
-            rec["name"], moved = name, True
     for b in BLASTERS:
         did = _blaster_device(b.get("node"))
         if did and "name" in b:
@@ -1154,7 +1149,6 @@ core.ON_RENAME.append(_on_rename)
 core.MERGE_PLAN.append(_merge_plan)
 core.DEVICE_MERGED.append(_merged)
 core.HEALTH_CHECKS.append(_health)
-core.NAME_OWNERS.append(_own_name)
 core.ON_EVENT.append(_on_event)
 core.DEVICE_REMOVED.append(_on_removed)
 core.WIRING_MIGRATORS.append({"name": "ir", "files": [core.plugin_data("ir") / "settings.json"], "entries": _wiring_old})   # its sections' file
@@ -1172,5 +1166,6 @@ for _n in BLASTERS:
         _listen(_n["node"])
 core.STARTUP_TASKS.append(_status_loop)
 core.STARTUP_TASKS.append(_probe_loop)
+_own_name = core.own_names(lambda: None, _named, _save_named, _lock)   # one name: the record's
 _one_name_each()
 _sync()

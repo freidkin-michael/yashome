@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Health of the house's big model (plug-in computers, role LLM): the Ollama of the computer in use, reached through
 llm-tunnel.sh at 127.0.0.1:11435. GET 127.0.0.1:11436/health -> {"state": "available" | "busy" | "off", ...}; the voice
-service sends to the big model only on "available", else to this host's own one.
+service sends to the big model only on "available", else to this host's own one. Also on each address of LLM_LISTEN.
 
 off = no computer in use, or no tunnel (it is off, asleep, ssh down). busy = its owner uses the GPU (VRAM beyond ours
 > 2 GB, or the GPU loaded while no model of ours is): our model is unloaded so the card is free again; also busy when the
@@ -19,6 +19,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 API = "http://127.0.0.1:11435"
+PORT = 11436
 TARGET = os.path.join(os.environ.get("HOUSE_DIR", ""), "plugin-data", "computers", "llm.json")
 KEY = os.environ.get("YASHOME_SSH_KEY") or os.path.expanduser("~/.config/yashome/ssh/id")
 KNOWN = os.environ.get("YASHOME_HOSTS_KNOWN", "")
@@ -143,5 +144,29 @@ class H(BaseHTTPRequestHandler):
         pass
 
 
+def listen(raw: str) -> list:
+    """127.0.0.1 and the addresses of LLM_LISTEN (IPv4, comma or space separated, never 0.0.0.0); else ValueError."""
+    extra = [a for a in re.split(r"[,\s]+", raw or "") if a]
+    bad = [a for a in extra if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", a) or a == "0.0.0.0"]
+    if bad:
+        raise ValueError(f"LLM_LISTEN: {bad[0]} is not one IPv4 address of this host")
+    return list(dict.fromkeys(["127.0.0.1"] + extra))
+
+
+def serve(addr: str, retry_s: float = 10):
+    """addr:PORT; an address not there yet (a Docker bridge made after this started) is tried again."""
+    while True:
+        try:
+            srv = ThreadingHTTPServer((addr, PORT), H)
+        except OSError as e:
+            print(f"{addr}:{PORT}: {e}; again in {retry_s:g} s", flush=True)
+            time.sleep(retry_s)
+            continue
+        srv.serve_forever()
+
+
 if __name__ == "__main__":
-    ThreadingHTTPServer(("127.0.0.1", 11436), H).serve_forever()
+    addrs = listen(os.environ.get("LLM_LISTEN", ""))
+    for a in addrs[1:]:
+        threading.Thread(target=serve, args=(a,), daemon=True).start()
+    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()

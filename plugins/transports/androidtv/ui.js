@@ -9,8 +9,7 @@
 
   function card(t, box, reload){                                     // one Android TV on the TVs page
     const state = !t.paired ? 'not paired: press Pairing with the TV on' : t.connected ? 'paired' : 'paired, not connected (off?)';
-    box.innerHTML = `<div class="row" style="flex-wrap:wrap"><span class="rlabel bindcaption">${esc(i18n(state))}<br>${
-        esc(i18n('Inputs'))}: ${esc(Object.keys(t.inputs || {}).join(', ') || '\u2014')}<br>${esc(i18n('Apps'))}: ${esc(Object.keys(t.apps || {}).join(', ') || '\u2014')}${
+    box.innerHTML = `<div class="row" style="flex-wrap:wrap"><span class="rlabel bindcaption">${esc(i18n(state))}${
         missing ? `<br>${esc(i18n('Needs in EXTRA_PIP: {0}', missing))}` : ''}</span>
       <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button class="dlg-btn" data-at="pair">${esc(i18n('Pairing'))}</button>

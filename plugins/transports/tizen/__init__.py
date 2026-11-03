@@ -495,6 +495,7 @@ def _health() -> list:
 
 
 core.SETTINGS_SECTIONS["tizen_tvs"] = lambda: TVS
+_own_name = core.own_names(lambda: TVS, lambda _t, did: _tv(did), lambda _t: core.save_settings(), _lock)   # one name: the TV's entry
 core.TRANSPORTS[TRANSPORT] = lambda cfg, code, val, kind: _apply(cfg, code, val)
 core.ASYNC_CONTROL[TRANSPORT] = _control
 core.DEVICE_FIELDS.append("wakes")
