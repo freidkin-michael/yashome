@@ -6,13 +6,18 @@ The remote's keys are the control kind "tv_key" (one stateless control per key, 
 a TV plug-in (webos, tizen) lists the keys its TV takes over the network with key_controls() and gets a press as
 code "key_<name>" through its own transport. The window's remote sends a key over the network when the TV has it,
 else through the TV's IR remote; the TV itself is the webos or the tizen plug-in."""
+import asyncio
+import os
 import re
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from pydantic import Field
 
 import app as core
 
-PLUGIN = {"name": "TV", "version": "1.1.0", "icon": "tv"}
+from . import _probe
+
+PLUGIN = {"name": "TV", "version": "1.2.0", "icon": "tv"}
 
 # the remote's keys, in the order of a remote; the names are the remote layout's (panels widgets.js irKey). No input key:
 # the inputs are the TV's input list, the same on every TV
@@ -79,3 +84,52 @@ def remote(d: dict, devices: dict) -> list:
         out.append({"slot": k if k in KEYS or k in _MEDIA_SLOT.values() else "", "dev": dev, "code": c["code"],
                     "label": c.get("label") or c["code"]})
     return out
+
+
+# ---- Add a TV: the TVs a sweep of the house's /24 finds, on request, and what TV sits at one address ----
+KNOWN_HOSTS: list = []             # a TV plug-in appends a callable -> {address: name} of the TVs it has ("already added")
+
+
+def _known() -> dict:
+    out = {}
+    for f in KNOWN_HOSTS:
+        try:
+            out.update({h: str(n or h) for h, n in f().items() if h})
+        except Exception as e:                                      # a broken plug-in must not hide the list
+            core.log.warning(f"[tv] known hosts: {e}")
+    return out
+
+
+def _mark(r: dict, known: dict) -> dict:
+    r["known"] = r["host"] in known
+    r["house_name"] = known.get(r["host"], "")                      # the name on its card (an LG tells none before pairing)
+    r["supported"] = bool(r["platform"]) and r["platform"] in core.TRANSPORTS
+    return r
+
+
+@core.app.post("/api/tv/search")
+async def tv_search(request: Request):
+    """The TVs on the house's LAN: a sweep of the /24 of BIND_ADDRESS, of the address the page came from and of the
+    devices' addresses (a few seconds; nothing runs between two presses)."""
+    core.house_token_only(request)
+    seeds = [os.environ.get("BIND_ADDRESS"), request.url.hostname] + [d.get("host") for d in list(core.DEVICES.values())]
+    networks = _probe.nets(seeds)
+    if not networks:
+        raise HTTPException(409, "the house's LAN is not known: set BIND_ADDRESS in .env, or type the TV's address")
+    known = _known()
+    rows = [_mark(r, known) for r in await asyncio.to_thread(_probe.sweep, networks)]
+    return {"tvs": sorted(rows, key=lambda r: r["known"]), "networks": [str(n) for n in networks]}
+
+
+class ProbeBody(core.Body):
+    host: str = Field(min_length=1, max_length=100)
+
+
+@core.app.post("/api/tv/probe")
+async def tv_probe(body: ProbeBody, request: Request):
+    """What TV sits at this address: the wizard's "not in the list" (platform "" = no answer: off, or not a TV)."""
+    core.house_token_only(request)
+    host = body.host.strip()
+    if not _probe.HOST_RE.fullmatch(host):
+        raise HTTPException(400, "address: an IP address or a host name")
+    return _mark(await asyncio.to_thread(_probe.probe, host), _known())

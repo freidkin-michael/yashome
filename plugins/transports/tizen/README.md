@@ -1,6 +1,6 @@
 # tizen - Samsung Tizen TVs (2016 and later)
 
-The TVs are the settings section `tizen_tvs` (`plugin-data/tizen/settings.json`), edited in Settings -> Devices -> TVs (the Samsung cards and **Add a Samsung TV**):
+The TVs are the settings section `tizen_tvs` (`plugin-data/tizen/settings.json`), edited in Settings -> Devices -> TVs (the Samsung cards; a new one through **Add a TV**):
 `{id, name, host, mac, inputs {name: KEY_...}, apps {name: app id}, ir_on {device, code}}` (`setup/settings.example.json`).
 Each one becomes a device of category `tv` (the TV plug-in's card): power, volume, mute, media, and input / app when set.
 
@@ -13,7 +13,7 @@ Each one becomes a device of category `tv` (the TV plug-in's card): power, volum
 | Volume, mute | UPnP `SetVolume` / `SetMute` (absolute) |
 | Media, input | keys (`KEY_PLAY` ...; an input is the key in its settings, e.g. `KEY_HDMI1`) |
 | App | `POST :8001/api/v2/applications/<id>` |
-| Discovery | `GET /api/tizen/discover`: SSDP for `urn:samsung.com:device:RemoteControlReceiver:1` (a bridged container sees no multicast: enter the address by hand) |
+| Adding | the tv plug-in's **Add a TV** finds the TV (the LAN or its address) and opens this plug-in's form; the plug-in tells it which addresses it already has |
 
 `GET /api/tizen` lists the TVs (with `paired`), the unassigned pairings and whether `tokens.json` is readable;
 `PUT` / `DELETE /api/tizen/tvs/{id}` change them. Health warns about a TV that is not paired.
@@ -21,10 +21,10 @@ Each one becomes a device of category `tv` (the TV plug-in's card): power, volum
 | file | what |
 |---|---|
 | `__init__.py` | the devices, the poller, the routes above, the health rows |
-| `_tv.py` | the TV's channels: remote (wss :8002), REST (:8001), UPnP (:9197), SSDP discovery |
-| `ui.js`, `i18n.json` | the Samsung cards on Settings -> Devices -> TVs: add, edit, pair, remove, the TVs found on the LAN |
+| `_tv.py` | the TV's channels: remote (wss :8002), REST (:8001), UPnP (:9197) |
+| `ui.js`, `i18n.json` | the Samsung cards on Settings -> Devices -> TVs: edit, pair, remove; the form of a new one for Add a TV |
 | `setup/settings.example.json` | the shape of `tizen_tvs` |
 
 Setup: turn `tizen` on, give the TV a fixed address (reserve it in the router), turn on "Power On with
-Mobile", then Settings -> Devices -> TVs -> **Add a Samsung TV** (or **Find on the network**) and **Pairing**
+Mobile", then Settings -> Devices -> TVs -> **Add a TV** and **Pairing**
 (press Allow on the TV within 30 s).

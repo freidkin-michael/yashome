@@ -481,12 +481,7 @@ def tizen_adopt(dev_id: str, body: AdoptBody):
     return {"ok": True, "paired": True}
 
 
-@core.app.get("/api/tizen/discover")
-async def tizen_discover():
-    """The Samsung TVs that answer SSDP on the LAN, those not set up yet first (from a container: only with host networking)."""
-    found = await asyncio.to_thread(tv.discover)
-    known = {t["host"] for t in TVS}
-    return {"found": [dict(f, known=f["host"] in known) for f in found]}
+tv_plugin.KNOWN_HOSTS.append(lambda: {t.get("host"): t.get("name") or t["id"] for t in TVS})   # the tv plug-in's Add a TV: "already added"
 
 
 def _health() -> list:

@@ -1,5 +1,5 @@
 // LG TV (webOS): its card on Settings -> TVs - address, MAC for power-on, pairing, its inputs and apps; Edit writes
-// them back (the card's input and app lists follow), Pair asks the TV once (Allow on its screen).
+// them back (the card's input and app lists follow), Pair asks the TV once (Allow on its screen); add() is a new one's name.
 (() => {
   const esc = Home.escapeHtml;
 
@@ -60,8 +60,22 @@
     };
   }
 
+  // the tv plug-in's Add a TV found an LG TV: its name, then the house adds it; Pairing and Edit follow on its card
+  function add(found, into, reload, say){
+    into.innerHTML = `<div class="row"><span class="rlabel">${esc(i18n('Name'))}</span><input class="askin" data-lgn="name" placeholder="${esc(i18n('Living room TV'))}" value="${esc(found.name || '')}"></div>
+      <div class="row" style="justify-content:flex-end"><button class="dlg-btn primary" data-lgn="save">${esc(i18n('Save'))}</button></div>`;
+    into.querySelector('[data-lgn="save"]').onclick = async () => {
+      const name = into.querySelector('[data-lgn="name"]').value.trim();
+      if(!name){ say(i18n('Give the TV a name')); return; }
+      try {
+        await Home.api('/api/webos/tvs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, host: found.host, mac: found.mac || ''})});
+        await Home.reloadDevices(); reload();
+      } catch(e){ say(e.message || String(e)); }
+    };
+  }
+
   HomePlugins.register({
-    deviceSettings: [{category: 'tv', transport: 'webos', label: 'LG', list, card}],
+    deviceSettings: [{category: 'tv', transport: 'webos', label: 'LG', list, card, add}],
     help: [
       {id: 'webos.pair', screen: 'settings:tv', sel: '[data-lg="pair"]', title: 'Pair',
        text: 'The TV shows a question: accept it within 40 s. Once is enough; the key is kept in the house.'},

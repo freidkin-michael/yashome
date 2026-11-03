@@ -387,3 +387,53 @@ def test_removing_an_lg_tv_drops_its_entry_and_key_and_a_wrong_id_is_404(monkeyp
     assert c.delete("/api/webos/tvs/nobody", headers=house).status_code == 404
     assert c.delete("/api/webos/tvs/lg-gone", headers=house).json() == {"ok": True}
     assert json.loads(path.read_text()) == [{"id": "other", "transport": "zigbee"}] and json.loads((tmp_path / "keys.json").read_text()) == {"tv-two": "k2"}
+
+
+def test_add_a_tv_writes_a_new_lg_entry_registers_it_and_refuses_a_second_one_at_the_same_address(monkeypatch, tmp_path):
+    import json
+    import os
+    from fastapi.testclient import TestClient
+    house = {"Authorization": "Bearer " + os.environ["DASHBOARD_TOKEN"]}
+    path = tmp_path / "devices.json"
+    path.write_text("[]")
+    monkeypatch.setattr(me, "DEVICES_PATH", path)
+    c = TestClient(core.app)
+    body = {"name": "Salon TV", "host": "192.0.2.77", "mac": "00:11:22:33:44:55"}
+    assert c.post("/api/webos/tvs", json=body).status_code in (401, 403)
+    assert c.post("/api/webos/tvs", headers=house, json={**body, "mac": "x"}).status_code == 400
+    assert c.post("/api/webos/tvs", headers=house, json={**body, "host": "a b"}).status_code == 400
+    tv = c.post("/api/webos/tvs", headers=house, json=body).json()["tv"]
+    try:
+        assert tv["id"] == "lg_salon_tv_77" and tv["mac"] == "00:11:22:33:44:55" and not tv["paired"]
+        assert core.DEVICES[tv["id"]]["transport"] == "webos" and tv["inputs"] == me.NEW_INPUTS
+        assert [e["id"] for e in json.loads(path.read_text())] == [tv["id"]]
+        assert c.post("/api/webos/tvs", headers=house, json=body).status_code == 409
+        assert "192.0.2.77" in me.tv_plugin._known()
+    finally:
+        c.delete(f"/api/webos/tvs/{tv['id']}", headers=house)             # through the plug-in: it owns the device
+    assert tv["id"] not in core.DEVICES
+
+
+def test_a_pairing_of_a_tv_without_a_mac_learns_the_one_it_tells(monkeypatch, tmp_path):
+    import json
+    path = tmp_path / "devices.json"
+    tv = core.DEVICES["tv_test"]
+    path.write_text(json.dumps([{"id": "tv_test", "name": tv["name"], "transport": "webos", "category": "tv", "host": "192.0.2.10", "mac": "",
+                                 "controls": [{k: v for k, v in x.items() if not k.startswith("_")} for x in tv["controls"] if x["kind"] != "tv_key"]}]))
+    monkeypatch.setattr(me, "DEVICES_PATH", path)
+    monkeypatch.setattr(me, "WEBOS_KEYS_PATH", tmp_path / "keys.json")
+    monkeypatch.setattr(me, "_webos_keys", {})
+    monkeypatch.setitem(core.DEVICES, "tv_test", dict(tv, mac=""))
+    monkeypatch.setattr(me, "_keys_broken", False)
+    updated = []
+    monkeypatch.setattr(me.core, "update_device", lambda d: updated.append(d["mac"]))
+
+    async def pair(ip, prompt_timeout=40):
+        return "new-key"
+
+    async def mac(ip, key):
+        return "00:11:22:33:44:55"
+    monkeypatch.setattr(me.webos, "pair", pair)
+    monkeypatch.setattr(me.webos, "mac", mac)
+    assert asyncio.run(me.webos_pair("tv_test"))["paired"]
+    assert json.loads(path.read_text())[0]["mac"] == "00:11:22:33:44:55" and updated == ["00:11:22:33:44:55"]

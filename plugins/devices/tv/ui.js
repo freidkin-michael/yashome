@@ -127,7 +127,66 @@
     if(!box.querySelector('.tvset')) box.insertAdjacentHTML('afterbegin', `<div class="bindcaption">${E(i18n('No TV yet.'))}</div>`);
     const foot = Home.el('section', '');
     box.append(foot);
+    addWizard(foot, provs, reload);
     for(const p of provs) if(typeof p.actions === 'function') HomePlugins.safe(p.actions, foot, reload);
+  }
+
+  // Add a TV: the TVs a sweep of the LAN finds (on each press only), or one address; the house names the platform itself. A platform with a plug-in
+  // opens that plug-in's form (deviceSettings add); one without is named and sent to the IR page; no answer = off.
+  const PLATFORM = {tizen: 'Samsung (Tizen)', webos: 'LG (webOS)', androidtv: 'Android TV / Google TV', roku: 'Roku TV',
+                    vidaa: 'Hisense (VIDAA)', philips: 'Philips'};
+  function addWizard(foot, provs, reload){
+    const E = Home.escapeHtml, J = {'Content-Type': 'application/json'};
+    const adders = Object.fromEntries(provs.filter(p => typeof p.add === 'function').map(p => [p.transport, p]));
+    const w = Home.el('div', '');
+    w.innerHTML = `<div class="row" style="justify-content:flex-end"><button class="dlg-btn primary" data-tvw="open">${E(i18n('Add a TV'))}</button></div>
+      <div data-tvw="body" hidden>
+        <div class="row"><span class="rlabel bindcaption" data-tvw="msg"></span><button class="dlg-btn" data-tvw="again">${E(i18n('Search again'))}</button></div>
+        <div data-tvw="list"></div>
+        <div class="row"><span class="rlabel">${E(i18n('Not in the list? Its address'))}</span>
+          <span style="display:flex;gap:6px"><input class="askin" data-tvw="host" placeholder="${E(i18n('IP address'))}" style="width:150px">
+          <button class="dlg-btn" data-tvw="check">${E(i18n('Check'))}</button></span></div>
+        <div data-tvw="one"></div><div class="bindcaption" data-tvw="say"></div><div data-tvw="form"></div></div>`;
+    foot.append(w);
+    const q = k => w.querySelector(`[data-tvw="${k}"]`), say = m => { q('say').textContent = m; };
+    const row = r => {
+      const what = r.platform === 'androidtv' && r.maker && r.maker !== 'Android TV' ? `${r.maker} \u00b7 ${PLATFORM.androidtv}` : (PLATFORM[r.platform] || r.maker);
+      let act;
+      if(r.known) act = `<span class="bindcaption">${E(i18n('Already added'))}</span>`;
+      else if(adders[r.platform] && r.supported) act = `<button class="dlg-btn primary" data-tvw-add="${E(r.host)}">${E(i18n('Add'))}</button>`;
+      else if(r.platform) act = `<span class="bindcaption">${E(i18n('Not over the network yet: add it by IR'))}</span><button class="dlg-btn" data-tvw-ir="1">${E(i18n('IR'))}</button>`;
+      else act = `<span class="bindcaption">${E(i18n('No answer: switch the TV on and try again'))}</span>`;
+      return `<div class="row"><span class="rlabel">${E(r.house_name || r.name || r.model || r.host)}<br><span class="bindcaption">${E([what, r.host].filter(Boolean).join(' \u00b7 '))}</span></span>
+        <span style="display:flex;gap:6px;align-items:center">${act}</span></div>`;
+    };
+    const wire = (box, rows) => {
+      box.querySelectorAll('[data-tvw-add]').forEach(b => { b.onclick = () => {
+        const r = rows.find(x => x.host === b.dataset.tvwAdd); say('');
+        HomePlugins.safe(adders[r.platform].add, r, q('form'), reload, say);
+      }; });
+      box.querySelectorAll('[data-tvw-ir]').forEach(b => { b.onclick = () => openSettings('ir'); });
+    };
+    const search = async () => {
+      q('msg').textContent = i18n('Searching the network (a few seconds)...'); q('list').innerHTML = ''; q('again').disabled = true;
+      try {
+        const r = await Home.api('/api/tv/search', {method: 'POST'});
+        q('msg').textContent = r.tvs.length ? '' : i18n('No TV answered on the network: a TV that is off does not answer');
+        q('list').innerHTML = r.tvs.map(row).join(''); wire(q('list'), r.tvs);
+      } catch(e){ q('msg').textContent = e.message || String(e); }
+      q('again').disabled = false;
+    };
+    q('open').onclick = () => { const b = q('body'); b.hidden = !b.hidden; if(!b.hidden) search(); };
+    q('again').onclick = search;
+    q('check').onclick = async () => {
+      const host = q('host').value.trim(); say(''); q('one').innerHTML = '';
+      if(!host){ say(i18n('Type the TV\'s address')); return; }
+      say(i18n('Checking...'));
+      try {
+        const r = await Home.api('/api/tv/probe', {method: 'POST', headers: J, body: JSON.stringify({host})});
+        say(r.platform || r.known ? '' : i18n('{0} did not answer: switch the TV on and press Check again', host));
+        if(r.platform || r.known){ q('one').innerHTML = row(r); wire(q('one'), [r]); }       // a TV of the house: "Already added", even when off
+      } catch(e){ say(e.message || String(e)); }
+    };
   }
 
   // The TV's one remote, the same for every TV: each key over the network when the TV has it (its tv_key controls, the
@@ -192,6 +251,8 @@
     settings: [{subject: 'tv', title: 'TVs', render: tvPage}],
     tabs: [{id: 'tech', label: 'Appliances', cats: ['tv', 'media'], after: 'button'}],
     cardFaces: [{match: d => d.category === 'tv', render, update}],
+    help: [{id: 'tv.add', screen: 'settings:tv', sel: '[data-tvw="open"]', title: 'Add a TV',
+            text: 'Finds the TVs on the network and tells their make itself; one that is not listed: type its address. A TV that is off does not answer: switch it on first.'}],
     holds: [(d, code, value) => d && (d.transport === 'webos' || d.wakes) && code === 'power' && value === true ? 12000 : 0],
   });
 })();

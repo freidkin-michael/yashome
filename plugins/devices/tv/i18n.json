@@ -36,6 +36,21 @@
     "pause": "Пауза",
     "stop": "Стоп",
     "rewind": "Перемотка назад",
-    "fast_forward": "Перемотка вперёд"
+    "fast_forward": "Перемотка вперёд",
+    "Add a TV": "Добавить телевизор",
+    "IP address": "IP-адрес",
+    "Search again": "Искать снова",
+    "Not in the list? Its address": "Нет в списке? Его адрес",
+    "Check": "Проверить",
+    "Already added": "Уже добавлен",
+    "Add": "Добавить",
+    "Not over the network yet: add it by IR": "По сети пока нельзя: добавьте через ИК",
+    "No answer: switch the TV on and try again": "Не отвечает: включите телевизор и повторите",
+    "Searching the network (a few seconds)...": "Ищу в сети (несколько секунд)...",
+    "No TV answered on the network: a TV that is off does not answer": "В сети не ответил ни один телевизор: выключенный не отвечает",
+    "Type the TV's address": "Введите адрес телевизора",
+    "Checking...": "Проверяю...",
+    "{0} did not answer: switch the TV on and press Check again": "{0} не ответил: включите телевизор и нажмите «Проверить» ещё раз",
+    "Finds the TVs on the network and tells their make itself; one that is not listed: type its address. A TV that is off does not answer: switch it on first.": "Находит телевизоры в сети и сам определяет марку; если нужного нет в списке, введите его адрес. Выключенный телевизор не отвечает: сначала включите его."
   }
 }

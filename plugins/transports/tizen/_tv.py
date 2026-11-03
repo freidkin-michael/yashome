@@ -1,15 +1,13 @@
 """Samsung Tizen TV (2016+) over the LAN: the remote-control channel (wss :8002, a token the TV hands out once its owner
-presses Allow), the REST info and app launch (:8001), UPnP RenderingControl for an absolute volume and mute (:9197),
-SSDP discovery. Standard library + websockets. The token is never logged: no URL with it reaches a log or an error."""
+presses Allow), the REST info and app launch (:8001), UPnP RenderingControl for an absolute volume and mute (:9197).
+Standard library + websockets. The token is never logged: no URL with it reaches a log or an error."""
 import asyncio
 import base64
 import json
 import logging
 import re
-import socket
 import ssl
 import urllib.request
-from xml.sax.saxutils import escape
 
 try:
     import websockets
@@ -176,30 +174,3 @@ def mute(host: str) -> bool:
 
 def set_mute(host: str, on: bool):
     _soap(host, "SetMute", f"<DesiredMute>{1 if on else 0}</DesiredMute>")
-
-
-def discover(timeout: float = 3.0) -> list:
-    """SSDP: the Samsung TVs that answer on the LAN -> [{host, name}] (the name from their REST info when it answers)."""
-    st = "urn:samsung.com:device:RemoteControlReceiver:1"
-    msg = ("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\n"
-           f"ST: {st}\r\n\r\n").encode()
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.settimeout(timeout)
-    hosts = []
-    try:
-        s.sendto(msg, ("239.255.255.250", 1900))
-        while True:
-            _, (ip, _) = s.recvfrom(4096)
-            if ip not in hosts:
-                hosts.append(ip)
-    except OSError:
-        pass
-    finally:
-        s.close()
-    out = []
-    for ip in hosts:
-        try:
-            out.append({"host": ip, "name": escape(str((info(ip).get("device") or {}).get("name") or ip))})
-        except (OSError, ValueError):
-            out.append({"host": ip, "name": ip})
-    return out

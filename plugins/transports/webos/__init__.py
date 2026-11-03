@@ -300,7 +300,28 @@ async def webos_pair(dev_id: str):
                 core.log.warning(f"[webos] pair key NOT persisted: {e}")
                 return {"ok": True, "paired": True, "persisted": False, "warning": f"key not saved to disk: {e}"}
         return {"ok": True, "paired": True, "persisted": True}
-    return await asyncio.to_thread(keep)            # an fsync under the lock: not on the event loop
+    out = await asyncio.to_thread(keep)             # an fsync under the lock: not on the event loop
+    if not cfg.get("mac"):
+        try:
+            got = await webos.mac(_webos_host(cfg), key)
+        except Exception as e:                      # the pairing stands; the MAC can be typed in Edit
+            core.log.warning(f"[webos] {dev_id}: no MAC from the TV: {e}")
+            got = ""
+        if got:
+            await asyncio.to_thread(_learn_mac, dev_id, got)
+    return out
+
+
+def _learn_mac(dev_id: str, mac: str):
+    """A TV added without a MAC: the one it told at its pairing goes into its entry (power-on needs it)."""
+    with _lock:
+        entries = _read_json(DEVICES_PATH, [])
+        d = next((e for e in entries if isinstance(e, dict) and e.get("id") == dev_id and e.get("transport") == "webos"), None) if isinstance(entries, list) else None
+        if d is None or d.get("mac"):
+            return
+        d["mac"] = mac
+        core.atomic_json_dump(DEVICES_PATH, entries, indent=1, ensure_ascii=False)
+        core.update_device(_with_keys(d))
 
 
 @core.app.get("/api/webos/tvs/{dev_id}/lists")
@@ -377,6 +398,53 @@ def webos_tv_put(dev_id: str, body: TvBody, request: Request):
     return {"tv": _row(core.DEVICES[dev_id])}
 
 
+class NewTvBody(core.Body):
+    name: str = Field(min_length=1, max_length=60)
+    host: str = Field(max_length=100)
+    mac: str = Field("", max_length=17)
+
+
+# a new TV's lists until its own come after the pairing (Edit reads them from the TV)
+NEW_INPUTS = {"HDMI 1": "HDMI_1", "HDMI 2": "HDMI_2", "HDMI 3": "HDMI_3"}
+NEW_APPS = {"YouTube": "youtube.leanback.v4", "Netflix": "netflix"}
+
+
+@core.app.post("/api/webos/tvs")
+def webos_tv_add(body: NewTvBody, request: Request):
+    """Add an LG TV (the tv plug-in's Add a TV): a devices.json entry with the usual controls, registered at once."""
+    core.house_token_only(request)
+    host, mac = body.host.strip(), body.mac.strip().lower()
+    if not _HOST_RE.fullmatch(host):
+        raise HTTPException(400, "address: an IP address or a host name")
+    if mac and not _MAC_RE.fullmatch(mac):
+        raise HTTPException(400, "MAC: aa:bb:cc:dd:ee:ff")
+    name = core.check_name(body.name)
+    with _lock:
+        entries = _read_json(DEVICES_PATH, [])
+        if not isinstance(entries, list):
+            raise HTTPException(409, "devices.json is not a list: fix it first")
+        if any(isinstance(e, dict) and e.get("transport") == "webos" and e.get("host") == host for e in entries):
+            raise HTTPException(409, f"{host}: this TV is already added")
+        base = "lg_" + (re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:30] or "tv") + "_" + host.split(".")[-1]
+        dev_id, n = base, 2
+        while dev_id in core.DEVICES or any(isinstance(e, dict) and e.get("id") == dev_id for e in entries):
+            dev_id, n = f"{base}_{n}", n + 1
+        d = {"id": dev_id, "name": name, "transport": "webos", "category": "tv", "model": "LG webOS", "host": host, "mac": mac,
+             "_webos_inputs": dict(NEW_INPUTS), "_webos_apps": dict(NEW_APPS),
+             "controls": [{"kind": "switch", "code": "power", "label": "Power"},
+                          {"kind": "bright", "code": "volume", "label": "Volume", "min": 0, "max": 100},
+                          {"kind": "switch", "code": "mute", "label": "Mute"},
+                          {"kind": "setting_enum", "code": "input", "label": "Input", "range": list(NEW_INPUTS)},
+                          {"kind": "setting_enum", "code": "app", "label": "App", "range": list(NEW_APPS)},
+                          {"kind": "setting_enum", "code": "media", "label": "Media", "range": ["play", "pause", "stop"]}]}
+        try:
+            core.register_device(_with_keys(d))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        core.atomic_json_dump(DEVICES_PATH, entries + [d], indent=1, ensure_ascii=False)
+    return {"tv": _row(core.DEVICES[dev_id])}
+
+
 @core.app.delete("/api/webos/tvs/{dev_id}")
 def webos_tv_delete(dev_id: str, request: Request):
     """Remove an LG TV: its devices.json entry and its pairing key go, and the device (a rule naming it is reported as gone)."""
@@ -398,3 +466,4 @@ def webos_tv_delete(dev_id: str, request: Request):
 core.TRANSPORTS["webos"] = lambda cfg, code, val, kind: _webos_apply(cfg, code, val)
 core.ASYNC_CONTROL["webos"] = _webos_control
 core.STARTUP_TASKS.append(_webos_poller)
+tv_plugin.KNOWN_HOSTS.append(lambda: {d.get("host"): d.get("name") or d["id"] for d in _tvs()})   # the tv plug-in's Add a TV: "already added"

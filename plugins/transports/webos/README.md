@@ -11,8 +11,8 @@ TV (and before the 409 of a TV that is off).
 
 | file | what |
 |---|---|
-| `__init__.py` | the transport, the poller, `POST /api/webos/<id>/pair`, `GET /api/webos/tvs`, `PUT` / `DELETE /api/webos/tvs/<id>` (the house token) |
-| `ui.js`, `i18n.json` | the LG card on Settings -> Devices -> TVs: address, MAC, pairing, inputs and apps; Pairing, Edit, Remove |
+| `__init__.py` | the transport, the poller, `POST /api/webos/<id>/pair`, `GET` / `POST /api/webos/tvs`, `PUT` / `DELETE /api/webos/tvs/<id>` (the house token) |
+| `ui.js`, `i18n.json` | the LG card on Settings -> Devices -> TVs: address, MAC, pairing, inputs and apps; Pairing, Edit, Remove; the form of a new one for Add a TV |
 | `_ssap.py` | the SSAP client and Wake-on-LAN; also a command line (see its docstring: pair, status, cmd, lists of inputs and apps, wol) |
 | `host/wol-relay.py` | the Wake-on-LAN relay on the host (`tools/host-sockets.sh` installs it) |
 | `setup/devices.example.json` | a TV: `id`, `name`, `host`, `mac`, `_webos_inputs` (label -> input id), `_webos_apps` (label -> app id), its controls |
@@ -31,8 +31,9 @@ TV (and before the 409 of a TV that is off).
 ## Setting up a TV
 
 1. Give the TV a fixed address (reserve it in the router) and allow its wake over the network in its settings.
-2. Add its entry to `plugin-data/webos/devices.json` (see `setup/devices.example.json`) and restart
-   the backend (`docker compose restart home`). There is no Add button for an LG TV.
+2. Settings -> Devices -> TVs -> **Add a TV**: the house finds it on the LAN (or by its address), asks its
+   name and adds it (`POST /api/webos/tvs`: an entry in `devices.json` with HDMI 1-3, YouTube and Netflix).
+   Then **Pairing** (a TV without a MAC tells its own there, for power-on), and **Edit** for its own inputs and apps.
 3. Settings -> Devices -> TVs: its LG card. **Edit** changes its name, address, MAC, inputs and apps
    (up to 40 lines each, `name = id`); it rewrites the entry in `devices.json`. **Remove** drops the
    entry and its pairing key; the TV itself is not touched.

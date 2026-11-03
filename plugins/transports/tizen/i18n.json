@@ -8,8 +8,6 @@
     "Edit": "Изменить",
     "Remove": "Удалить",
     "No TV yet.": "Телевизоров пока нет.",
-    "Find on the network": "Найти в сети",
-    "Add a TV": "Добавить ТВ",
     "Name": "Имя",
     "Address": "Адрес",
     "For power-on (Wake-on-LAN)": "Для включения (Wake-on-LAN)",
@@ -19,14 +17,9 @@
     "name = app id, one a line": "имя = id приложения, по одному в строке",
     "none": "нет",
     "Save": "Сохранить",
-    "Searching...": "Ищу...",
-    "None answered (the TV may be off, or the container has no LAN multicast).": "Никто не ответил (ТВ выключен, или контейнер не видит мультикаст сети).",
-    "Add": "Добавить",
     "Press Allow on the TV now (30 s)": "Нажмите «Разрешить» на ТВ (30 с)",
     "Samsung TV": "Телевизоры Samsung",
     "Samsung TVs on the network: address, pairing, inputs and apps": "Телевизоры Samsung в сети: адрес, спаривание, входы и приложения",
-    "The address (a fixed one: reserve it in the router), its MAC for power-on, the inputs and apps it should offer.": "Адрес (постоянный: закрепите его в роутере), MAC для включения, входы и приложения, которые он предложит.",
-    "Asks the LAN which Samsung TVs are there; a TV that is off does not answer.": "Спрашивает сеть, какие там есть телевизоры Samsung; выключенный ТВ не отвечает.",
     "The TV shows a question: press Allow on it within 30 s. Once is enough; the key is kept in the house.": "ТВ покажет вопрос: нажмите «Разрешить» в течение 30 с. Один раз достаточно, ключ хранится в доме.",
     "After a switch-off, s": "После выключения, с",
     "The TV counts as off this long after the house switched it off": "Столько ТВ считается выключенным после выключения домом",
@@ -36,7 +29,6 @@
     "A separate \"on\" key of its IR remote: pressed with every power-on": "Отдельная кнопка «вкл» его ИК-пульта: нажимается при каждом включении",
     "Only a key that switches on and never off (learned apart from \"off\"). It lights the screen in any state, so a power-on is this key plus one Wake-on-LAN; without it, Wake-on-LAN is repeated for 90 s.": "Только кнопка, которая включает и никогда не выключает (выучена отдельно от «выкл»). Она зажигает экран в любом состоянии, поэтому включение — это она и один Wake-on-LAN; без неё Wake-on-LAN повторяется 90 с.",
     "Pair it on the TVs page": "Подключите его на странице «Телевизоры»",
-    "Add a Samsung TV": "Добавить Samsung",
     "Samsung": "Samsung",
     "{0}: the TV does not answer. Is it on and on the network? ({1})": "{0}: телевизор не отвечает. Он включён и в сети? ({1})",
     "The TV did not allow it: press Pairing again and Allow on the TV within 30 s ({0})": "Телевизор не разрешил: нажмите «Сопряжение» ещё раз и «Разрешить» на телевизоре в течение 30 с ({0})",
@@ -50,7 +42,7 @@
     "More apps after the pairing": "Остальные приложения - после сопряжения",
     "The TV is off: the usual apps only; switch it on and open Edit again for its own list": "Телевизор выключен: показаны только обычные приложения; включите его и снова откройте «Изменить», чтобы увидеть его список",
     "Give the TV a name": "Дайте телевизору имя",
-    "The address is under Advanced: Find on the network fills it": "Адрес - в «Дополнительно»; «Найти в сети» заполнит его сам",
-    "not paired: press Pairing with the TV on": "не сопряжён: включите телевизор и нажмите «Сопряжение»"
+    "not paired: press Pairing with the TV on": "не сопряжён: включите телевизор и нажмите «Сопряжение»",
+    "The address is under Advanced": "Адрес - в «Дополнительно»"
   }
 }

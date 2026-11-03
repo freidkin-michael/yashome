@@ -1,5 +1,5 @@
 // Samsung TV (Tizen): Settings -> Samsung TV - the TVs (address, MAC for Wake-on-LAN, inputs, apps, the IR power-on fallback),
-// the pairing (one Allow on the TV) and the TVs found on the LAN. The card is the TV plug-in's (category tv).
+// the pairing (one Allow on the TV) and the form of a new one (Add a TV). The card is the TV plug-in's (category tv).
 (() => {
   const esc = Home.escapeHtml;
   const J = {'Content-Type': 'application/json'};
@@ -10,14 +10,14 @@
   // The address, the timings and the IR fallback sit under Advanced; the id and the MAC the house finds itself.
   const INPUTS = [['KEY_HDMI1', 'HDMI 1'], ['KEY_HDMI2', 'HDMI 2'], ['KEY_HDMI3', 'HDMI 3'], ['KEY_HDMI4', 'HDMI 4'], ['KEY_TV', 'TV']];
   const slug = v => String(v || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
-  function form(into, t, host, reload, say){
+  function form(into, t, host, reload, say, seed){
     const isNew = !t;
-    t = t || {id: '', name: '', host: host || '', mac: '', inputs: {'HDMI 1': 'KEY_HDMI1', 'HDMI 2': 'KEY_HDMI2'}, apps: {}};
+    t = t || {id: '', name: (seed && seed.name) || '', host: host || '', mac: (seed && seed.mac) || '', inputs: {'HDMI 1': 'KEY_HDMI1', 'HDMI 2': 'KEY_HDMI2'}, apps: {}};
     const cur = t.ir_on ? `${t.ir_on.device}|${t.ir_on.code}` : '';
     const byKey = Object.fromEntries(Object.entries(t.inputs || {}).map(([n, k]) => [k, n]));
     const inputs = INPUTS.map(([k, def]) => `<div class="row"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-in="${k}"${byKey[k] ? ' checked' : ''}> ${esc(def)}</label>
         <input class="askin" data-in-name="${k}" placeholder="${esc(def)}" value="${esc(byKey[k] && byKey[k] !== def ? byKey[k] : '')}"></div>`).join('');
-    into.innerHTML = `${isNew ? `<div class="row"><span class="rlabel">${esc(i18n('Name'))}</span><input class="askin" data-tf="name" placeholder="${esc(i18n('Bedroom TV'))}"></div>` : ''}
+    into.innerHTML = `${isNew ? `<div class="row"><span class="rlabel">${esc(i18n('Name'))}</span><input class="askin" data-tf="name" placeholder="${esc(i18n('Bedroom TV'))}" value="${esc(t.name)}"></div>` : ''}
       <h3 style="margin:10px 0 4px;font-size:15px">${esc(i18n('Inputs'))}</h3>
       <div class="bindcaption">${esc(i18n('Ticked ones are buttons on the card; a name of your own, e.g. PlayStation, is optional'))}</div>${inputs}
       <h3 style="margin:14px 0 4px;font-size:15px">${esc(i18n('Apps'))}</h3>
@@ -54,7 +54,7 @@
       into.querySelectorAll('[data-app]').forEach(c => { if(c.checked) apps[c.dataset.appName] = c.dataset.app; });
       const body = {id: t.id || slug('samsung_' + name + '_' + (f('host').value.trim().split('.').pop() || '')), name, host: f('host').value.trim(), mac: f('mac').value.trim(),
                     inputs, apps, ir_on: dev ? {device: dev, code} : null, hold_off_s: +f('hold').value || 0, hold_confirm_s: +f('confirm').value || 0};
-      if(!body.host){ say(i18n('The address is under Advanced: Find on the network fills it')); return; }
+      if(!body.host){ say(i18n('The address is under Advanced')); return; }
       try { await Home.api('/api/tizen/tvs/' + encodeURIComponent(body.id), {method: 'PUT', headers: J, body: JSON.stringify(body)}); reload(); }
       catch(e){ say(e.message || String(e)); }
     };
@@ -90,34 +90,10 @@
     };
   }
 
-  function actions(box, reload){                                     // under the cards: find a Samsung TV on the LAN, add one
-    const w = Home.el('div', '');
-    w.innerHTML = `<div class="row" style="justify-content:flex-end;gap:6px"><span data-tz="msg" class="bindcaption"></span>
-        <button class="dlg-btn" data-tz="find">${esc(i18n('Find on the network'))}</button>
-        <button class="dlg-btn primary" data-tz="add">${esc(i18n('Add a Samsung TV'))}</button></div>
-      <div data-tz="found"></div><div data-tz="form"></div>`;
-    box.append(w);
-    const q = k => w.querySelector(`[data-tz="${k}"]`), say = t => { q('msg').textContent = t; };
-    q('add').onclick = () => form(q('form'), null, '', reload, say);
-    q('find').onclick = async () => {
-      say(i18n('Searching...'));
-      try {
-        const r = await Home.api('/api/tizen/discover');
-        say(r.found.length ? '' : i18n('None answered (the TV may be off, or the container has no LAN multicast).'));
-        q('found').innerHTML = r.found.filter(f => !f.known).map(f => `<div class="row"><span class="rlabel">${esc(f.name)}<br><span class="bindcaption">${esc(f.host)}</span></span>
-          <button class="dlg-btn" data-tz-host="${esc(f.host)}">${esc(i18n('Add'))}</button></div>`).join('');
-        q('found').querySelectorAll('[data-tz-host]').forEach(b => { b.onclick = () => form(q('form'), null, b.dataset.tzHost, reload, say); });
-      } catch(e){ say(e.message || String(e)); }
-    };
-  }
-
   HomePlugins.register({
-    deviceSettings: [{category: 'tv', transport: 'tizen', label: 'Samsung', list, card, actions}],
+    deviceSettings: [{category: 'tv', transport: 'tizen', label: 'Samsung', list, card,
+      add: (found, into, reload, say) => form(into, null, found.host, reload, say, found)}],   // the tv plug-in's Add a TV
     help: [
-      {id: 'tizen.add', screen: 'settings:tv', sel: '[data-tz="add"]', title: 'Add a TV',
-       text: 'The address (a fixed one: reserve it in the router), its MAC for power-on, the inputs and apps it should offer.'},
-      {id: 'tizen.find', screen: 'settings:tv', sel: '[data-tz="find"]', title: 'Find on the network',
-       text: 'Asks the LAN which Samsung TVs are there; a TV that is off does not answer.'},
       {id: 'tizen.pair', screen: 'settings:tv', sel: '[data-tz="pair"]', title: 'Pair',
        text: 'The TV shows a question: press Allow on it within 30 s. Once is enough; the key is kept in the house.'},
       {id: 'tizen.ir', screen: 'settings:tv', sel: '[data-tf="ir"]', at: 'label', title: 'IR on key',

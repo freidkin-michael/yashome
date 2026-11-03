@@ -14,6 +14,7 @@ CLI (for bring-up, inside the dashboard container, which has `websockets`, from 
 """
 import asyncio
 import json
+import re
 import sys
 
 try:
@@ -201,6 +202,20 @@ async def button(ip, key, name):
 
 
 @bounded(20)
+async def mac(ip, key) -> str:
+    """The TV's own MAC (wired first, else Wi-Fi), for Wake-on-LAN; "" when it does not tell."""
+    ws, key = await _open(ip, key)
+    try:
+        info = await _request(ws, "ssap://com.webos.service.connectionmanager/getinfo")
+    finally:
+        await _close(ws)
+    for part in ("wiredInfo", "wifiInfo"):
+        m = str((info.get(part) or {}).get("macAddress") or "").lower()
+        if re.fullmatch(r"([0-9a-f]{2}:){5}[0-9a-f]{2}", m):
+            return m
+    return ""
+
+
 async def lists(ip, key):
     """Real external-input + launch-point lists, as {id: label} maps."""
     ws, key = await _open(ip, key)
