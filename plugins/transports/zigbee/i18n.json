@@ -121,6 +121,7 @@
     "Voltage": "Напряжение",
     "Battery low": "Батарея садится",
     "Carbon monoxide": "Угарный газ",
-    "Rain": "Дождь"
+    "Rain": "Дождь",
+    "The room the device goes to; with no name typed it is called after the room and what it is (\"Hallway motion sensor\").": "Комната, куда идёт устройство; если имя не введено, оно называется по комнате и тому, что это («Прихожая датчик движения»)."
   }
 }

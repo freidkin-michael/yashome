@@ -46,9 +46,11 @@ function ST_PAGES(){
       pg = by[id] || (by[id] = {id, group: 'other', icon: ICON[m.icon] ? m.icon : 'puzzle', title: e.title || m.name || id, expl: e.expl || '', tabs: [], titles: []});
       if(!pages.includes(pg)) pages.push(pg);
     }
-    for(const t of Array.isArray(e.tabs) ? e.tabs : [{id: stSlug(e.tab || e.title), title: e.tab || e.title, render: e.render}]) pg.tabs.push({...t, needs: t.needs || e.needs});
+    for(const t of Array.isArray(e.tabs) ? e.tabs : [{id: stSlug(e.tab || e.title), title: e.tab || e.title, render: e.render}]) pg.tabs.push({...t, needs: t.needs || e.needs, own: m.id === pg.id});
     pg.titles.push(e.title);
   }
+  const rank = t => t.core ? 0 : t.own ? 1 : 2;           // the core's tab, then the page's own plug-in (TVs before Players), then the rest
+  pages.forEach(p => p.tabs.sort((a, b) => rank(a) - rank(b)));
   return pages.filter(x => x.tabs.length);
 }
 // All devices: every device with its kind, how it is connected, its room, whether it answers; a tap opens its window;
@@ -111,7 +113,7 @@ function stForgotten(box, quiet){
   draw();
 }
 const ST_LEFTOVER = {'name-override': 'its name', 'channel-names': 'channel names', 'channel-dimrange': 'dim windows', favorite: 'a favourite', room: 'room',
-  'tab-order': 'place in a tab', 'tile-size': 'tile size in', 'room-sensor': 'thermometer of a room', binding: 'a rule', automation: 'automation', panel: 'panel'};
+  'tab-order': 'place in a tab', 'tile-size': 'tile size in', 'room-sensor': 'thermometer of a room', serves: 'the room it serves', binding: 'a rule', automation: 'automation', panel: 'panel'};
 // Maintenance -> Plug-ins: one row per plug-in (its switch when the helper runs, its name, version and state, what it is);
 // "More" opens what the old About page showed: folder, what it needs, its health rows
 function stPluginMeta(id){
@@ -290,7 +292,9 @@ function stRenderCore(cur, box, tab, quiet){
         <div id="st-helper"></div>
       </section>
       <section><h3 id="st-h-update">${i18n('Update')}</h3><div class="bindcaption" style="margin-bottom:8px">${i18n('A new version of Yashome: what it brings and the button to apply it (a backup is made first).')}</div><div id="st-update"></div></section>`,
-    health: `<section><div class="bindcaption" style="margin-bottom:8px">${i18n('A green dot means fine. Every row says what it checks; a yellow or red one says what to do.')}</div><div id="st-health"></div></section>`,
+    health: `<section><div class="bindcaption" style="margin-bottom:8px">${i18n('A green dot means fine. Every row says what it checks; a yellow or red one says what to do.')}</div><div id="st-health"></div></section>
+      <section><div class="row"><span class="rlabel">${i18n('Demo host')}<br><span class="bindcaption">${i18n('A computer the house watches too: name or address, :port if not 443. Empty: none.')}</span></span>
+        <input class="askin" id="st-demo" style="width:200px" placeholder="demo.example.org"> <button class="dlg-btn" id="st-demo-save">${i18n('Save')}</button></div></section>`,
   };
   if(cur.id === 'devices'){
     if(quiet || tab !== 'forgotten') stDevices(box, quiet);
@@ -311,6 +315,7 @@ function stRenderCore(cur, box, tab, quiet){
     if(confirm(i18n('Restart every service of the house now? About a minute without the house.'))) helperJob('restart', box.querySelector('#st-restart-out'));
   };
   if(cur.id === 'health' || cur.id === 'overview') renderHealth(box.querySelector('#st-health'));
+  if(cur.id === 'overview') stDemoHost(box);
   if(cur.id === 'device'){
     const ib = document.getElementById('install-btn'), ir = box.querySelector('#st-install-row'), no = box.querySelector('#st-install-no');
     if(window.matchMedia && matchMedia('(display-mode: standalone)').matches){   // already the installed app: nothing to install
@@ -626,6 +631,8 @@ const HEALTH_HELP = {
   zigbee: ['the Zigbee network and its stick', 'Check that the Zigbee stick is plugged in, then restart the house.', 'restart', 'docker compose logs zigbee2mqtt'],
   schedules: ['timed rules that fired while their device was away', 'Check that the device is on and that the rule\'s time is right.', 'rules'],
   plugin: ['a plug-in that failed to load', 'Restart the house. If it stays red, the house log says why.', 'restart'],
+  containers: ['every service of the house runs and is on the house network', 'Restart the house: every service is made again with its network.', 'restart', 'docker compose ps'],
+  demo: ['the demo computer answers on the network', 'Check that the demo computer is on and that its address on Overview is right.'],
   settings: ['the house\'s settings file', 'Restore the last good backup.', 'backups'],
 };
 const HEALTH_ACT = {restart: 'Restart the house', backups: 'Open Backups', computers: 'Open Computers and servers', weather: 'Open Weather', rules: 'Open the rules'};
@@ -659,6 +666,17 @@ async function renderHealth(box){
 }
 // the header's Health button (the watchdog plug-in) is the one sign that something needs a look: the gear has none of its own
 
+// Settings -> Overview: the demo host the health page watches (settings "house"), saved at once
+async function stDemoHost(box){
+  const inp = box.querySelector('#st-demo'), save = box.querySelector('#st-demo-save');
+  if(!inp) return;
+  api('/api/house').then(h => { inp.value = h.demo_host || ''; }).catch(() => {});
+  save.onclick = async () => {
+    try { await api('/api/house', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({demo_host: inp.value.trim()})}); }
+    catch(e){ stToast(e.message || String(e)); return; }
+    stToast(i18n('Saved')); renderHealth(box.querySelector('#st-health'));
+  };
+}
 // Settings -> Backups: one every night (the backend), here its age, "back up now" and the downloads
 async function renderBackups(box){
   if(!box) return;
@@ -681,15 +699,25 @@ async function renderBackups(box){
     <div class="row" style="gap:6px"><button class="dlg-btn" id="bk-file">${i18n('Restore from a file')}</button>
       <input type="file" id="bk-pick" accept=".gz,.tgz,application/gzip" hidden></div>
     <div class="bindcaption" id="bk-out"></div>
-    <div class="bindcaption">${escapeHtml(b.nightly ? i18n('Every night at {0}, {1} copies kept on this computer.', b.at, b.keep)
-      : i18n('No nightly backup is set up: make one now and then with Back up now.'))}</div>
+    <div class="row"><span class="rlabel">${i18n('Nightly backup')}<br><span class="bindcaption">${escapeHtml(b.nightly ? i18n('Every night at {0}, {1} copies kept on this computer.', b.at, b.keep)
+      : i18n('No nightly backup is set up: make one now and then with Back up now.'))}</span></span>
+      <label class="sw"><input type="checkbox" id="bk-on" ${b.nightly ? 'checked' : ''}> <span>${i18n('On')}</span></label>
+      <input type="time" class="askin" id="bk-at" aria-label="${escapeHtml(i18n('Backup time'))}" value="${escapeHtml(b.nightly ? String(b.at).padStart(5, '0') : '03:30')}" ${b.nightly ? '' : 'disabled'}></div>
     <div class="bindcaption">${escapeHtml(i18n('A backup holds the house settings, its passwords, the Zigbee network and your own plug-ins; not the logs.'))}</div>`;
   box.querySelector('#bk-now').onclick = async ev => {
     ev.target.disabled = true;
     try { await api('/api/backups', {method: 'POST'}); } catch(e){ alert(e.message || e); }
     renderBackups(box);
   };
-  const out = box.querySelector('#bk-out');
+  const out = box.querySelector('#bk-out'), on = box.querySelector('#bk-on'), at = box.querySelector('#bk-at');
+  const saveAt = async () => {                              // the nightly loop takes the new time at once
+    at.disabled = !on.checked;
+    if(on.checked && !at.value) return;
+    try { await api('/api/house', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({backup_at: on.checked ? at.value : 'off'})}); }
+    catch(e){ out.textContent = e.message || String(e); return; }
+    stToast(i18n('Saved')); renderBackups(box);
+  };
+  on.onchange = saveAt; at.onchange = saveAt;
   const restore = async name => {
     const ok = await askConfirm(i18n('Restore the house from {0}? The house stops for a minute; what is there now is backed up first and kept aside, nothing is deleted.', name), i18n('Restore'));
     if(!ok) return;

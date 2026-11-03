@@ -142,3 +142,60 @@ def test_the_clock_loop_survives_an_error(monkeypatch):
     with pytest.raises(Stop):
         core._clock_loop()
     assert core._clock_last["error"] == "OSError: broker gone"
+
+
+def test_a_container_left_with_no_network_is_red_and_points_at_restart(monkeypatch):
+    monkeypatch.setenv("HELPER_KEY", "k")
+    seen = []
+
+    def fake(method, path, body=None, timeout=15):
+        seen.append((method, path))
+        return {"containers": [{"name": "yashome-zigbee2mqtt-1", "service": "zigbee2mqtt", "networks": [], "netless": True},
+                               {"name": "yashome-home-1", "service": "home", "networks": ["yashome_default"], "netless": False}]}
+    monkeypatch.setattr(core, "_helper", fake)
+    rows = core._containers_health()
+    assert seen == [("GET", "/v1/containers")]
+    assert [(r["id"], r["state"], r["link"], r["args"]) for r in rows] == \
+        [("containers:yashome-zigbee2mqtt-1", "bad", "restart", ["yashome-zigbee2mqtt-1", "zigbee2mqtt"])]
+    monkeypatch.setattr(core, "_helper", lambda *a, **k: {"containers": [{"name": "a", "networks": ["n"], "netless": False}]})
+    assert [(r["state"], r["args"]) for r in core._containers_health()] == [("ok", ["1"])]
+
+    def down(*a, **k):
+        raise core.HTTPException(503, "the helper does not answer")
+    monkeypatch.setattr(core, "_helper", down)
+    assert [r["state"] for r in core._containers_health()] == ["warn"]
+
+    def old(*a, **k):
+        raise core.HTTPException(404, "helper: not found")
+    monkeypatch.setattr(core, "_helper", old)
+    assert core._containers_health() == []
+    monkeypatch.delenv("HELPER_KEY")
+    assert core._containers_health() == []                  # no helper at all: nothing to check with
+
+
+def test_the_demo_host_is_watched_only_when_set_and_is_yellow_when_it_does_not_answer(monkeypatch):
+    import socket
+    old = dict(core._house)
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    c = TestClient(core.app)
+    try:
+        core._house.pop("demo_host", None)
+        assert core._demo_health() == []
+        assert c.put("/api/house", headers=HOUSE, json={"demo_host": "bad host;x"}).status_code == 400
+        assert c.put("/api/house", headers=HOUSE, json={"demo_host": f"127.0.0.1:{port}"}).json()["demo_host"] == f"127.0.0.1:{port}"
+        assert [(r["id"], r["state"]) for r in core._demo_health()] == [("demo", "ok")]
+        srv.close()
+        r = core._demo_health()[0]
+        assert (r["state"], r["args"][0]) == ("warn", f"127.0.0.1:{port}")
+        assert core.demo_host() == ("127.0.0.1", port)
+        core._house["demo_host"] = "demo.example.org"
+        assert core.demo_host() == ("demo.example.org", 443)
+        assert c.put("/api/house", headers=HOUSE, json={"demo_host": ""}).status_code == 200
+        assert core._demo_health() == []
+    finally:
+        srv.close()
+        core._house.clear()
+        core._house.update(old)

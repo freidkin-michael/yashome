@@ -26,7 +26,9 @@ Zigbee for Yashome through [zigbee2mqtt](https://www.zigbee2mqtt.io/), with its 
   While the last list is empty or lacks more than half of the known devices (waiting records count), nobody is told.
   The waiting records are kept in `plugin-data/zigbee/gone.json`, so a restart does not lose them.
 - **Dashboard.** "Add" -> Zigbee (with the `connect` plug-in: the Add / bind window opens it with everything else): permit_join for 254 s, the devices that join with their interview
-  state, a name for each, leftovers of failed pairings to remove. A Zigbee device's modal has
+  state, a room and a name for each, leftovers of failed pairings to remove. A room picked with no name typed names the
+  device "<Room> <kind>" ("Hallway motion sensor", the kind in the house language); moved to another room later (the
+  device window, the map, a renamed room), such an automatic name follows the room, a typed one never changes. A Zigbee device's modal has
   "Rename in zigbee2mqtt": the key itself changes, and the core moves every binding, favourite,
   room, automation and timer with it.
 - **Settings -> Devices -> Zigbee.** Three tabs: Devices (every Zigbee device; a tap opens its

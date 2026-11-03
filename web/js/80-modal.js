@@ -151,6 +151,9 @@ function buildModal(){
           <span class="rval" id="m_room_box"><select id="m_room" ${ROOM_LOCKED.includes(d.id) ? `disabled title="${i18n('The map sets the room')}"` : ''}><option value="">${i18n('No room')}</option>${ROOMS.map(r =>
             `<option value="${escapeHtml(r.id)}"${(r.devices||[]).includes(d.id) ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}</select>
           ${ROOM_LOCKED.includes(d.id) ? `<button class="dlg-btn" id="m_room_map">${i18n('Show on the map')}</button>` : ''}</span></div>
+        <div class="row"><span class="rlabel">${i18n('Serves')}<br><span class="bindcaption">${i18n('The room its voice commands, room tab and family rights go by')}</span></span>
+          <span class="rval"><select id="m_serves"><option value="">${i18n('Same as where it stands')}</option>${ROOMS.map(r =>
+            `<option value="${escapeHtml(r.id)}"${d.serves === r.id ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}</select></span></div>
         <div class="row"><span class="rlabel">${i18n('Favourite')}</span><button class="dlg-btn" id="m_fav"></button></div>
       </section>
       ${sectSwitches}${sectBright}${sectPlugins}${sectSensors}${sectSet}${sectEvents}
@@ -174,6 +177,12 @@ function buildModal(){
     const to = roomSel.value || null;                  // rooms are made on the map (its bar: New room)
     try { await moveDeviceToRoom(d.id, to); }
     catch(e){ alert(i18n('Error: ') + (e.message || e)); }
+  };
+  const sv = document.getElementById('m_serves');
+  if(sv) sv.onchange = async () => {
+    try { await api('/api/devices/' + encodeURIComponent(d.id) + '/serves', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({room: sv.value})}); }
+    catch(e){ alert(i18n('Error: ') + (e.message || e)); return; }
+    d.serves = sv.value; await reloadRooms();
   };
   const rm = document.getElementById('m_room_map');
   if(rm) rm.onclick = () => { sessionStorage.setItem('map.focus', d.id); closeModal(); Home.openTab('p:map'); };   // the map zooms to it

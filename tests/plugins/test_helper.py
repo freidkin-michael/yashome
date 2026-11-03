@@ -798,3 +798,28 @@ def test_a_player_command_reaches_ctl_on_its_stdin_with_only_its_own_fields(fake
     args = log.read_text().splitlines()
     assert any(" -M -N -f " in a for a in args)                               # one shared connection, in the background
     assert args[-1].endswith("-l fraddy 192.0.2.61 python3 /opt/yashome-player/ctl.py") and "StrictHostKeyChecking=yes" in args[-1]
+
+
+def test_containers_says_which_one_has_no_network(monkeypatch, tmp_path):
+    seen = []
+    inspect = [{"Name": "/yashome-zigbee2mqtt-1", "Config": {"Labels": {"com.docker.compose.service": "zigbee2mqtt"}},
+                "HostConfig": {"NetworkMode": "yashome_default"}, "NetworkSettings": {"Networks": {}}},
+               {"Name": "/yashome-home-1", "Config": {"Labels": {"com.docker.compose.service": "home"}},
+                "HostConfig": {"NetworkMode": "yashome_default"}, "NetworkSettings": {"Networks": {"yashome_default": {}}}},
+               {"Name": "/yashome-off-1", "Config": {}, "HostConfig": {"NetworkMode": "none"}, "NetworkSettings": {"Networks": {}}}]
+
+    def fake_run(cmd, cfg, timeout=10, input=None):
+        seen.append(cmd)
+        out = "a\nb\nc\n" if cmd[1] == "ps" else json.dumps(inspect)
+        return subprocess.CompletedProcess(cmd, 0, out, "")
+    monkeypatch.setattr(helper, "run", fake_run)
+    cfg = helper.Config({"YASHOME_DIR": str(tmp_path)})
+    status, body = helper.get_containers(cfg, None)
+    assert status == 200 and seen[0][:3] == ["docker", "ps", "-q"] and "label=com.docker.compose.project=yashome" in seen[0]
+    assert seen[1] == ["docker", "inspect", "a", "b", "c"]
+    assert [(c["name"], c["service"], c["netless"]) for c in body["containers"]] == [
+        ("yashome-home-1", "home", False), ("yashome-off-1", "", False), ("yashome-zigbee2mqtt-1", "zigbee2mqtt", True)]
+    monkeypatch.setattr(helper, "run", lambda *a, **k: None)
+    with pytest.raises(helper.HttpError):
+        helper.get_containers(cfg, None)
+    assert ("GET", "/v1/containers") in helper.ROUTES

@@ -199,6 +199,27 @@ def _migrate_room_sensors(v, old, new, lost):
     return {"room_sensors": n}
 
 
+# The room a device serves when that is not where it stands (a speaker in the hall that plays for the living room):
+# {device: rid}; none = the room it stands in. Voice, the room tabs and family rights go by it (served_room).
+_serves: dict = {}
+
+
+def _clean_serves(raw) -> dict:
+    return {d: r for d, r in raw.items() if isinstance(d, str) and isinstance(r, str) and r} if isinstance(raw, dict) else {}
+
+
+def _migrate_serves(v, old, new, lost):
+    if old not in v:
+        return {"serves": 0}
+    rid = v.pop(old)
+    if not lost:
+        v.setdefault(new, rid)
+    return {"serves": 1}
+
+
+_store("serves", "_serves", {}, clean=_clean_serves, migrate=_migrate_serves, refs=lambda v: [("serves", d, rid) for d, rid in v.items()])
+
+
 _store("room_sensors", "_room_sensors", {}, migrate=_migrate_room_sensors,
        refs=lambda v: [("room-sensor", src.rpartition("/")[0], rid) for rid, picks in v.items() for src in picks.values()])
 
@@ -224,7 +245,27 @@ def _clean_house(v) -> dict:
     if v.get("lang") not in house_langs():
         v["lang"] = "en"
     v.pop("temp_precision", None)                # an older house chose tenths: every screen shows whole numbers now
+    if house_backup_at(v.get("backup_at")) is None:
+        v.pop("backup_at", None)                 # unset or unreadable: BACKUP_AT of .env
+    if house_demo_host(v.get("demo_host")) is None:
+        v.pop("demo_host", None)
     return v
+
+
+def house_backup_at(v) -> "str | None":
+    """The nightly backup time as stored: "HH:MM" (zero-padded) or "off"; None for anything else."""
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", v.strip()) if isinstance(v, str) else None
+    if m and int(m.group(1)) < 24 and int(m.group(2)) < 60:
+        return f"{int(m.group(1)):02d}:{m.group(2)}"
+    return "off" if v == "off" else None
+
+
+def house_demo_host(v) -> "str | None":
+    """A demo host to watch: a name or an address, an optional :port; "" for none; None for anything else."""
+    if not isinstance(v, str):
+        return None
+    v = v.strip()
+    return v if v == "" or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::\d{1,5})?", v) else None
 
 
 def house_lang() -> str:

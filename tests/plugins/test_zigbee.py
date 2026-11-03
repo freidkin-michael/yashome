@@ -690,3 +690,49 @@ def test_zigbee2mqtts_live_link_goes_through_with_its_token_filled_in(monkeypatc
         time.sleep(0.2)
     assert got["url"] == "ws://zigbee2mqtt:8080/plugins/zigbee/ui/api?token=z2m-tok"
     assert got["sent"] == ['{"topic":"bridge/request/health_check"}']
+
+
+MOTION = {"type": "binary", "property": "occupancy", "access": 1}
+
+
+def test_a_room_picked_at_pairing_names_the_device_and_the_automatic_name_follows_its_moves(bridge, monkeypatch):
+    """"Hallway motion sensor": the room and the kind; moved, it is renamed only while its name is still the automatic one."""
+    rooms = [{"id": "zr_hall", "name": "Hallway", "devices": []}, {"id": "zr_kit", "name": "Kitchen", "devices": []}]
+    core.rooms_edit(lambda rs: rs.extend(rooms))
+    try:
+        me.pair_start()
+        me.on_bridge(["zigbee2mqtt", "bridge", "event"], json.dumps(
+            {"type": "device_interview", "data": {"ieee_address": "0xm1", "friendly_name": "0xm1", "status": "successful",
+                                                  "definition": {"model": "PIR", "exposes": [MOTION]}}}).encode())
+        f = next(x for x in me.pair_status()["found"] if x["ieee"] == "0xm1")
+        assert f["names"]["zr_hall"] == "Hallway motion sensor" and f["names"]["zr_kit"] == "Kitchen motion sensor"
+        with pytest.raises(HTTPException) as e:
+            me.pair_add(me.PairAdd(ieee="0xm1", friendly_name="0xm1", room="zr_none"))
+        assert e.value.status_code == 404
+        monkeypatch.setattr(me, "wait_devices", lambda pred, timeout=0: (me.sync_devices([z("Hallway motion sensor", exposes=[MOTION])]), True)[1])
+        r = me.pair_add(me.PairAdd(ieee="0xm1", friendly_name="0xm1", room="zr_hall"))
+        assert r["id"] == "Hallway motion sensor"
+        assert ("zigbee2mqtt/bridge/request/device/rename", json.dumps({"from": "0xm1", "to": "Hallway motion sensor"})) in bridge
+        did = r["id"]
+        assert did in next(x for x in core.get_rooms() if x["id"] == "zr_hall")["devices"]
+        assert core.DEVICES[did]["name"] == "Hallway motion sensor"            # placed by the pairing: no second rename
+        core.rooms_edit(lambda rs: [x.__setitem__("devices", [did] if x["id"] == "zr_kit" else [d for d in x["devices"] if d != did]) for x in rs])
+        assert core.DEVICES[did]["name"] == "Kitchen motion sensor"
+        core.set_device_name(did, "My PIR")                                     # typed by the user: never touched again
+        core.rooms_edit(lambda rs: [x.__setitem__("devices", [did] if x["id"] == "zr_hall" else [d for d in x["devices"] if d != did]) for x in rs])
+        assert core.DEVICES[did]["name"] == "My PIR"
+    finally:
+        core._name_overrides.pop("Hallway motion sensor", None)
+        core.rooms_edit(lambda rs: rs.__setitem__(slice(None), [x for x in rs if x["id"] not in ("zr_hall", "zr_kit")]))
+
+
+def test_an_automatic_name_reads_in_the_house_language_and_a_typed_one_is_never_automatic(monkeypatch):
+    assert me.auto_name("Motion sensor", "Hallway", "en") == "Hallway motion sensor"
+    assert me.auto_name("Motion sensor", "", "en") == "Motion sensor" and me.auto_name("", "Hallway") == ""
+    assert me.auto_name("Motion sensor", "Прихожая", "ru") == "Прихожая датчик движения"   # i18n
+    monkeypatch.setattr(core, "house_lang", lambda: "ru")
+    assert me.is_auto_name("Датчик движения 2", "Motion sensor")                            # i18n
+    assert me.is_auto_name("Прихожая датчик движения", "Motion sensor", ["Прихожая"])      # i18n
+    assert me.is_auto_name("Hallway motion sensor 3", "Motion sensor", ["Hallway"]) and me.is_auto_name("0x00158d0001", "")
+    assert not me.is_auto_name("Hallway PIR", "Motion sensor", ["Hallway"])
+    assert not me.is_auto_name("Kitchen motion sensor", "Motion sensor", ["Hallway"])        # not the room it was in

@@ -116,8 +116,7 @@ function renderRoom(app, rid){
     activeTab = 'fav'; rememberTab('fav');
     await reloadRooms();
   };
-  const devs = (room.devices||[]).map(id => BY_ID[id]).filter(Boolean)
-  ;
+  const devs = roomServes(room).map(id => BY_ID[id]).filter(Boolean);      // the devices serving the room, wherever they stand
   if(devs.length > 1){
     const ord = document.createElement('button');
     ord.className = 'dlg-btn' + (gridEditMode ? ' primary' : '');
@@ -144,9 +143,8 @@ function renderRoom(app, rid){
     cd.dataset.dev = d.id;
     if(gridEditMode) armGridDrag(cd, g, activeTab, async parent => {
       // visible order + the room's invisible (missing) members at the tail
-      const visible = Array.from(parent.children).map(x => x.dataset.dev).filter(Boolean);
-      const rest = (room.devices||[]).filter(id => !visible.includes(id));
-      room.devices = visible.concat(rest);
+      const phys = room.devices || [], visible = Array.from(parent.children).map(x => x.dataset.dev).filter(id => id && phys.includes(id));
+      room.devices = visible.concat(phys.filter(id => !visible.includes(id)));    // one serving from another room stays out of this one
       try{
         await api('/api/rooms/'+encodeURIComponent(room.id), {
           method:'PUT', headers:{'Content-Type':'application/json'},

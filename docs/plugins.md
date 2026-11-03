@@ -141,6 +141,8 @@ PLUGIN = {"name": "Hello", "version": "1.0.0", "icon": "puzzle"}   # shown in Se
 | `core.store_status(id, st)`, `core.store_status_exact(id, st)`, `core.status_copy(id, default)`, `core.log` | read and publish device state, log. `store_status`: the device said something (online: it is live); `codes=` the channels this report answers (a command in flight on another one is not): pass every channel of a per-channel message, only the changed ones of a frame that carries the whole device (zigbee2mqtt); left out, the changed values count. `store_status_exact`: a word about it as given, no grace period - offline at once; an online word after an outage makes it wait for its report (docs/device-state.md). A device that never reports (an IR appliance: its blaster's word is all there is) stores its online with `store_status` |
 | `core.get_status(id) -> dict` | a device's state as stored (the live dict: read it, never change it; `status_copy` for a copy); `{"online": False, "error": "no data yet"}` before the first |
 | `core.get_rooms() -> list` | the dashboard's rooms `[{id, name, devices: [ids]}]` as stored (a copy: read it, never change it) |
+| `core.served_room(dev) -> str` | the id of the room a device serves: its Serves pick, else the first room it stands in (`devices`); '' for none. Voice, room tabs and family rights go by it; the map by where it stands |
+| `core.served_devices(rid) -> list` | the devices that serve a room: those standing in it that serve no other, then those picked to serve it (`GET /api/rooms` gives it as `serves`) |
 | `core.rooms_edit(fn) -> list` | change the rooms in one step: `fn(rooms)` edits a deep copy in place (an exception changes nothing), the result is cleaned and saved |
 | `core.set_room_locked(devices, rooms=(), hidden=())` | the devices, the rooms a plug-in owns and the rooms the tabs hide (kept only for what names them), replaced in one step: the room API answers 409 when such a device would move or such a room (or one holding them) would be deleted; the dashboard shows the devices' room read-only and hides an empty room of the set from its tabs (`core.ROOM_LOCKED`, `core.ROOM_ZONED`, `core.ROOM_HIDDEN` hold them: read only) |
 | `await core.control(id, core.ControlBody(code=..., value=...))` | switch a device like `POST /api/devices/{id}/control` does; from a thread: `asyncio.run_coroutine_threadsafe(..., core.main_loop)`. It raises what the route answers (`HTTPException` 400, 404, 409, 500, 502, 503): catch it |
@@ -212,6 +214,7 @@ devices of zigbee2mqtt's retained `bridge/devices`) uses these on top:
 | `core.check_name(name, kind, taken=(), most=60, id_like=False)` | every name typed in the dashboard goes through it before it is stored: trimmed, not empty, at most `most` characters, no control character, none of `taken` in any case (409), `id_like` (an id or a topic) only `[A-Za-z0-9_-]`; returns the trimmed name, else 400/409 with an English text that `i18n.js` translates |
 | `core.set_device_name(id, name)` | the one way a display name changes (the card's pencil, `POST /api/devices/<id>/rename`): a plug-in that keeps the name stores it, else the override in `settings.json` "names"; never both, so the tile, the card, voice and the map show one name |
 | `core.ROOMS_OWNER.update(create=fn(name) -> room, rename=fn(rid, name) -> room, delete=fn(rid))` | the rooms are yours (the map): `POST`, `PUT` (a new name) and `DELETE /api/rooms` call these instead of changing the rooms themselves; raise HTTPException for a refusal. Without an owner the core keeps the rooms itself and logs a warning |
+| `core.ON_ROOM_MOVE.append(fn(dev_id, old_room_names, new_room_name))` | after a device came into a room (moved, placed on the map, its room renamed): the zigbee plug-in renames a device whose name is still the automatic one |
 | `core.ROOM_REFS.append(fn(rid) -> [{kind, name}])` | what of yours names a room (a panel hangs in it, a satellite stands in it): `GET /api/rooms/{id}/refs` lists it before a delete |
 | `core.NAME_OWNERS.append(fn(id, name) -> bool)` | your plug-in keeps the display names of its devices (an IR tile in its record): store the new one and return True; the core then keeps no override for it |
 | `core.take_name_override(id) -> str or None` | at start, take over a rename saved in the overrides before you kept names yourself: returned and dropped there |
@@ -342,7 +345,7 @@ HomePlugins.register({
 
 Helpers: `Home.api(path, opts)`, `Home.openModal(html, id, {onClose})` (onClose runs once when it closes or another modal replaces it),
 `Home.closeModal()`, `Home.modalId()`,
-`Home.escapeHtml(s)`, `Home.el(tag, cls, html)`, `Home.devices()`, `Home.state(id)`,
+`Home.escapeHtml(s)`, `Home.el(tag, cls, html)`, `Home.devices()`, `Home.rooms()` (`[{id, name}]`), `Home.state(id)`,
 `Home.activeTab()`, `Home.sendControl(id, code, value)`, `Home.refresh()`,
 `Home.reloadDevices()` (after your plug-in added, renamed or removed devices: the device list,
 favourites and tabs again), `Home.tabForCategory(cat)` (the label of the tab a category shows in),

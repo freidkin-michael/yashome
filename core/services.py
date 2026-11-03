@@ -90,14 +90,33 @@ def backup_next(now: datetime, at: str):
     return nxt if nxt > now else nxt + timedelta(days=1)
 
 
+_backup_wake = threading.Event()        # set when the time changes on the Backups page: the loop takes it at once
+
+
+def backup_at() -> str:
+    """The nightly time: the one set on the Backups page (settings "house"), else BACKUP_AT of .env."""
+    return _house.get("backup_at") or BACKUP_AT
+
+
+def _backup_tick(wait=None) -> bool:
+    """One turn of the nightly loop: waits for the time or for a change of it; True when it made the backup."""
+    wait = wait or _backup_wake.wait
+    _backup_wake.clear()
+    now = datetime.now()
+    nxt = backup_next(now, backup_at())
+    if wait(None if nxt is None else max(1.0, (nxt - now).total_seconds())):
+        return False                                # a new time: counted again
+    if nxt is None or datetime.now() < nxt - timedelta(seconds=1):
+        return False
+    backup_now()
+    return True
+
+
 def _backup_loop():
-    if backup_next(datetime.now(), BACKUP_AT) is None:
-        log.warning(f"[backup] no nightly backup: BACKUP_AT={BACKUP_AT!r} (off, or HH:MM)")
-        return
+    if backup_next(datetime.now(), backup_at()) is None:
+        log.warning(f"[backup] no nightly backup: {backup_at()!r} (off, or HH:MM): set a time on the Backups page")
     while True:
-        now = datetime.now()
-        time.sleep(max(60, (backup_next(now, BACKUP_AT) - now).total_seconds()))
-        backup_now()
+        _backup_tick()
 
 
 def _house_token_only(request: Request):
@@ -298,6 +317,55 @@ def health_report() -> dict:
     return {"rows": rows, "worst": rows[0]["state"] if rows else "ok", "ts": time.time()}
 
 
+def _containers_health() -> list:
+    """The stack's containers, through the helper (it holds the docker socket): one with no network is red."""
+    if not os.environ.get("HELPER_KEY"):
+        return []
+    try:
+        items = _helper("GET", "/v1/containers", None, 4)["containers"]
+    except HTTPException as e:
+        if e.status_code == 404:                    # a helper older than this check: nothing to say until make update
+            return []
+        return [health_row("containers", "warn", "Containers", "cannot be checked: {0}", "", (e.detail,))]
+    lost = [c for c in items if c.get("netless")]
+    if not lost:
+        return [health_row("containers", "ok", "Containers", "{0} running, each on its network", "", (len(items),))]
+    return [health_row(f"containers:{c['name']}", "bad", "Container {0}", "has no network: nothing reaches it",
+                       "Restart the house: every container is made again and gets its network back", (c["name"], c.get("service") or c["name"]),
+                       link="restart", cmd="docker compose up -d --force-recreate {1}") for c in lost]
+
+
+DEMO_PORT = 443
+DEMO_TIMEOUT_S = 2.0
+
+
+def demo_host() -> tuple:
+    """The demo host to watch (Settings -> Overview): (host, port), or None when none is set."""
+    v = (_house.get("demo_host") or "").strip()
+    if not v:
+        return None
+    host, _, port = v.rpartition(":") if re.fullmatch(r".+:\d{1,5}", v) else (v, "", "")
+    return host, int(port) if port else DEMO_PORT
+
+
+def _demo_health() -> list:
+    """A TCP connect to the demo host, only when one is set: yellow when it does not answer."""
+    hp = demo_host()
+    if hp is None:
+        return []
+    import socket
+    where = f"{hp[0]}:{hp[1]}"
+    try:
+        socket.create_connection(hp, timeout=DEMO_TIMEOUT_S).close()
+    except OSError as e:
+        return [health_row("demo", "warn", "Demo host", "{0} does not answer: {1}",
+                           "Check that the demo computer is on and that its address on this page is right", (where, type(e).__name__))]
+    return [health_row("demo", "ok", "Demo host", "{0} answers", "", (where,))]
+
+
+HEALTH_CHECKS.extend([_containers_health, _demo_health])
+
+
 @app.get("/api/health/report")
 async def health_report_api(request: Request):
     _house_token_only(request)
@@ -381,8 +449,8 @@ def backups_list(request: Request):
     _house_token_only(request)
     items = backup.listing(BACKUP_DIR)
     return {"items": items, "age_s": int(time.time() - items[0]["ts"]) if items else None,
-            "error": _backup_last["error"], "warnings": _backup_last["warnings"], "at": BACKUP_AT,
-            "nightly": backup_next(datetime.now(), BACKUP_AT) is not None, "keep": _backup_keep()}
+            "error": _backup_last["error"], "warnings": _backup_last["warnings"], "at": backup_at(),
+            "nightly": backup_next(datetime.now(), backup_at()) is not None, "keep": _backup_keep()}
 
 
 @app.post("/api/backups")

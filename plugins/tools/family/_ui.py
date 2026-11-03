@@ -138,8 +138,9 @@ def screen(rights, my_items: list, lang: str = "") -> dict:
     lang = lang if re.fullmatch(r"[a-z]{2}", lang or "") else core.house_lang()
     seen = lambda dev: dev in core.DEVICES and _visible(core.DEVICES[dev]) and (rights is None or dev in rights)
     ro = lambda dev: rights is not None and rights.get(dev) != "control"
-    rooms = [r for r in core.get_rooms() if any(seen(x) for x in r.get("devices") or [])]
-    room_of = {x: r.get("name", "") for r in rooms for x in r.get("devices") or []}
+    served = {r["id"]: core.served_devices(r["id"]) for r in core.get_rooms()}       # the room a device serves, not where it stands
+    rooms = [{**r, "devices": served[r["id"]]} for r in core.get_rooms() if any(seen(x) for x in served[r["id"]])]
+    room_of = {x: r.get("name", "") for r in rooms for x in r["devices"]}
     card = lambda dev, codes=None, title=None: _card(core.DEVICES[dev], lang, room_of, ro(dev), codes, title)
     tabs = []
     tabs.append({"id": "my", "title": tr("My screen", lang),

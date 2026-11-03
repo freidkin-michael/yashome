@@ -223,7 +223,8 @@ Administrator (above Full access in Rights) is full access plus: writes NFC card
 phone hears of a browser that asks to come in and may allow or deny it, list the guests and revoke a guest key; Administrator
 ticks Full access with it. The member row says the level: administrator, full access, or limited: N devices.
 
-Rights: Family phone -> Rights. Three levels: Administrator, Full access, or Limited. Limited lists the devices by room
+Rights: Family phone -> Rights. Three levels: Administrator, Full access, or Limited. Limited lists the devices by the room
+they serve (a device's Serves in its window, else the room it stands in; the phone's room tabs go by it too)
 (a room's selector sets all its devices, opened it sets one), with locks and the gate apart at the top (hidden until chosen;
 Control asks first) and devices with no room or of the house's machinery (Zigbee repeaters, speakers and microphones) under
 Other; a search field shows with more than 15 devices. Per device: hidden / view / control; hidden devices

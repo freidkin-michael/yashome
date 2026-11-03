@@ -29,6 +29,7 @@ def list_devices():
         "transport": d.get("transport"),
         "controls": _controls_with_dimrange(d["id"], d.get("controls", [])),
         "room": d.get("room", ""),
+        "serves": _serves.get(d["id"], ""),       # the room it serves when not the one it stands in (Serves in its window)
         **{k: d.get(k) for k in DEVICE_FIELDS},   # fields a plug-in needs on its cards
         "ieee": d.get("ieee"), "model": d.get("model"), "vendor": d.get("vendor"), "description": d.get("description"),
         "esphome": bool(d.get("esphome_node") or str(d.get("availability_topic") or "").endswith("/status")),   # an ESPHome node's status topic
@@ -197,6 +198,8 @@ def i18n_js():
 
 class HouseBody(Body):
     lang: Optional[str] = None
+    backup_at: Optional[str] = None         # "HH:MM" or "off" (Settings -> Backups); "" = BACKUP_AT of .env
+    demo_host: Optional[str] = None         # host[:port] the health page watches; "" = none
 
 
 @app.get("/display.js")
@@ -216,10 +219,23 @@ def put_house(body: HouseBody, request: Request):
     _house_token_only(request)
     if body.lang is not None and body.lang not in house_langs():
         raise HTTPException(400, f"lang: one of {', '.join(house_langs())}")
+    at = None if body.backup_at in (None, "") else house_backup_at(body.backup_at)
+    if body.backup_at not in (None, "") and at is None:
+        raise HTTPException(400, "backup time: HH:MM or off")
+    if body.demo_host is not None and house_demo_host(body.demo_host) is None:
+        raise HTTPException(400, "demo host: a name or an address, and :port if it is not 443")
     with _settings_lock:
         if body.lang is not None:
             _house["lang"] = body.lang
+        if at:
+            _house["backup_at"] = at
+        elif body.backup_at == "":
+            _house.pop("backup_at", None)
+        if body.demo_host is not None:
+            _house["demo_host"] = house_demo_host(body.demo_host)
         _save_settings()
+    if body.backup_at is not None:
+        _backup_wake.set()                      # the nightly loop counts to the new time now, no restart
     return get_house()
 
 
@@ -353,6 +369,26 @@ def set_dimrange(dev_id: str, code: str, body: DimRangeBody):
             dr[code] = [lo, hi]
         _save_settings()
     return {"ok": True, "code": code, "floor": lo, "ceil": hi}
+
+
+class ServesBody(Body):
+    room: str = ""          # a room id; "" = the room it stands in
+
+
+@app.put("/api/devices/{dev_id}/serves")
+def set_device_serves(dev_id: str, body: ServesBody):
+    """The room a device serves (voice, the room tabs, family rights); "" = where it stands. The map keeps the place."""
+    if dev_id not in DEVICES:
+        raise HTTPException(404, "unknown device")
+    with _settings_lock:
+        if body.room and _find_room(body.room) < 0:
+            raise HTTPException(404, "unknown room")
+        if body.room:
+            _serves[dev_id] = body.room
+        else:
+            _serves.pop(dev_id, None)
+        _save_settings()
+    return {"ok": True, "serves": served_room(dev_id), "picked": body.room}
 
 
 @app.post("/api/devices/{dev_id}/rename")

@@ -69,7 +69,7 @@ if (not SETTINGS_PATH.exists() and not _same_dir(HOUSE, ROOT)
     _SETTINGS_BAD = "HOUSE_DIR is empty but the checkout still holds the house (make move-house moves it)"
     log.error(f"[settings] {_SETTINGS_BAD}; saves DISABLED until fixed")
 _CORE_SECTIONS = {"_version", "names", "channel_names", "channel_dimrange", "bindings", "favorites", "rooms",
-                  "tab_order", "tile_sizes", "room_sensors", "automations", "rules_disabled", "house", "aliases"}
+                  "tab_order", "tile_sizes", "room_sensors", "serves", "automations", "rules_disabled", "house", "aliases"}
 _IN_SETTINGS_FILE = set(_cfg)
 
 # A plug-in's sections live in its own plugin-data/<name>/settings.json: merged into _cfg here,

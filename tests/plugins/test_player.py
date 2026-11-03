@@ -171,11 +171,11 @@ def house(monkeypatch, tmp_path):
     monkeypatch.setattr(core, "get_status", lambda dev: tv if dev == "tv_main" else {})
     monkeypatch.setattr(pcs, "DATA", tmp_path / "computers.json")
     monkeypatch.setattr(pcs, "_computers", {
-        "i3server": {"name": "i3server", "host": "192.0.2.61", "user": "tester", "tv": "tv_main", "input": "HDMI 3"},
+        "living-pc": {"name": "living-pc", "host": "192.0.2.61", "user": "tester", "tv": "tv_main", "input": "HDMI 3"},
         "bedroom": {"name": "bedroom", "host": "192.0.2.62", "user": "tester"},
         "kid": {"name": "Kid PC", "host": "192.0.2.63", "user": "kid", "wsl": "Ubuntu/kid"},
         "dell": {"name": "Dell", "host": "192.0.2.10", "user": "tester"}})
-    monkeypatch.setattr(pcs, "_status", {"i3server": {"ok": True, "roles": ["player"]}, "bedroom": {"ok": True, "roles": ["player"]},
+    monkeypatch.setattr(pcs, "_status", {"living-pc": {"ok": True, "roles": ["player"]}, "bedroom": {"ok": True, "roles": ["player"]},
                                          "kid": {"ok": True, "roles": ["player"]}, "dell": {"ok": True, "roles": []}})
     monkeypatch.setattr(me, "_cache", {})
     for k, v in TVS.items():
@@ -187,8 +187,8 @@ def house(monkeypatch, tmp_path):
 
 def test_the_players_are_the_computers_with_the_role_and_say_why_one_does_not_answer(house):
     ps = {p["id"]: p for p in house.get("/api/player", headers=HOUSE).json()["players"]}
-    assert set(ps) == {"i3server", "bedroom"}                                 # a WSL has no screen; Dell has no player
-    assert (ps["i3server"]["tv_name"], ps["i3server"]["input"], ps["i3server"]["state"]["idle"]) == ("Main TV", "HDMI 3", True)
+    assert set(ps) == {"living-pc", "bedroom"}                                 # a WSL has no screen; Dell has no player
+    assert (ps["living-pc"]["tv_name"], ps["living-pc"]["input"], ps["living-pc"]["state"]["idle"]) == ("Main TV", "HDMI 3", True)
     assert ps["bedroom"]["state"] is None and "not running" in ps["bedroom"]["error"]
     n = len(house.calls)
     house.get("/api/player", headers=HOUSE)
@@ -197,23 +197,23 @@ def test_the_players_are_the_computers_with_the_role_and_say_why_one_does_not_an
 
 
 def test_play_turns_the_tv_on_onto_its_input_then_plays_there(house):
-    r = house.post("/api/player/i3server/play", headers=HOUSE, json={"url": "https://example.com/a.m3u8", "title": "A film"})
+    r = house.post("/api/player/living-pc/play", headers=HOUSE, json={"url": "https://example.com/a.m3u8", "title": "A film"})
     assert r.status_code == 200 and r.json()["state"]["idle"] is False and r.json()["tv_note"] == ""
     assert house.sent == [("tv_main", "power", True), ("tv_main", "input", "HDMI 3")]
     assert house.calls[-1] == ("/v1/hosts/player", {"host": "192.0.2.61", "user": "tester", "cmd": "play",
                                                     "url": "https://example.com/a.m3u8", "title": "A film"})
     house.sent.clear()
-    house.post("/api/player/i3server/play", headers=HOUSE, json={"url": "https://example.com/b.m3u8"})
+    house.post("/api/player/living-pc/play", headers=HOUSE, json={"url": "https://example.com/b.m3u8"})
     assert house.sent == []                                                   # on and on its input already
     r = house.post("/api/player/bedroom/play", headers=HOUSE, json={"url": "https://example.com/a.m3u8"})
     assert r.status_code == 409 and r.json()["detail"].startswith("the player is not running")   # no TV there: nothing switched
 
 
 def test_a_command_passes_only_its_fields(house):
-    r = house.post("/api/player/i3server/cmd", headers=HOUSE, json={"cmd": "seek", "by": -30})
+    r = house.post("/api/player/living-pc/cmd", headers=HOUSE, json={"cmd": "seek", "by": -30})
     assert r.status_code == 200
     assert house.calls[-1] == ("/v1/hosts/player", {"host": "192.0.2.61", "user": "tester", "cmd": "seek", "by": -30.0})
-    assert house.post("/api/player/i3server/cmd", headers=HOUSE, json={"cmd": "play"}).status_code == 400
+    assert house.post("/api/player/living-pc/cmd", headers=HOUSE, json={"cmd": "play"}).status_code == 400
     assert house.post("/api/player/nope/cmd", headers=HOUSE, json={"cmd": "stop"}).status_code == 404
 
 
@@ -228,14 +228,14 @@ def test_the_computer_gets_ctl_and_its_unit_from_the_house_without_the_token(hou
 def test_computers_installs_a_player_anywhere_but_in_a_wsl_and_has_no_use(house):
     v = house.get("/api/computers", headers=HOUSE).json()
     roles = {c["id"]: c["roles"]["player"] for c in v["computers"]}
-    assert roles["i3server"] == {"installed": True, "active": False, "many": True} and not roles["dell"]["installed"]
+    assert roles["living-pc"] == {"installed": True, "active": False, "many": True} and not roles["dell"]["installed"]
     r = house.post("/api/computers/dell/roles/player", headers=HOUSE, json={"action": "install"})
     assert r.status_code == 200
     assert house.calls[-1] == ("/v1/hosts/run", {"host": "192.0.2.10", "user": "tester", "role": "player", "action": "install",
                                                  "args": {"house": "http://192.0.2.10:8765"}})
-    assert house.post("/api/computers/i3server/roles/player", headers=HOUSE, json={"action": "use"}).status_code == 400
+    assert house.post("/api/computers/living-pc/roles/player", headers=HOUSE, json={"action": "use"}).status_code == 400
     assert house.post("/api/computers/kid/roles/player", headers=HOUSE, json={"action": "install"}).status_code == 409
-    house.post("/api/computers/i3server/roles/player", headers=HOUSE, json={"action": "remove"})
+    house.post("/api/computers/living-pc/roles/player", headers=HOUSE, json={"action": "remove"})
     assert house.calls[-1][1]["action"] == "remove" and house.calls[-1][1]["args"] == {}
 
 
@@ -312,7 +312,7 @@ def test_a_pasted_page_goes_to_the_source_of_its_site_and_link_takes_the_rest(fi
 
 
 def test_watch_sends_the_sources_stream_with_its_headers_and_the_next_episode_follows(films):
-    r = films.post("/api/player/i3server/watch", headers=HOUSE, json={"source": "site", "id": "s1", "translation": "10", "season": 1,
+    r = films.post("/api/player/living-pc/watch", headers=HOUSE, json={"source": "site", "id": "s1", "translation": "10", "season": 1,
                                                                        "episode": 2, "quality": "1080p", "title": "Series"})
     assert r.status_code == 200, r.text
     assert sys.modules["yashome_player_source_site"].CALLS[-1] == ("s1", "10", 1, 2, "1080p")
@@ -321,23 +321,23 @@ def test_watch_sends_the_sources_stream_with_its_headers_and_the_next_episode_fo
                                                     "subs": ["https://cdn.example.com/s.vtt"]})
     assert films.sent[:2] == [("tv_main", "power", True), ("tv_main", "input", "HDMI 3")]
     rec = films.get("/api/player/recent", headers=HOUSE).json()
-    assert rec["recent"][0]["episode"] == 2 and rec["now"]["i3server"]["season"] == 1
-    r = films.post("/api/player/i3server/next", headers=HOUSE).json()           # the last of season 1: season 2, episode 1
+    assert rec["recent"][0]["episode"] == 2 and rec["now"]["living-pc"]["season"] == 1
+    r = films.post("/api/player/living-pc/next", headers=HOUSE).json()           # the last of season 1: season 2, episode 1
     assert films.calls[-1][1]["url"] == "https://cdn.example.com/2/1.m3u8" and r["watching"]["season"] == 2
-    assert films.post("/api/player/i3server/next", headers=HOUSE).status_code == 409
-    assert json.loads(me.WATCH.read_text())["now"]["i3server"]["episode"] == 1
+    assert films.post("/api/player/living-pc/next", headers=HOUSE).status_code == 409
+    assert json.loads(me.WATCH.read_text())["now"]["living-pc"]["episode"] == 1
 
 
 def test_an_episode_that_ends_near_its_end_counts_as_seen_and_a_stop_by_hand_ends_the_series(films):
-    films.post("/api/player/i3server/watch", headers=HOUSE, json={"source": "site", "id": "s1", "season": 1, "episode": 1})
-    me._seen("i3server", {"idle": False, "pos": 1300.0, "duration": 1400.0})
+    films.post("/api/player/living-pc/watch", headers=HOUSE, json={"source": "site", "id": "s1", "season": 1, "episode": 1})
+    me._seen("living-pc", {"idle": False, "pos": 1300.0, "duration": 1400.0})
     assert me._watch["recent"][0]["pos"] == 1300.0
-    me._seen("i3server", {"idle": True})
-    assert me._watch["now"]["i3server"]["ended"] is True                      # the loop starts the next one
-    assert me._next_of(me._watch["now"]["i3server"]) == (1, 2)
-    me._seen("i3server", {"idle": False, "pos": 100.0, "duration": 1400.0})
-    films.post("/api/player/i3server/cmd", headers=HOUSE, json={"cmd": "stop"})
-    assert "i3server" not in me._watch["now"]
+    me._seen("living-pc", {"idle": True})
+    assert me._watch["now"]["living-pc"]["ended"] is True                      # the loop starts the next one
+    assert me._next_of(me._watch["now"]["living-pc"]) == (1, 2)
+    me._seen("living-pc", {"idle": False, "pos": 100.0, "duration": 1400.0})
+    films.post("/api/player/living-pc/cmd", headers=HOUSE, json={"cmd": "stop"})
+    assert "living-pc" not in me._watch["now"]
 
 
 def test_only_a_poster_a_source_named_is_fetched(films, monkeypatch):

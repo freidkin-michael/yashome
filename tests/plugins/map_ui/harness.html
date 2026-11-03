@@ -103,6 +103,25 @@ function press(el){
     box.innerHTML = ''; await __p.tabs[0].render(box); await sleep(200);
     window.__map = () => mapData; log('IDLE'); document.getElementById('out').textContent = out.join('\n'); return;
   }
+  if(location.search.includes('zoom')){     // a fling, a wheel spun out or in, a pinch whose one finger lifts first: the plan stays on the pane
+    const view = $(box, '[data-m="view"]'), st = () => $(box, '[data-m="stage"]').getBoundingClientRect(), v = view.getBoundingClientRect();
+    const pe = (t, id, x, y) => view.dispatchEvent(new PointerEvent(t, {pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true}));
+    const wheel = (n, dy) => { for(let k = 0; k < n; k++) view.dispatchEvent(new WheelEvent('wheel', {deltaY: dy, clientX: cx, clientY: cy, bubbles: true, cancelable: true})); };
+    const cover = () => { const a = st(), w = Math.min(a.right, v.right) - Math.max(a.left, v.left), h = Math.min(a.bottom, v.bottom) - Math.max(a.top, v.top);
+      return +Math.min(Math.max(0, w) / Math.min(a.width, v.width), Math.max(0, h) / Math.min(a.height, v.height)).toFixed(2); };
+    const fit = async () => { $(box, '[data-m="fit"]').click(); await sleep(60); }, fitW = st().width, cx = (v.left + v.right) / 2, cy = (v.top + v.bottom) / 2;
+    pe('pointerdown', 1, cx, cy); for(let k = 1; k <= 20; k++){ pe('pointermove', 1, cx - 80 * k, cy - 80 * k); await sleep(20); } pe('pointerup', 1, cx - 1600, cy - 1600); await sleep(60);
+    const flung = cover(); await fit();
+    wheel(40, 100); await sleep(60); const outW = +(st().width / fitW).toFixed(2); await fit();
+    wheel(60, -100); await sleep(60); const inW = +(st().width / fitW).toFixed(2), inCover = cover(); await fit();
+    pe('pointerdown', 1, cx - 20, cy); pe('pointerdown', 2, cx + 20, cy);
+    for(let k = 1; k <= 10; k++){ pe('pointermove', 1, cx - 20 - 8 * k, cy); pe('pointermove', 2, cx + 20 + 8 * k, cy); await sleep(20); }
+    await sleep(60); const a = st(); pe('pointerup', 1, cx - 100, cy); pe('pointermove', 2, cx + 103, cy + 3); await sleep(60);
+    const jump = Math.round(Math.hypot(st().left - a.left, st().top - a.top)); pe('pointerup', 2, cx + 103, cy + 3); await fit();
+    pe('pointerdown', 1, cx, cy); pe('pointerdown', 2, cx, cy); pe('pointermove', 2, cx + 50, cy); pe('pointermove', 1, cx, cy); pe('pointerup', 1, cx, cy); pe('pointerup', 2, cx + 50, cy); await sleep(60);
+    log('zoom: ' + JSON.stringify({flung, outW, inW, inCover, jump, nan: /NaN|Infinity/.test($(box, '[data-m="stage"]').style.transform)}));
+    log('DONE'); document.getElementById('out').textContent = out.join('\n'); return;
+  }
   if(RESTRICTED){
     const view = $(box, '[data-m="view"]'), el = () => box.querySelector('[data-id="r1"]'), at = () => mapData.items[0];
     const pe = (type, x, y, tgt, kind) => tgt.dispatchEvent(new PointerEvent(type, {pointerId: 9, pointerType: kind, clientX: x, clientY: y, bubbles: true}));

@@ -490,7 +490,7 @@ class StoreRegistry(unittest.TestCase):
                   "favorites": [{"device": old, "code": "state"}], "rooms": [{"id": "r", "name": "R", "devices": [old]}],
                   "tab_order": {"t": [old]}, "tile_sizes": {"t": {old: {"w": 1}}}, "room_sensors": {"r": {"temperature": old + "/temperature"}},
                   "automations": {old + "/state": {"schedule": []}}, "rules_disabled": {f"b|{old}|btn|single"}, "house": {"lang": "en"},
-                  "aliases": {old: ["rg_older"]}}
+                  "aliases": {old: ["rg_older"]}, "serves": {old: "r"}}
         no_devices = {"house", "aliases"}                     # no device key (aliases keeps former ids on purpose)
         self.assertEqual(set(sample), set(app._STORES), "a new store needs a row here")
         self.assertEqual(set(app._STORES) | {"_version"}, app._CORE_SECTIONS)

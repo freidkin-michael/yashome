@@ -314,8 +314,8 @@
       const p = plan(); if(!p) return;
       sizeView(); S.userZoomed = false;
       if(!view.clientWidth || !view.clientHeight){ requestAnimationFrame(fit); return; }         // not laid out yet: once more next frame
-      const lw = S.rot ? p.h : p.w, lh = S.rot ? p.w : p.h;                 // the plan as it lies on the screen
-      S.scale = Math.min(view.clientWidth / lw, view.clientHeight / lh) * 0.98;
+      const lh = S.rot ? p.w : p.h;                                         // the plan as it lies on the screen
+      S.scale = fitScale();
       S.ox = S.rot ? (view.clientWidth + p.h * S.scale) / 2 : (view.clientWidth - p.w * S.scale) / 2;
       S.oy = (view.clientHeight - lh * S.scale) / 2;
       place();
@@ -810,13 +810,17 @@
       } else if(S.noPan){
         if(Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) moved = true;          // it began on a thing: not a tap any more, but never a pan
       } else if(start && (moved || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 7)){
-        moved = true; S.userZoomed = true; S.ox = start.ox + e.clientX - start.x; S.oy = start.oy + e.clientY - start.y; placeSoon();
+        moved = true; S.userZoomed = true; S.ox = start.ox + e.clientX - start.x; S.oy = start.oy + e.clientY - start.y; keepInView();
+        start.ox = S.ox - (e.clientX - start.x); start.oy = S.oy - (e.clientY - start.y); placeSoon();     // held at the edge: a way back moves it at once
       }
       ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
     });
     let lastCorner = {i: -1, at: 0};
+    const panFromRest = () => {                     // a finger of a pinch lifted: the other pans on from here, not from where it was pressed
+      const [o] = ptrs.values(); if(ptrs.size === 1) start = {x: o.x, y: o.y, ox: S.ox, oy: S.oy};
+    };
     const up = e => {
-      const was = ptrs.has(e.pointerId); ptrs.delete(e.pointerId);
+      const was = ptrs.has(e.pointerId); ptrs.delete(e.pointerId); panFromRest();
       if(S.opDrag && S.opDrag.id === e.pointerId){ const d = S.opDrag; S.opDrag = null; if(moved) changed(); else draw(); if(!moved) openingSheet(d.o); return; }
       if(S.opDraw && S.opDraw.id === e.pointerId){                               // a stroke: an opening on the nearest wall; a tap: the one under it
         const D = S.opDraw; S.opDraw = null;
@@ -834,11 +838,19 @@
         dropLift(!back);                                     // a release back at the start cancels
         if(active) return;                                   // it was a lift, not a tap
       } if(was && !moved && ptrs.size === 0 && e.type === 'pointerup') tap(e); };
-    view.addEventListener('pointerup', up); view.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); S.opDraw = null; if(lift) dropLift(false); });
+    view.addEventListener('pointerup', up); view.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); panFromRest(); S.opDraw = null; if(lift) dropLift(false); });
     view.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15); }, {passive: false});
-    function zoomAt(cx, cy, k){
-      const r = view.getBoundingClientRect(), nx = Math.max(0.05, Math.min(6, S.scale * k)), f = nx / S.scale;
-      S.userZoomed = true; S.ox = (cx - r.left) - ((cx - r.left) - S.ox) * f; S.oy = (cy - r.top) - ((cy - r.top) - S.oy) * f; S.scale = nx; placeSoon();
+    function zoomAt(cx, cy, k){                  // from half the fitted plan to 8 times it (at most 6): a phone at 6 showed one wall
+      const fs = fitScale(); if(!(k > 0) || !isFinite(k) || !(fs > 0)) return;
+      const r = view.getBoundingClientRect(), nx = clamp(S.scale * k, fs / 2, Math.max(fs, Math.min(6, fs * 8))), f = nx / S.scale;
+      S.userZoomed = true; S.ox = (cx - r.left) - ((cx - r.left) - S.ox) * f; S.oy = (cy - r.top) - ((cy - r.top) - S.oy) * f; S.scale = nx; keepInView(); placeSoon();
+    }
+    function fitScale(){ const p = plan(), w = view.clientWidth, h = view.clientHeight; return p && w && h ? Math.min(w / (S.rot ? p.h : p.w), h / (S.rot ? p.w : p.h)) * 0.98 : 0; }
+    function keepInView(){                       // a pan or a zoom never takes the plan off the pane: half the pane (or half the plan) stays covered
+      const p = plan(), vw = view.clientWidth, vh = view.clientHeight; if(!p || !vw || !vh) return;
+      const W = (S.rot ? p.h : p.w) * S.scale, H = (S.rot ? p.w : p.h) * S.scale, dx = S.rot ? W : 0;      // turned, the plan lies left of ox
+      const mx = Math.min(W, vw) / 2, my = Math.min(H, vh) / 2;
+      S.ox = clamp(S.ox - dx, mx - W, vw - mx) + dx; S.oy = clamp(S.oy, my - H, vh - my);
     }
     const planToScreen = (x, y) => {                                           // a point of the plan (0..1) -> client coordinates
       const p = plan(), vr = view.getBoundingClientRect(), X = x * p.w * S.scale, Y = y * p.h * S.scale;

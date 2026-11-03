@@ -13,7 +13,7 @@ const GESTURE_WORDS = {single: 'press', true: 'triggered', false: 'cleared', bel
 function ruleTitle(r){
   const w = (r.when && r.when[0]) || {}, t = (r.then && r.then[0]) || {};
   if(r.kind === 'binding'){
-    const g = whenGesture(w.gesture, w.device);
+    const g = whenGesture(w.gesture, w.device, w.type === 'sensor' ? w.code : '');
     const wc = w.type === 'sensor' ? ((BY_ID[w.device] || {}).controls || []).find(x => x.code === w.code) : null;
     const who = w.device_name + (wc && wc.label ? ' \u00b7 ' + wc.label : '');
     if(t.type && t.type !== 'device'){
@@ -79,6 +79,9 @@ function fmtReading(val, dev, code){
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
 }
 function roomNameOf(id){ const r = ROOMS.find(x => (x.devices || []).includes(id)); return r ? r.name : ''; }
+// the devices a room serves (its tab, family rights): the server's `serves`, else those standing in it
+const roomServes = r => r.serves || r.devices || [];
+function servedRoomOf(id){ const r = ROOMS.find(x => roomServes(x).includes(id)); return r ? r.name : ''; }
 // a channel label a user left as "-" or a "nothing" word is no name: the channel is numbered instead
 const NO_NAME = /^[\s\-\u2013\u2014_.\u00b7]*$|^(\u043d\u0438\u0447\u0435\u0433\u043e|\u043d\u0435\u0442|none|no|empty|\u043f\u0443\u0441\u0442\u043e)$/i;   // i18n: the words users type for "no name"
 function chanLabel(s, i, n){ return (s.label && !NO_NAME.test(s.label)) ? s.label : (n > 1 ? String(i + 1) : ''); }
@@ -96,8 +99,16 @@ function effCat(d){
 const CAT_EN = {switch: 'switch', sensor: 'sensor', button: 'button', indicator: 'indicator light', other: 'device', climate: 'air conditioner', tv: 'TV',
                 media: 'media player', ir: 'IR remote', camera: 'camera'};      // English has no table of its own (and restricted mode drops the tables)
 function catLabel(c){ if(!c) return ''; const t = i18n('category:' + c); return t.startsWith('category:') ? CAT_EN[c] || i18n('device') : t; }
-function whenGesture(g, dev){
+// a yes/no trigger of a channel in its words: the channel's own labels, else BOOL_WORDS ("became open"), else on/off
+function boolGesture(g, dev, code){
+  if(g !== 'true' && g !== 'false') return '';
+  const ctl = ((BY_ID[dev] || {}).controls || []).find(x => x.code === code) || {}, w = BOOL_WORDS[code];
+  const word = (ctl.labels || {})[g] || i18n(w ? w[g === 'true' ? 0 : 1] : g === 'true' ? 'on' : 'off');
+  return i18n('became {0}', word);
+}
+function whenGesture(g, dev, code){
   if(dev && isNfc(dev)) return g;                 // a tag's name is its own word, never a gesture's ("lock" stays "lock")
+  if(code && boolGesture(g, dev, code)) return boolGesture(g, dev, code);
   if(GESTURE_LABELS[g]) return GESTURE_LABELS[g];
   if(GESTURE_WORDS[g]) return i18n(GESTURE_WORDS[g]);
   return gestureLabel(g);
@@ -105,7 +116,7 @@ function whenGesture(g, dev){
 function whenChip(w){
   if(w.type === 'button') return `${escapeHtml(w.device_name)}: ${escapeHtml(whenGesture(w.gesture, w.device))}`;
   if(w.type === 'sensor'){
-    const g = whenGesture(w.gesture, w.device);
+    const g = whenGesture(w.gesture, w.device, w.code);
     const ctl = ((BY_ID[w.device] || {}).controls || []).find(x => x.code === w.code);
     const chan = ctl && ctl.label ? ` \u00b7 ${ctl.label}` : '';
     const t = (w.threshold!=null) ? ` ${g} ${w.threshold}` : ` ${g}`;

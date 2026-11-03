@@ -503,6 +503,39 @@ def container_exists(name):
     return r.returncode == 0
 
 
+STACK_PROJECT = "yashome"           # docker-compose.yml: name
+
+
+def stack_containers(cfg):
+    """The stack's running containers and their networks. One left with none (Docker restarted it while the
+    link was down) answers nobody: the health page shows it, Restart the house makes it again."""
+    r = run(["docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={STACK_PROJECT}"], cfg, timeout=8)
+    if r is None or r.returncode != 0:
+        raise HttpError(503, "docker does not answer: " + ((r.stderr if r else "") or "no docker").strip()[-200:])
+    ids = r.stdout.split()
+    if not ids:
+        return []
+    r = run(["docker", "inspect", *ids], cfg, timeout=8)
+    try:
+        items = json.loads(r.stdout) if r is not None and r.returncode == 0 else None
+    except ValueError:
+        items = None
+    if not isinstance(items, list):
+        raise HttpError(503, "docker inspect gave nothing readable")
+    out = []
+    for c in items:
+        labels = (c.get("Config") or {}).get("Labels") or {}
+        nets = sorted((c.get("NetworkSettings") or {}).get("Networks") or {})
+        mode = (c.get("HostConfig") or {}).get("NetworkMode") or ""
+        out.append({"name": str(c.get("Name") or "").lstrip("/"), "service": labels.get("com.docker.compose.service", ""),
+                    "networks": nets, "netless": not nets and mode != "none"})
+    return sorted(out, key=lambda x: x["name"])
+
+
+def get_containers(cfg, _body):
+    return 200, {"containers": stack_containers(cfg)}
+
+
 def current_job(cfg):
     job = read_job(cfg)
     if job is None:
@@ -1053,6 +1086,7 @@ ROUTES = {
     ("POST", "/v1/env"): post_env,
     ("POST", "/v1/jobs"): post_jobs,
     ("GET", "/v1/jobs/current"): get_job,
+    ("GET", "/v1/containers"): get_containers,
     ("POST", "/v1/hosts/check"): post_hosts_check,
     ("POST", "/v1/hosts/scan"): post_hosts_scan,
     ("POST", "/v1/hosts/forget"): post_hosts_forget,

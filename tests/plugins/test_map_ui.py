@@ -1,4 +1,5 @@
 """The map screen in a real (headless) Chrome against stubs: draw an LED strip, edit its path, refuse a one-point strip, cancel, save over a stale revision."""
+import json
 import shutil
 import subprocess
 import tempfile
@@ -141,3 +142,20 @@ def test_restricted_a_watcher_drags_nothing_the_session_let_edit_moves_and_saves
     assert "DONE" in log, log
     assert "watcher: [[false,0],[false,0],[false,false,false,false]]" in log, log     # mouse, finger: no move, no save; no owner's tool
     assert "editor: [[true,1],[true,1],[true,true,true,false]]" in log, log          # each drag moved and saved once; the tools, never the plan picture
+
+
+@pytest.mark.skipif(CHROME is None, reason="no Chrome here")
+@pytest.mark.parametrize("query,size", [("?zoom=1", "1000,900"), ("?zoom=1&portrait=1", "412,915")])
+def test_a_pan_or_a_zoom_never_takes_the_plan_off_the_pane(query, size):
+    with tempfile.TemporaryDirectory() as d:
+        shutil.copy(HERE / "map_ui" / "harness.html", d)
+        shutil.copy(HERE.parent.parent / "plugins" / "tools" / "map" / "ui.js", d); shutil.copy(HERE.parent.parent / "display.js", d)
+        page = subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", f"--window-size={size}", "--virtual-time-budget=60000",
+                               f"--user-data-dir={d}/chrome", "--dump-dom", f"file://{d}/harness.html{query}"], capture_output=True, text=True, timeout=90).stdout
+    log = page.split('<pre id="out">', 1)[-1].split("</pre>", 1)[0]
+    errors = [ln for ln in log.splitlines() if ln.startswith(("ERROR", "FAIL")) and "ResizeObserver loop" not in ln]
+    assert "DONE" in log and not errors, log
+    z = json.loads(log.split("zoom: ", 1)[1].splitlines()[0])
+    assert z["flung"] >= 0.49 and z["inCover"] >= 0.49, z            # a fling or a zoom in leaves half the pane on the plan (a phone showed a black pane)
+    assert 0.45 <= z["outW"] <= 0.55 and z["inW"] <= 8.05, z          # zoom out stops at half the fitted plan, in at 8 times it
+    assert z["jump"] <= 6 and not z["nan"], z                          # one finger of a pinch lifted: the other pans 3 px on, the plan does not jump

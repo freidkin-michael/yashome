@@ -152,9 +152,9 @@ def _sats() -> list:
 
 
 def _map_room(s: dict) -> dict:
-    """The room of the map (the dashboard rooms) that holds one of the satellite's cards or its tablet, else {}."""
+    """The room one of the satellite's cards or its tablet serves (its Serves pick, else where it stands on the map), else {}."""
     ids = {s["id"] + "_mic", s["id"] + "_spk"} | ({s["panel"]} if s.get("panel") else set())
-    return next((r for r in core.get_rooms() if ids & set(r.get("devices") or [])), {})
+    return next((r for r in core.get_rooms() if ids & set(core.served_devices(r["id"]))), {})
 
 
 def _room(s: dict) -> str:

@@ -53,6 +53,10 @@ Each role is a card (group "voice"): `<id>_mic` has Listening (on / muted: `<nod
 not on the card but work from the API, from a rule and from MQTT: `home/cmd/<id>_spk/say` with a text, `.../play` with a URL,
 `.../stop`, `.../volume`.
 
+A satellite's room is the room its cards serve: the card's Serves in its window, else the room it stands in on the map. A
+TV session takes the TV that serves the satellite's room. For the commands, voice-vad reads the room a device serves from
+`GET /api/rooms` (`serves` of each room) or `GET /api/devices` (`serves`, empty = where it stands), never from `devices`.
+
 - `POST /api/voice/say {text, target, lang?, voice?}`: the TTS speaks, every player of `target` (a satellite id, a room or `all`)
   plays it. `POST /api/voice/play {url, target}`, `POST /api/voice/stop {target}`, `POST /api/voice/volume {target, value 0..100}`.
 - Settings -> Voice -> Voice (`GET/PUT /api/voice/config`, the house token; voice-vad reads it every 10 s, no restart): the wake word, how exact

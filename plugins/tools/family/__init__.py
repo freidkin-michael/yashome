@@ -719,8 +719,9 @@ def _trim(path: str, data, rights: dict):
     if path == "/api/rooms/locked" and isinstance(data, dict):
         return {**data, "devices": [x for x in data.get("devices", []) if x in rights]}
     if path == "/api/rooms":
-        rooms = [{**r, "devices": [x for x in r.get("devices", []) if x in rights]} for r in data]
-        return [r for r in rooms if r["devices"]]
+        rooms = [{**r, "devices": [x for x in r.get("devices", []) if x in rights],
+                  **({"serves": [x for x in r["serves"] if x in rights]} if isinstance(r.get("serves"), list) else {})} for r in data]
+        return [r for r in rooms if r["devices"] or r.get("serves")]
     return data
 
 

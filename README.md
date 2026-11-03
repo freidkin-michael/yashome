@@ -39,7 +39,8 @@ home they can read end to end, on a Raspberry Pi or an old laptop, with a broker
 - **Rules without code.** A rule is a trigger (device event, time, sensor threshold), optional
   conditions and actions. Per channel: schedules ("on at 06:00 on weekdays") and auto-off
   ("switch off 60 minutes after any on"), including a manual press.
-- **Rooms and favourites.** The dashboard groups by room, keeps a favourites strip, shows live
+- **Rooms and favourites.** The dashboard groups by room (the room a device serves: its window's Serves,
+  else where it stands), keeps a favourites strip, shows live
   state over a WebSocket and re-syncs itself if the broker restarts.
 - **Ids that can change.** When a device's id changes in its own system, every rule, favourite,
   room and timer that referenced it moves along (`POST /api/devices/relink`, or a plug-in's own
@@ -212,7 +213,7 @@ so the browser's Back works.
 
 | group | pages |
 |---|---|
-| Overview | the house checks itself: what is fine and what needs you; each row opens the place that fixes it |
+| Overview | the house checks itself: what is fine and what needs you (a container left with no network too); each row opens the place that fixes it; a demo host to watch (optional) |
 | House | Home map (the map editor), Family (phones, rights, the app), House language, Weather |
 | Devices | All devices (with Forgotten), Zigbee, IR, TVs, Panels, NFC tags, Computers and servers |
 | Automation | Rules, History, Watchdog |
@@ -221,7 +222,7 @@ so the browser's Back works.
 | Maintenance | Backups, Plug-ins and update, Restart, Firmware builder |
 
 A page comes from the core or from a plug-in; a page whose plug-in is off is not listed. A plug-in's page with no
-subject of its own lands under **Other**. The layout and its rules: [docs/settings-design.md](docs/settings-design.md).
+subject of its own lands under **Other**. On a page, the tab of the page's own plug-in comes first (TVs before Players). The layout and its rules: [docs/settings-design.md](docs/settings-design.md).
 
 ![Settings](docs/img/settings.png)
 Settings full screen: the groups on the left, a page with its tabs on the right.
@@ -256,8 +257,8 @@ and hands out guest sessions. See [docs/security.md](docs/security.md) and [docs
 
 ## Backups
 
-The backend makes a backup every night (`BACKUP_AT`, default 03:30 in the `TZ` of `.env` - UTC
-without it; `off` for none) into `backups/` and keeps the last 14 (`BACKUP_KEEP`): the house files
+The backend makes a backup every night at the time set in Settings -> Maintenance -> Backups (taken at
+once, no restart; unset: `BACKUP_AT`, default 03:30 in the `TZ` of `.env` - UTC without it; `off` for none) into `backups/` and keeps the last 14 (`BACKUP_KEEP`): the house files
 (HOUSE_DIR, or the house files of this checkout), `.env`, zigbee2mqtt's data without its log (the
 coordinator's network key: without it every Zigbee device is paired again) and your own plug-ins.
 Runtime state (pending timers, the status cache) stays out: restored days later it would replay old

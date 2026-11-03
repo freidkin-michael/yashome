@@ -135,6 +135,8 @@ const Home = {
   },
   tabForCategory: cat => tabForCategory(cat),
   roomOf: id => roomNameOf(id),            // the room a device is in, '' when none
+  servedRoomOf: id => servedRoomOf(id),    // the room a device serves (its Serves pick, else where it stands), '' when none
+  rooms: () => ROOMS.map(r => ({id: r.id, name: r.name})),   // the rooms of the house: [{id, name}]
   when: ms => fmtWhen(ms),                 // a date and time in the UI language
   ago: sec => agoText(sec),                // how long ago, from an age in seconds: "5 min ago", "3 h ago", "4 days ago"
   toast: text => stToast(text),            // a short note at the bottom ("Saved")

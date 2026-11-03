@@ -1431,3 +1431,23 @@ def test_the_app_s_screen_is_made_by_the_house_for_the_phone_s_token(phones, mon
     assert [(k["slot"], k["code"], k.get("value")) for k in items[3]["keys"]] == \
         [("ok", "key_ok", None), ("play", "media", "play"), ("pause", "media", "pause")]    # IR power and stray IR chips stay off
     assert ui.slot("ir_power_on") == "on" and ui.slot("ir_x", "up") == "up" and ui.slot("ir_tools") == ""
+
+
+def test_the_phone_s_room_tabs_and_the_rooms_it_reads_go_by_the_room_a_device_serves(monkeypatch):
+    """A speaker standing in the hall that serves the living room is on the living room's tab of the phone, not the hall's."""
+    monkeypatch.setattr(core, "_save_settings", lambda: None)
+    for d in ("sv_spk", "sv_lamp"):
+        monkeypatch.setitem(core.DEVICES, d, {"id": d, "name": d, "category": "switch", "controls": [{"code": "state", "kind": "switch"}]})
+    old_rooms, old_serves = [dict(r) for r in core._rooms], dict(core._serves)
+    core._rooms.extend([{"id": "sv_h", "name": "Hall", "devices": ["sv_spk", "sv_lamp"]}, {"id": "sv_l", "name": "Living", "devices": []}])
+    core._serves["sv_spk"] = "sv_l"
+    try:
+        tabs = {t["id"]: [c["id"] for c in t["cards"]] for t in me._ui.screen(None, [], "en")["tabs"]}
+        assert tabs["room:sv_h"] == ["sv_lamp"] and tabs["room:sv_l"] == ["sv_spk"]
+        rooms = [{"id": "sv_h", "devices": ["sv_spk", "sv_lamp"], "serves": ["sv_lamp"]}, {"id": "sv_l", "devices": [], "serves": ["sv_spk"]}]
+        assert me._trim("/api/rooms", rooms, {"sv_spk": "view"}) == [{"id": "sv_h", "devices": ["sv_spk"], "serves": []},
+                                                                    {"id": "sv_l", "devices": [], "serves": ["sv_spk"]}]
+    finally:
+        core._rooms[:] = old_rooms
+        core._serves.clear()
+        core._serves.update(old_serves)

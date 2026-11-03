@@ -113,6 +113,27 @@ def get_rooms():
         return list(_rooms)
 
 
+def served_room(dev: str) -> str:
+    """The id of the room a device serves: the one picked for it (Serves), else the first room it stands in; '' for none.
+    Voice, the room tabs and family rights go by it; the map and the device's own Room by where it stands."""
+    with _rooms_lock:
+        rid = _serves.get(dev)
+        if rid and _find_room(rid) >= 0:
+            return rid
+        return next((r["id"] for r in _rooms if dev in (r.get("devices") or [])), "")
+
+
+def served_devices(rid: str) -> list:
+    """The devices that serve room `rid`: those standing in it that serve no other room, then those picked to serve it."""
+    with _rooms_lock:
+        idx = _find_room(rid)
+        if idx < 0:
+            return []
+        other = lambda d: _serves.get(d) not in (None, rid) and _find_room(_serves[d]) >= 0
+        here = [d for d in _rooms[idx].get("devices") or [] if not other(d)]
+        return here + [d for d, r in _serves.items() if r == rid and d not in here]
+
+
 ROOM_SENSOR_KINDS = ("temperature", "humidity")
 OUTDOOR_CODES = ("wind", "wind_speed", "rain", "rain_rate")    # a weather station's: it is outside, whatever room it is listed in
 
@@ -213,7 +234,7 @@ def _room_sensor_health() -> list:
 @app.get("/api/rooms")
 def api_rooms():
     """The rooms, each with the order its temperature and humidity are read in (the page takes the first live one)."""
-    return [{**r, "sensors": {k: room_sensor_order(r["id"], k) for k in ROOM_SENSOR_KINDS}} for r in get_rooms()]
+    return [{**r, "serves": served_devices(r["id"]), "sensors": {k: room_sensor_order(r["id"], k) for k in ROOM_SENSOR_KINDS}} for r in get_rooms()]
 
 
 @app.get("/api/rooms/{rid}/sensors")
@@ -270,9 +291,37 @@ def set_room_locked(devices, rooms=(), hidden=()):
         ROOM_HIDDEN.update(hidden)
 
 
+def _room_sets() -> dict:
+    """device -> the names of the rooms it is in now."""
+    with _rooms_lock:
+        out: dict = {}
+        for r in _rooms:
+            for d in r.get("devices") or ():
+                out.setdefault(d, set()).add(r.get("name") or "")
+        return out
+
+
+def _rooms_moved(before: dict) -> None:
+    """ON_ROOM_MOVE for every device that came into a room since `before` (outside the lock: a handler may rename)."""
+    for dev, names in _room_sets().items():
+        for new in sorted(names - before.get(dev, set())):
+            for fn in list(ON_ROOM_MOVE):
+                try:
+                    fn(dev, sorted(before.get(dev, ())), new)
+                except Exception:                      # noqa: BLE001  a follow-up never undoes the move
+                    log.exception(f"[rooms] room move hook {getattr(fn, '__name__', fn)} failed for {dev}")
+
+
 def rooms_edit(fn):
     """Edit the dashboard rooms in one step under the settings lock: `fn(rooms)` gets a deep copy to change in place (an exception leaves the
     rooms as they were); what it leaves is cleaned and saved. A plug-in that owns the rooms (the map) uses it. -> a copy of the new list."""
+    had = _room_sets()
+    out = _rooms_edit(fn)
+    _rooms_moved(had)
+    return out
+
+
+def _rooms_edit(fn):
     with _rooms_lock:
         before = {r.get("id") for r in _rooms}
         work = copy.deepcopy(_rooms)
@@ -280,6 +329,8 @@ def rooms_edit(fn):
         _clean_rooms(work)
         _rooms[:] = work
         for rid in before - {r["id"] for r in work}:
+            for d in [d for d, r in _serves.items() if r == rid]:
+                _serves.pop(d)                         # a deleted room: its devices serve where they stand again
             _tile_sizes.pop(f"room:{rid}", None)
             _tab_order.pop(f"room:{rid}", None)
             _room_sensors.pop(rid, None)
@@ -317,6 +368,13 @@ def _room_copy(rid: str) -> dict:
 
 
 def _set_room_devices(rid: str, devices: list) -> dict:
+    had = _room_sets()
+    out = _set_room_devices_locked(rid, devices)
+    _rooms_moved(had)
+    return out
+
+
+def _set_room_devices_locked(rid: str, devices: list) -> dict:
     with _rooms_lock:
         idx = _find_room(rid)
         if idx < 0:
@@ -338,6 +396,7 @@ def create_room(body: RoomBody):
         _refuse_locked([], devices)
         room = own(name)
         return {"ok": True, "room": _set_room_devices(room["id"], devices) if devices else room}
+    had = _room_sets()
     with _rooms_lock:
         _refuse_locked([], devices)
         rid = f"r{int(time.time() * 1000)}"
@@ -346,6 +405,7 @@ def create_room(body: RoomBody):
         room = {"id": rid, "name": name, "devices": devices}
         _rooms.append(room)
         _save_settings()
+    _rooms_moved(had)
     return {"ok": True, "room": room}
 
 
@@ -357,6 +417,7 @@ def update_room(rid: str, body: RoomBody):
         room = _room_copy(rid)
         room = own(rid, name) if name != room.get("name") else room
         return {"ok": True, "room": _set_room_devices(rid, body.devices) if body.devices is not None else room}
+    had = _room_sets()
     with _rooms_lock:
         idx = _find_room(rid)
         if idx < 0:
@@ -369,6 +430,7 @@ def update_room(rid: str, body: RoomBody):
             _refuse_locked(room.get("devices") or [], new)
             room["devices"] = new
         _save_settings()
+    _rooms_moved(had)
     return {"ok": True, "room": room}
 
 
@@ -406,6 +468,8 @@ def delete_room(rid: str):
         if rid in ROOM_ZONED or ROOM_LOCKED & set(_rooms[idx].get("devices") or []):
             raise HTTPException(409, "this room comes from the map: delete its zone there")
         removed = _rooms.pop(idx)
+        for d in [d for d, r in _serves.items() if r == rid]:
+            _serves.pop(d)
         _tile_sizes.pop(f"room:{rid}", None)
         _tab_order.pop(f"room:{rid}", None)
         _room_sensors.pop(rid, None)

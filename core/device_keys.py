@@ -185,6 +185,8 @@ def _prune_data_refs(keys) -> list:
             for k in [d for d in list(sizes) if d in keys]:
                 sizes.pop(k)
                 gone.append(("tile-size", k, scope))
+        for k in [d for d in _serves if d in keys]:
+            gone.append(("serves", k, _serves.pop(k)))
         for rid, picks in list(_room_sensors.items()):              # a room's thermometer picked by hand: the room goes back to auto
             for kind in [k for k, src in picks.items() if src.rpartition("/")[0] in keys]:
                 gone.append(("room-sensor", picks.pop(kind).rpartition("/")[0], rid))

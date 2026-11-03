@@ -351,12 +351,52 @@ class Api(unittest.TestCase):
         finally:
             app._backup_last.clear(); app._backup_last.update(old)
 
-    def test_off_means_no_nightly_loop(self):
+    def test_off_means_the_loop_waits_for_a_time_and_makes_none(self):
         old, app.BACKUP_AT = app.BACKUP_AT, "off"
+        waits = []
         try:
-            app._backup_loop()                          # returns at once instead of raising in the thread
+            with unittest.mock.patch.object(app, "backup_now", side_effect=AssertionError("no backup when off")):
+                assert app._backup_tick(lambda t: (waits.append(t), True)[1]) is False
         finally:
             app.BACKUP_AT = old
+        assert waits == [None]                          # no timeout: only a new time wakes it
+
+    def test_the_time_set_on_the_page_is_saved_and_the_loop_takes_it_without_a_restart(self):
+        old = dict(app._house)
+        try:
+            for bad in ("25:00", "3:3", "x", "never"):
+                assert self.c.put("/api/house", json={"backup_at": bad}, headers=self.house).status_code == 400
+            app._backup_wake.clear()
+            assert self.c.put("/api/house", json={"backup_at": "4:05"}, headers=self.house).status_code == 200
+            assert app._backup_wake.is_set() and app._house["backup_at"] == "04:05" and app.backup_at() == "04:05"
+            assert json.loads(app.SETTINGS_PATH.read_text())["house"]["backup_at"] == "04:05"
+            b = self.c.get("/api/backups", headers=self.house).json()
+            assert (b["at"], b["nightly"]) == ("04:05", True)
+            waits = []
+            assert app._backup_tick(lambda t: (waits.append(t), False)[1]) is False   # woke early: not due, no backup
+            due = app.backup_next(datetime.now(), "04:05") - datetime.now()
+            assert abs(waits[0] - due.total_seconds()) < 5
+            self.c.put("/api/house", json={"backup_at": "off"}, headers=self.house)
+            assert self.c.get("/api/backups", headers=self.house).json()["nightly"] is False
+            self.c.put("/api/house", json={"backup_at": ""}, headers=self.house)          # empty: .env's time again
+            assert "backup_at" not in app._house and app.backup_at() == app.BACKUP_AT
+            assert app._clean_house({"lang": "en", "backup_at": "99:99"}) == {"lang": "en"}
+        finally:
+            app._house.clear(); app._house.update(old)
+
+    def test_the_loop_makes_the_backup_once_its_time_came(self):
+        made = []
+        seq = iter([datetime(2026, 10, 6, 3, 29), datetime(2026, 10, 6, 3, 30, 1)])
+
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return next(seq)
+        with unittest.mock.patch.object(app, "datetime", Clock), unittest.mock.patch.object(app, "backup_now", lambda: made.append(1)), \
+                unittest.mock.patch.object(app, "backup_at", lambda: "03:30"):
+            waits = []
+            assert app._backup_tick(lambda t: (waits.append(t), False)[1]) is True
+        assert waits == [60.0] and made == [1]
 
     def test_the_nightly_time(self):
         now = datetime(2026, 10, 6, 20, 0)

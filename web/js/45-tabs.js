@@ -92,7 +92,7 @@ function placesHtml(){
   const top = allTabs().filter(t => t.plugin && t.plugin.row === 'places' && !t.plugin.hidden).map(t =>      // a plug-in tab of the top row: after Favourites, before the rooms
     { const dot = t.plugin.dot ? HomePlugins.safe(t.plugin.dot) : '', bd = t.plugin.badge ? HomePlugins.safe(t.plugin.badge) : '';       // a colour dot and a count the plug-in keeps current
       return `<button class="tab ${t.id===activeTab?'active':''}" data-tab="${escapeHtml(t.id)}">${dot ? `<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:${escapeHtml(dot)}"></i>` : ''}${escapeHtml(t.label)}${bd !== '' && bd != null ? `<span class="badge">${escapeHtml(String(bd))}</span>` : ''}</button>`; }).join('');
-  return fav + top + ROOMS.filter(r => !ROOM_HIDDEN.includes(r.id) && ((r.devices || []).length || !ROOM_ZONED.includes(r.id) || 'room:' + r.id === activeTab)).map(r => {      // map mode: a room without a device lives on the map only
+  return fav + top + ROOMS.filter(r => !ROOM_HIDDEN.includes(r.id) && (roomServes(r).length || !ROOM_ZONED.includes(r.id) || 'room:' + r.id === activeTab)).map(r => {      // map mode: a room without a device lives on the map only
     const tid = 'room:' + r.id, c = roomClimate(r), t = c ? c.value : null;
     return `<button class="tab ${tid===activeTab?'active':''}" data-tab="${escapeHtml(tid)}">${escapeHtml(r.name)}<b class="rtemp" id="rtemp_${escapeHtml(r.id)}" title="${escapeHtml(roomClimateTip(c))}">${t != null ? t + '°' : ''}</b></button>`;
   }).join('') + (ROOMS.length ? '' :       // the first room; later ones on the map (its bar: New room)

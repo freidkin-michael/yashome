@@ -19,7 +19,7 @@ TVS = {"tv_bed": {"id": "tv_bed", "name": "Bedroom TV", "category": "tv", "trans
        "tv_main": {"id": "tv_main", "name": "Main TV", "category": "tv", "transport": "webos",
                    "controls": [{"code": "input", "range": ["PC", "HDMI 2", "HDMI 3"]}]}}
 HOSTS = {"192.0.2.33": {"ok": True, "ssh": True, "sudo": True, "hostname": "bedroom", "os": "Ubuntu", "mac": "00:11:22:33:44:55", "screens": [SAM]},
-         "192.0.2.61": {"ok": True, "ssh": True, "sudo": True, "hostname": "i3server", "os": "Ubuntu", "screens": [LG]},
+         "192.0.2.61": {"ok": True, "ssh": True, "sudo": True, "hostname": "living-pc", "os": "Ubuntu", "screens": [LG]},
          "192.0.2.10": {"ok": True, "ssh": True, "sudo": True, "hostname": "dell", "os": "Ubuntu", "screens": []},
          "192.0.2.40": {"ok": False, "ssh": False, "sudo": False, "error": "the key is refused"},
          "192.0.2.41": {"ok": False, "ssh": True, "sudo": False, "hostname": "kid", "error": "sudo asks for a password"}}
@@ -441,7 +441,7 @@ def test_discovered_reads_the_companions_file_and_ignores_a_stale_one(tmp_path, 
     f = tmp_path / "discovered.json"
     monkeypatch.setattr(me, "DISCOVERED", f)
     assert me.discovered() == []
-    host = {"host": "192.0.2.61", "name": "i3server", "servers": ["touchmouse"], "ports": {}, "seen": time.time()}
+    host = {"host": "192.0.2.61", "name": "living-pc", "servers": ["touchmouse"], "ports": {}, "seen": time.time()}
     f.write_text(json.dumps({"hosts": [host, {"host": "192.0.2.9"}, "junk"], "updated": time.time()}))
     assert me.discovered() == [host]
     f.write_text(json.dumps({"hosts": [host], "updated": time.time() - 3600}))

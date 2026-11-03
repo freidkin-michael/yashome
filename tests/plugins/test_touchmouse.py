@@ -169,14 +169,14 @@ def test_receivers_found_by_the_broadcast_are_listed_by_themselves(clean, monkey
     already listed by hand keeps its entry; one that is not a computer of the house keeps its own name."""
     pcs = sys.modules["yashome_plugins.computers"]
     monkeypatch.setattr(pcs, "discovered", lambda: [
-        {"host": "192.0.2.61", "name": "i3server", "servers": ["build", "touchmouse"], "ports": {"touchmouse": 7709}},
+        {"host": "192.0.2.61", "name": "living-pc", "servers": ["build", "touchmouse"], "ports": {"touchmouse": 7709}},
         {"host": "192.0.2.62", "name": "box", "servers": ["touchmouse"], "ports": {}},
         {"host": "192.0.2.30", "name": "media", "servers": ["touchmouse"], "ports": {}},
         {"host": "192.0.2.63", "name": "nas", "servers": ["build"], "ports": {}}])
-    monkeypatch.setattr(pcs, "by_host", lambda: {"192.0.2.61": {"id": "i3server", "name": "i3server", "tv": "LG"}})
+    monkeypatch.setattr(pcs, "by_host", lambda: {"192.0.2.61": {"id": "living-pc", "name": "living-pc", "tv": "LG"}})
     me._receivers.append({"id": "media-pc", "name": "Media PC", "host": "192.0.2.30", "port": 7709, "os": "linux"})
     got = {r["host"]: r for r in TestClient(core.app).get("/api/touchmouse", headers=HOUSE).json()}
-    assert got["192.0.2.61"] == {"id": "i3server", "name": "i3server (LG)", "host": "192.0.2.61", "port": 7709,
+    assert got["192.0.2.61"] == {"id": "living-pc", "name": "living-pc (LG)", "host": "192.0.2.61", "port": 7709,
                                  "os": "linux", "device": False, "found": True}
     assert got["192.0.2.62"]["name"] == "box" and got["192.0.2.62"]["id"] == "tm-192-0-2-62"
     assert got["192.0.2.30"]["id"] == "media-pc" and "found" not in got["192.0.2.30"]

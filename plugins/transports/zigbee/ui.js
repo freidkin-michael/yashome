@@ -40,6 +40,7 @@
       style="background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font:inherit;width:150px">`;
   const raw = n => /^0x[0-9a-f]+$/i.test(String(n || ''));          // a name z2m made up from the radio address
   const given = {};                                                  // ieee -> the default name it was offered (stays while the list polls)
+  const picked = {};                                                 // ieee -> the room picked for it: the name becomes "<Room> <kind>"
   // the default name from what the device is ("Wireless button"), numbered when the house has one by that name already
   function kindName(f){
     if(given[f.ieee]) return given[f.ieee];
@@ -66,10 +67,13 @@
       const txt = f.interview === 'failed' ? T('Not recognised: reset the device and pair it again closer to the gateway.') : T('identifying\u2026');
       return `<div class="row"><span class="rlabel">${esc(T('New device'))}${dimLine(txt)}</span></div>`;
     }
-    const dflt = typed[f.ieee] !== undefined ? typed[f.ieee] : kindName(f);
+    const dflt = typed[f.ieee] !== undefined ? typed[f.ieee] : (f.names || {})[picked[f.ieee]] || kindName(f);
+    const rooms = H.rooms ? H.rooms() : [];
     return `<div class="row" style="flex-wrap:wrap;gap:8px">
       <span class="rlabel">${esc(kindName(f))}</span>
-      <span style="display:flex;gap:6px">${nameInput(f, dflt)}
+      <span style="display:flex;gap:6px">${rooms.length ? `<select class="zb-room" data-ieee="${esc(f.ieee)}" aria-label="${T('Room')}">
+        <option value="">${T('No room')}</option>${rooms.map(r => `<option value="${esc(r.id)}"${picked[f.ieee] === r.id ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : ''}
+        ${nameInput(f, dflt)}
         <button class="dlg-btn primary zb-add" data-ieee="${esc(f.ieee)}">${T('Add')}</button></span></div>`;
   }
 
@@ -115,6 +119,12 @@
     }
     list.querySelectorAll('.zb-del').forEach(btn => { btn.onclick = () => removeOrphan(btn, list); });
     list.querySelectorAll('.zb-add').forEach(btn => { btn.onclick = () => addFound(btn, list); });
+    list.querySelectorAll('.zb-room').forEach(sel => { sel.onchange = () => {      // a name not typed by hand follows the room
+      const f = s.found.find(x => x.ieee === sel.dataset.ieee) || {}, inp = list.querySelector(`.zb-name[data-ieee="${CSS.escape(sel.dataset.ieee)}"]`);
+      const was = (f.names || {})[picked[f.ieee]] || kindName(f);
+      picked[f.ieee] = sel.value;
+      if(inp && inp.value === was) inp.value = (f.names || {})[sel.value] || kindName(f);
+    }; });
   }
 
   async function removeOrphan(btn, list){
@@ -140,7 +150,7 @@
     const orig = btn.textContent;
     btn.disabled = true; btn.textContent = '\u2026';
     try{
-      await post('/api/zigbee/pair/add', {ieee, friendly_name: inp ? inp.dataset.fn : '', name: (inp && inp.value || '').trim()});
+      await post('/api/zigbee/pair/add', {ieee, friendly_name: inp ? inp.dataset.fn : '', name: (inp && inp.value || '').trim(), room: picked[ieee] || ''});
       await H.reloadDevices();
       list.dataset.sig = '';
       pairPoll();
@@ -227,6 +237,7 @@
   HomePlugins.register({
     help: [
       {id: 'zigbee.name', screen: 'zigbee', screenName: 'Add Zigbee', sel: '.zb-name', title: 'Device name', text: 'The name the device gets; what it is (a button, a light) is the default.'},
+      {id: 'zigbee.room', screen: 'zigbee', screenName: 'Add Zigbee', sel: '.zb-room', title: 'Room', text: 'The room the device goes to; with no name typed it is called after the room and what it is ("Hallway motion sensor").'},
       {id: 'zigbee.add', screen: 'zigbee', screenName: 'Add Zigbee', sel: '.zb-add', title: 'Add', text: 'Adds a found device under that name, its card in its tab; for one added already it renames it.'},
       {id: 'zigbee.del', screen: 'zigbee', screenName: 'Add Zigbee', sel: '.zb-del', title: 'Delete', text: 'After a question takes a device that was not recognised off the Zigbee network; pair it again closer to the gateway.'},
       {id: 'zigbee.gwport', screen: 'settings:zigbee/gateway', sel: '[data-zg="port"]', title: 'Connection', text: 'Where the coordinator is: tcp://address:port for a network one. Save restarts Zigbee with it.'},

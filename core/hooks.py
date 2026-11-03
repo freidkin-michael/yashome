@@ -36,6 +36,7 @@ _MONTHS = "January February March April May June July August September October N
 SETTINGS_SECTIONS: dict = {}  # settings.json key -> fn() returning what to persist for the plug-in
 BINDING_ACTIONS: dict = {}   # action -> {"validate": fn(body)->entry, "run": fn(b)->dict, "describe": fn(b)->then}
 ROOMS_OWNER: dict = {}       # {"create": fn(name)->room, "rename": fn(rid, name)->room, "delete": fn(rid)}: the plug-in the rooms are (the map)
+ON_ROOM_MOVE: list = []      # fn(dev_id, old_room_names, new_room_name) once a device came into a room (an automatic name follows it)
 ROOM_REFS: list = []         # fn(rid) -> [{"kind", "name"}]: what of a plug-in names a room (a panel hangs in it, a satellite stands in it)
 DEVICE_FIELDS: list = []     # extra device keys GET /api/devices passes to the dashboard
 RESYNC_HOOKS: list = []      # fn(cli, force) -> int: ask a transport's devices to report now (30 s loop; force = /api/resync)

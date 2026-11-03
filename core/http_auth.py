@@ -304,7 +304,7 @@ def _writes_settings(path: str) -> bool:
     if path.startswith(_SETTINGS_WRITERS):
         return True
     # /api/devices/{id}/rename, .../channel/{code}/rename, .../dimrange, .../leftovers
-    return path.startswith("/api/devices/") and path.endswith(("/rename", "/dimrange", "/leftovers"))
+    return path.startswith("/api/devices/") and path.endswith(("/rename", "/dimrange", "/leftovers", "/serves"))
 
 
 def _refuse(code: int, why: str):

@@ -949,3 +949,26 @@ def test_a_tts_service_on_another_computer_is_the_one_in_use(monkeypatch):
     tar = _tar.open(fileobj=_io.BytesIO(c.get("/plugins/voice/tts.tar.gz").content))
     assert sorted(tar.getnames()) == ["Dockerfile", "numwords.py", "server.py"]
     assert b"COPY server.py numwords.py ./" in tar.extractfile("Dockerfile").read()
+
+
+def test_a_satellite_and_its_tv_go_by_the_room_a_device_serves(monkeypatch):
+    """The satellite's cards stand in the hall but serve the living room: that is its room; its TV session takes the TV serving it."""
+    rec = sys.modules["yashome_plugins.voice._record"]
+    for d, cat in (("sv_tv1", "tv"), ("sv_tv2", "tv"), ("svs_spk", "voice")):
+        monkeypatch.setitem(core.DEVICES, d, {"id": d, "name": d, "category": cat, "controls": []})
+    old_rooms, old_serves = [dict(r) for r in core._rooms], dict(core._serves)
+    core._rooms.extend([{"id": "sv_h", "name": "Hall", "devices": ["svs_spk", "sv_tv2"]}, {"id": "sv_l", "name": "Living", "devices": ["sv_tv1"]}])
+    try:
+        s = {"id": "svs", "room": "sv_l"}
+        assert me._room(s) == "sv_h"                                     # where its cards stand
+        core._serves["svs_spk"] = "sv_l"
+        assert me._room(s) == "sv_l"                                     # the room they serve
+        assert rec._tv_device(s) == "sv_tv1"
+        core._serves["sv_tv2"] = "sv_l"                                  # two TVs serve it: none is guessed
+        assert rec._tv_device(s) == ""
+        core._serves["sv_tv1"] = "sv_h"
+        assert rec._tv_device(s) == "sv_tv2"                             # it stands in the hall, it serves the living room
+    finally:
+        core._rooms[:] = old_rooms
+        core._serves.clear()
+        core._serves.update(old_serves)

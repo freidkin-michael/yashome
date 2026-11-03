@@ -105,7 +105,9 @@ the map has no zone for becomes an unplaced room: map.json and the rooms as they
 The right button opens a menu of its own on a desktop (the browser's menu is suppressed inside the map): on a thing - What it turns on / Link, Move, Blink,
 Remove; in a room - Rename, Change the outline, Merge with..., Delete the room; on empty space - Place a device here, New lamp here, New room here; on a corner
 in the editor - Delete the point. A touch screen has the sheets (a tap) for the same actions. A press on a thing never pans the map: a mouse drags an icon
-after 4 px, a finger after a 350 ms press (it may wander 10 px meanwhile); only a press on empty space pans.
+after 4 px, a finger after a 350 ms press (it may wander 10 px meanwhile); only a press on empty space pans. The zoom (a pinch or the wheel) goes
+from half the fitted plan to 8 times it (at most 6 to 1); a pan or a zoom keeps half the pane (or half the plan) covered by the plan, and when one finger
+of a pinch lifts the other pans on from where the plan is.
 
 ## The screen
 

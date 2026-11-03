@@ -269,7 +269,7 @@ async function openRights(uid){
   const rooms = {}, other = [];
   for(const d of devs){
     if(isLockish(d)) continue;
-    const room = Home.roomOf ? Home.roomOf(d.id) : '';
+    const room = Home.servedRoomOf ? Home.servedRoomOf(d.id) : Home.roomOf ? Home.roomOf(d.id) : '';     // the room it serves
     if(!room || isService(d)) other.push(d); else (rooms[room] = rooms[room] || []).push(d);
   }
   const opt = (v, cur, label) => `<option value="${v}"${cur===v?' selected':''}>${label}</option>`;

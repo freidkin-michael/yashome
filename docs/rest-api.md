@@ -23,6 +23,7 @@ POST   /api/devices/{id}/control                {code, value} -> {ok, code, valu
                                                 a brightness value is 0-100 % of the full range (home/cmd on the
                                                 bus takes percent of the dim window)
 POST   /api/devices/{id}/rename                 {name}: the display name only
+PUT    /api/devices/{id}/serves                 {room}: the room it serves (voice, the room tabs, family rights); "" = the room it stands in
 POST   /api/devices/{id}/channel/{code}/rename  {name}: the channel label
 POST   /api/devices/{id}/channel/{code}/dimrange {floor, ceil} -> {ok, code, floor, ceil}: the window of a
                                                 brightness channel
@@ -82,7 +83,7 @@ GET    /api/favorites
 PUT    /api/favorites/{device}/{code}           {alias} -> {ok, favorite}: switch channels only (else 400)
 DELETE /api/favorites/{device}/{code}           -> {ok, removed}
 POST   /api/favorites/reorder                   {order: ["device/code", ...]}
-GET    /api/rooms                               -> [{id, name, devices, sensors: {temperature|humidity: {pick, order}}}]: order = the sources the room's reading is tried in
+GET    /api/rooms                               -> [{id, name, devices, serves, sensors: {temperature|humidity: {pick, order}}}]: devices = those standing in it (the map), serves = those serving it; order = the sources the room's reading is tried in
 GET    /api/rooms/locked                        -> {devices, rooms, hidden}: what a plug-in owns (the map) and the rooms with no tab; a PUT that would move such a device answers 409
 POST   /api/rooms                               {name, devices?} -> {ok, room: {id, name, devices}}: made by the map (a room with no outline yet)
 PUT    /api/rooms/{id}                          {name?, devices?} -> {ok, room}: what is left out stays; a new name renames its outline too
@@ -97,9 +98,11 @@ PUT    /api/tile_sizes/{scope}                  {device, w?, h?, col?, hn?} -> {
                                                 (0-8), h min height px (0-2000), col pinned column (-1-32), hn min height
                                                 px on a narrow screen (<= 640 px; absent = kept as stored), clamped;
                                                 all 0 and col -1 = auto, the entry is dropped
-GET    /api/house                               -> {lang, langs}: the house language (Settings -> House language) and the ones there are
+GET    /api/house                               -> {lang, langs, backup_at?, demo_host?}: the house language (Settings -> House language) and the ones there are
                                                 (English + every dictionary of i18n.json)
-PUT    /api/house                               {lang} -> {lang, langs}: the house token only; /i18n.js leads with it
+PUT    /api/house                               {lang?, backup_at?, demo_host?} -> the same as GET: the house token only; /i18n.js leads with it.
+                                                backup_at: HH:MM or off (Settings -> Backups, the nightly loop takes it at once), "" = BACKUP_AT of .env;
+                                                demo_host: host[:port] (443) the health page checks by a TCP connect, "" = none
                                                 (window.HOUSE_LANG), the default of a screen where nobody picked a language
 ```
 
@@ -185,7 +188,7 @@ routes; the Zigbee plug-in:
 POST   /api/zigbee/pair/start                   permit_join on
 POST   /api/zigbee/pair/stop                    permit_join off
 GET    /api/zigbee/pair/status                  {active, remaining, found, orphans}
-POST   /api/zigbee/pair/add                     {ieee, friendly_name?, name?} - name a newly joined device;
+POST   /api/zigbee/pair/add                     {ieee, friendly_name?, name?, room?} - name a newly joined device (a room with no name: "<Room> <kind>");
                                                 409 a name taken, 504 (renamed) / 500 the device did not register
 POST   /api/zigbee/device/rename                {id, to} - renames in zigbee2mqtt AND moves every reference
 POST   /api/zigbee/device/remove                {id, force?}

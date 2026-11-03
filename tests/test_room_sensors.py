@@ -124,5 +124,51 @@ class RoomSensors(unittest.TestCase):
                 app._status_cache.pop(d, None)
 
 
+class ServedRoom(unittest.TestCase):
+    """A device serves the room picked for it (Serves) or else the room it stands in: GET /api/rooms says both apart,
+    a rename moves the pick, a deleted room drops it."""
+    def setUp(self):
+        self.old, app.DASHBOARD_TOKEN = app.DASHBOARD_TOKEN, TOKEN
+        self.c = TestClient(app.app)
+        self.h = {"Authorization": "Bearer " + TOKEN}
+        self.save, app._save_settings = app._save_settings, lambda: None
+        self.rooms, self.serves = [dict(r) for r in app._rooms], dict(app._serves)
+        app._rooms[:] = [{"id": "r_h", "name": "Hall", "devices": ["spk", "lamp"]}, {"id": "r_l", "name": "Living", "devices": ["tv"]}]
+        app._serves.clear()
+        for d in ("spk", "lamp", "tv"):
+            app.DEVICES[d] = {"id": d, "name": d, "category": "switch", "controls": []}
+
+    def tearDown(self):
+        app._rooms[:] = self.rooms
+        app._serves.clear()
+        app._serves.update(self.serves)
+        for d in ("spk", "lamp", "tv", "spk2"):
+            app.DEVICES.pop(d, None)
+        app._save_settings, app.DASHBOARD_TOKEN = self.save, self.old
+
+    def test_the_served_room_is_the_pick_else_where_it_stands(self):
+        assert app.served_room("spk") == "r_h" and app.served_room("nowhere") == ""
+        r = self.c.put("/api/devices/spk/serves", json={"room": "r_l"}, headers=self.h)
+        assert r.status_code == 200 and r.json()["serves"] == "r_l"
+        assert app.served_room("spk") == "r_l"
+        rooms = {x["id"]: x for x in self.c.get("/api/rooms", headers=self.h).json()}
+        assert rooms["r_h"]["devices"] == ["spk", "lamp"] and rooms["r_h"]["serves"] == ["lamp"]     # the map keeps the place
+        assert rooms["r_l"]["serves"] == ["tv", "spk"]
+        assert next(d for d in self.c.get("/api/devices", headers=self.h).json() if d["id"] == "spk")["serves"] == "r_l"
+        assert self.c.put("/api/devices/spk/serves", json={"room": "r_none"}, headers=self.h).status_code == 404
+        assert self.c.put("/api/devices/none/serves", json={"room": "r_l"}, headers=self.h).status_code == 404
+        assert self.c.put("/api/devices/spk/serves", json={"room": ""}, headers=self.h).json()["serves"] == "r_h"
+        assert "spk" not in app._serves
+
+    def test_a_rename_moves_the_pick_and_a_deleted_room_or_a_forgotten_device_drops_it(self):
+        app._serves["spk"] = "r_l"
+        assert app._migrate_serves(app._serves, "spk", "spk2", False) == {"serves": 1} and app._serves == {"spk2": "r_l"}
+        assert app._migrate_serves(app._serves, "spk2", "x", True) == {"serves": 1} and app._serves == {}
+        app._serves["lamp"] = "r_l"
+        app.rooms_edit(lambda rs: rs.__setitem__(slice(None), [r for r in rs if r["id"] != "r_l"]))
+        assert app._serves == {} and app.served_room("lamp") == "r_h"
+        assert app._clean_serves({"a": "r1", "b": "", 3: "x", "c": 5}) == {"a": "r1"}
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -100,6 +100,53 @@ def kind_name(exposes) -> str:
     return "Sensor" if props - {None, "linkquality", "battery"} else ""
 
 
+# ---- automatic names: "<Room> <kind>" ("Hallway motion sensor"); one follows its device to another room, a typed one never changes ----
+def _words(lang: str) -> dict:
+    try:
+        return json.loads((pathlib.Path(__file__).parent / "i18n.json").read_text(encoding="utf-8")).get(lang) or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def auto_name(kind: str, room: str = "", lang: str = "") -> str:
+    """The name the house gives a device of `kind`: "Hallway motion sensor" in a room, "Motion sensor" in none; '' with no kind."""
+    if not kind:
+        return ""
+    word = _words(lang or core.house_lang()).get(kind, kind)
+    if room and len(word) > 1 and not word[1].isupper():          # "IR blaster" keeps its capitals
+        word = word[0].lower() + word[1:]
+    return f"{room} {word}" if room else word
+
+
+def is_auto_name(name: str, kind: str, rooms=()) -> bool:
+    """A name the house gave (in English or the house language, maybe numbered) or zigbee2mqtt's 0x... address: never one typed."""
+    base = re.sub(r" \d+$", "", (name or "").strip())
+    if re.fullmatch(r"0x[0-9a-fA-F]+", base):
+        return True
+    return bool(kind) and any(base == auto_name(kind, r, lg) for lg in {"en", core.house_lang()} for r in ("", *rooms))
+
+
+def free_name(base: str, did: str = "") -> str:
+    """`base`, numbered when another device has that name or key already."""
+    taken = {k for k in core.DEVICES if k != did} | {d.get("name") for k, d in list(core.DEVICES.items()) if k != did}
+    name, n = base, 2
+    while name in taken:
+        name, n = f"{base} {n}", n + 1
+    return name
+
+
+def on_room_move(did: str, old_rooms: list, new_room: str) -> None:
+    """A device came into a room: its automatic name follows the room; a name the user typed stays."""
+    d = core.DEVICES.get(did) or {}
+    kind = d.get("z2m_kind") or ""
+    if d.get("transport") != TRANSPORT or not kind or not is_auto_name(d.get("name"), kind, old_rooms):
+        return
+    want = auto_name(kind, new_room)
+    if re.sub(r" \d+$", "", d.get("name") or "") == want:
+        return                                   # named for this room already (the pairing did it)
+    core.set_device_name(did, free_name(want, did))
+
+
 def _cli():
     return core.mqtt_client
 
@@ -187,7 +234,7 @@ def device_from_z2m(z) -> "dict | None":
             "ieee": z.get("ieee_address"), "model": defn.get("model"), "vendor": defn.get("vendor"),
             "description": defn.get("description"),
             "category": category, "controls": controls, "unsupported": unsupported,
-            "_skip_get": skip_get}
+            "z2m_kind": kind_name(defn.get("exposes")), "_skip_get": skip_get}
 
 
 def _register(z) -> bool:
@@ -668,6 +715,7 @@ class PairAdd(core.Body):
     ieee: str
     friendly_name: str = ""
     name: str = ""
+    room: str = ""          # a room id: the device goes there, and with no name typed it is called "<Room> <kind>"
 
 
 class RenameBody(core.Body):
@@ -716,6 +764,7 @@ def pair_status():
     """What joined in this window, plus leftovers of earlier attempts z2m could not identify
     (orphans): listed so a bad pairing can be removed and retried."""
     now = time.time()
+    rooms = core.get_rooms()
     with _pairing_lock:
         active = bool(_pairing["active"] and now < _pairing["until"])
         remaining = max(0, int(_pairing["until"] - now)) if active else 0
@@ -728,6 +777,8 @@ def pair_status():
                 "model": info.get("model"), "vendor": info.get("vendor"),
                 "description": info.get("description"),
                 "kind": info.get("kind") or "",
+                "names": {r["id"]: free_name(auto_name(info.get("kind") or "", r.get("name") or ""), fn)
+                          for r in rooms} if info.get("kind") else {},
                 "interview": info.get("interview"),
                 "registered": bool(reg),
                 "name": (reg or {}).get("name", fn),
@@ -747,7 +798,13 @@ def pair_add(body: PairAdd):
     so it is checked like a rename and never one that is taken."""
     _need_bridge()
     cur = (body.friendly_name or body.ieee).strip()
-    want = (body.name or "").strip() or cur
+    room = next((r for r in core.get_rooms() if r.get("id") == body.room), None) if body.room else None
+    if body.room and room is None:
+        raise HTTPException(404, "unknown room")
+    with _pairing_lock:
+        kind = (_pairing_found.get(body.ieee) or {}).get("kind") or ""
+    auto = free_name(auto_name(kind, room["name"]), cur) if room and kind else ""
+    want = (body.name or "").strip() or auto or cur
     if want != cur:
         want = _check_key(want, but=cur)
         _cli().publish(f"{NS}/bridge/request/device/rename", json.dumps({"from": cur, "to": want}))
@@ -759,6 +816,9 @@ def pair_add(body: PairAdd):
     with _pairing_lock:
         if body.ieee in _pairing_found:
             _pairing_found[body.ieee]["friendly_name"] = want
+    if room and want not in core.ROOM_LOCKED:
+        core.rooms_edit(lambda rooms: [r.__setitem__("devices", [x for x in r.get("devices") or [] if x != want]
+                                                     + ([want] if r["id"] == room["id"] else [])) for r in rooms])
     return {"id": want, "name": dev.get("name"), "category": dev.get("category"),
             "unsupported": bool(dev.get("unsupported"))}
 
@@ -877,6 +937,7 @@ core.TRANSPORT_BINDINGS[TRANSPORT] = binding
 core.STATE_ASK[TRANSPORT] = ask
 core.RESYNC_HOOKS.append(get_all)
 core.ON_RENAME.append(on_rename)
+core.ON_ROOM_MOVE.append(on_room_move)
 core.STARTUP_TASKS.append(load_devices)
 core.STARTUP_TASKS.append(_sweep_loop)
 if ENABLED:

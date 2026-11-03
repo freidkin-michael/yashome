@@ -104,7 +104,7 @@ def _tv_device(s: dict, asked: str = "") -> str:
     if asked:
         return asked if asked in tvs else ""
     room = next((r for r in core.get_rooms() if s.get("room") in (r.get("id"), r.get("name"))), None)
-    here = [d for d in tvs if room and d in (room.get("devices") or [])]
+    here = [d for d in tvs if room and core.served_room(d) == room["id"]]          # the TV serving that room, wherever it stands
     return here[0] if len(here) == 1 else tvs[0] if len(tvs) == 1 else ""
 
 

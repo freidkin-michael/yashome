@@ -280,3 +280,47 @@ class ModalToggleKeys(unittest.TestCase):
         self.assertEqual(o["live_space"], [["power", True]])
         self.assertEqual(o["live_held"], [])                                 # a held key acts once
         self.assertEqual(o["offline_card"], [])                              # a toggle inside an offline card: nothing
+
+
+class RuleAndSettingsWords(unittest.TestCase):
+    """A yes/no trigger reads in its channel's words; a settings page lists its own plug-in's tab first (TVs, then Players)."""
+    def _run(self, js):
+        node = _node()
+        if not node:
+            self.skipTest("no node")
+        r = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=40)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout.strip().splitlines()[-1])
+
+    def test_a_contact_trigger_says_open_or_closed_not_yes_or_no(self):
+        funcs = "\n".join(re.search(r, PAGE, re.S | re.M).group(0) for r in (
+            r"^const GESTURE_WORDS = .*?;$", r"^const BOOL_WORDS = .*?;$", r"^function boolGesture\(.*?^}",
+            r"^function whenGesture\(.*?^}", r"^const isNfc = .*?;$", r"^const GESTURE_LABELS = \{.*?^};", r"^function gestureLabel\(.*?^}"))
+        stub = ("const i18n = (k, ...a) => k.replace(/\\{(\\d)\\}/g, (_, i) => a[i]);\n"
+                "const BY_ID = {door: {controls: [{code: 'contact'}]}, pir: {controls: [{code: 'flag', labels: {true: 'busy', false: 'free'}}]}};\n")
+        out = self._run(stub + funcs + "\nconsole.log(JSON.stringify([whenGesture('false', 'door', 'contact'), whenGesture('true', 'door', 'contact'),"
+                        "whenGesture('true', 'pir', 'flag'), whenGesture('false', 'x', 'relay'), whenGesture('false', 'door')]));")
+        self.assertEqual(out, ["became open", "became closed", "became busy", "became off", 'became "no"'])
+
+    def test_the_tv_page_lists_tvs_before_players(self):
+        fn = re.search(r"^function ST_PAGES\(.*?^}", PAGE, re.S | re.M).group(0)
+        stub = ("const ICON = {}; const stSlug = t => String(t).toLowerCase();\n"
+                "const ST_SUBJECTS = [{id: 'tv', group: 'devices', title: 'TVs'}, {id: 'backups', group: 'service', title: 'Backups', core: true}];\n"
+                "const HomePlugins = {settings: [{subject: 'tv', title: 'Players', _plugin: {id: 'player'}}, {subject: 'tv', title: 'TVs', _plugin: {id: 'tv'}},"
+                " {subject: 'backups', title: 'More', _plugin: {id: 'backups'}}]};\n")
+        out = self._run(stub + fn + "\nconsole.log(JSON.stringify(ST_PAGES().map(p => [p.id, p.tabs.map(t => t.title)])));")
+        self.assertEqual(out, [["tv", ["TVs", "Players"]], ["backups", ["Backups", "More"]]])
+
+
+class RoomTabsServe(unittest.TestCase):
+    def test_a_room_tab_shows_the_devices_that_serve_it(self):
+        node = _node()
+        if not node:
+            self.skipTest("no node")
+        funcs = "\n".join(re.search(r, PAGE, re.S | re.M).group(0) for r in (r"^const roomServes = .*?;$", r"^function servedRoomOf\(.*?^}"))
+        js = ("const ROOMS = [{id: 'h', name: 'Hall', devices: ['spk', 'lamp'], serves: ['lamp']}, {id: 'l', name: 'Living', devices: [], serves: ['spk']},"
+              " {id: 'o', name: 'Old', devices: ['x']}];\n" + funcs +
+              "\nconsole.log(JSON.stringify([roomServes(ROOMS[0]), servedRoomOf('spk'), servedRoomOf('x'), servedRoomOf('none')]));")
+        r = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=40)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout.strip().splitlines()[-1]), [["lamp"], "Living", "Old", ""])
