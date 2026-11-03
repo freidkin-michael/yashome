@@ -89,10 +89,9 @@ gate, or look only), and Allow / Deny; the phone answers with its own token (`PO
 
 ## Writing door cards from a phone
 
-An administrator's phone is the antenna for writing an NTAG 424 DNA door card (plugins/sources/nfc/README.md): when a
-write starts (Settings -> NFC tags, or "Write a card" in the app's menu, shown to administrators only), the house sends
-`{cmd: nfc_write, sid}` the same way as an entry request, to administrators' phones only. The phone relays the card's
-commands; the keys never leave the house.
+An administrator's phone is the antenna for writing an NTAG 424 DNA door card (plugins/sources/nfc/README.md). The write
+starts in the app only ("Write a card" in its menu, shown to administrators only), and the phone that starts it carries it:
+it relays the card's commands; no other phone is told and the keys never leave the house.
 
 ## Widgets on the phone
 

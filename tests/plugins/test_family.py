@@ -1369,24 +1369,6 @@ def test_the_member_row_says_the_level_in_words():
     assert json.loads(out.stdout) == ["administrator", "full access", "limited: 3 devices", ""], out.stderr
 
 
-def test_a_card_write_goes_to_administrators_only_live_first_else_queued_and_tickled(phones, monkeypatch):
-    live, tickles = [], []
-    monkeypatch.setattr(me, "_tickle", lambda uid, high=False: tickles.append((uid, high)) or True)
-    monkeypatch.setattr(me, "_send_live", lambda uid, msg: live.append((uid, msg)) or True)
-    me._nfc_write_send("s0")
-    assert live == [] and me._pending_cmds == {}                                                  # no administrator: nobody
-    _make_admin()
-    me._nfc_write_send("s1")
-    assert live == [("adult", {"cmd": "nfc_write", "sid": "s1"})] and tickles == []
-    monkeypatch.setattr(me, "_send_live", lambda uid, msg: False)
-    me._pending_cmds["adult"] = [{"cmd": "guest", "id": "g"}]
-    me._nfc_write_send("s2")
-    me._nfc_write_send("s3")                                                                      # one session at a time: the newer one
-    assert me._pending_cmds["adult"] == [{"cmd": "guest", "id": "g"}, {"cmd": "nfc_write", "sid": "s3"}] and "kid" not in me._pending_cmds
-    assert tickles == [("adult", True)] * 2
-    assert me._nfc_write_notify in core.NFC_WRITE
-
-
 def test_what_a_restricted_phone_s_dashboard_may_read(phones, monkeypatch):
     c = TestClient(core.app)
     seen, hidden = phones["seen"], phones["hidden"]

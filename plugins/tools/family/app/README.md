@@ -25,8 +25,10 @@ both with the house's key; the Family page offers the APK.
   app asks for the location permission once, to read the name).
   The same message carries the app's version; on the house's `update` command `AppUpdate` downloads the
   built APK, checks its sha256 and hands it to the system installer (`UpdateReceiver` gets the answer).
-  A `guest` command (from the link or a pull) shows an entry request; an `nfc_write` one asks to hold a card to write
-  (administrators' phones only, which also have "Write a card" in the menu); both need the notification permission.
+  A `guest` command (from the link or a pull) shows an entry request; it needs the notification permission.
+  An administrator's phone has "Write a card" in the menu: it opens "Hold the card to the phone" and that phone carries the
+  write (`NfcWriteActivity`). A new card is listed as "Card <n>" and the screen offers "Name this card"; a card already on
+  the list keeps its name and rules and is not written until Rewrite is pressed.
 
 ## On the phone, once
 

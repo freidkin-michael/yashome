@@ -27,9 +27,8 @@ import java.util.concurrent.TimeUnit
 /** Keeps /api/family/live open while the phone reaches the house (its network or a
  *  VPN); a ring or a stop comes down it, the ack goes up; every minute it also says which gateway its
  *  Wi-Fi has and its own version ({"gw": ..., "v": ...}), so the house knows the phone is on its Wi-Fi
- *  even through a VPN; an "update" command fetches the newer APK (AppUpdate), a "guest" one shows an entry request (GuestNotice),
- *  an "nfc_write" one asks to hold a card to write (NfcWriteActivity). Reconnects with a growing pause, at once
- *  when a network comes up. Runs only for a house WITHOUT a Firebase sign-in (see enabled): with Firebase the push and the pull do it. */
+ *  even through a VPN; an "update" command fetches the newer APK (AppUpdate), a "guest" one shows an entry request (GuestNotice).
+ *  Reconnects with a growing pause, at once when a network comes up. Runs only for a house WITHOUT a Firebase sign-in (see enabled): with Firebase the push and the pull do it. */
 class LiveService : Service() {
     companion object {
         private const val CH = "house_link_min"            // an existing channel keeps its importance: the quiet one has a new id
@@ -124,7 +123,6 @@ class LiveService : Service() {
                     "stop" -> RingService.stop(this@LiveService)
                     "update" -> AppUpdate.start(this@LiveService, j)
                     "guest" -> GuestNotice.show(this@LiveService, j)
-                    "nfc_write" -> NfcWriteActivity.notify(this@LiveService, j)
                     "state" -> j.optJSONObject("values")?.let { WidgetState.apply(this@LiveService, it, j.optLong("t", 0L)) }
                 }
             }

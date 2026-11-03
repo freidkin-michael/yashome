@@ -159,12 +159,9 @@
     <string name="guest_forbidden">Only an administrator of the house may let guests in</string>
     <string name="guest_offline">No connection to the house</string>
     <string name="guest_failed">The house did not take the answer (%1$d)</string>
-    <string name="ch_nfc_write">Writing door cards</string>
     <string name="nfcw_title">Write a card</string>
     <string name="nfcw_menu">Write a card</string>
     <string name="nfcw_hold">Hold the card to the back of the phone</string>
-    <string name="nfcw_name_hint">The card\'s name</string>
-    <string name="nfcw_start">Write</string>
     <string name="nfcw_retry">Try again</string>
     <string name="nfcw_close">Close</string>
     <string name="nfcw_no_nfc">This phone has no NFC</string>
@@ -176,6 +173,13 @@
     <string name="nfcw_failed">Not written: %1$s</string>
     <string name="nfcw_offline">No connection to the house</string>
     <string name="nfcw_done">Written: %1$s</string>
+    <string name="nfcw_known">This is the card \u00ab%1$s\u00bb. Rewrite it? It keeps its name and rules.</string>
+    <string name="nfcw_rewrite">Rewrite</string>
+    <string name="nfcw_cancel">Cancel</string>
+    <string name="nfcw_hold_again">Hold the card to the phone again</string>
+    <string name="nfcw_name_this">Name this card</string>
+    <string name="nfcw_save">Save</string>
+    <string name="nfcw_cancelled">Cancelled: the card is left as it was</string>
     <string name="guest_flood_title">Too many entry requests</string>
     <string name="guest_flood_text">Requests are paused until %1$s. Nobody got in.</string>
     <string name="guest_text_many">%1$d browsers ask to come in - latest code %2$s</string>

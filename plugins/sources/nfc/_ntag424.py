@@ -337,9 +337,11 @@ def sdm_settings(fs: dict, picc_off: int, mac_off: int) -> dict:
     return {**fs, "sdm": sdm, "rw": KEY2, "change": KEY0, "read": KEY2, "write": KEY2}
 
 
-def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=os.urandom):
-    """Generator: yields APDUs, is sent each answer (bytes). Returns {ok, step, uid?, keys?, error?}.
-    keys = {0: master, 1: SDM meta read, 2: SDM file read}. `state["step"]` names the step under way."""
+def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=os.urandom, known=None):
+    """Generator: yields APDUs, is sent each answer (bytes). Returns {ok, step, uid?, keys?, error?, known?}.
+    keys = {0: master, 1: SDM meta read, 2: SDM file read}. `state["step"]` names the step under way.
+    known(uid_hex) -> a name or None: a card that takes the house key 0 has its UID read at once, and a named one
+    ends the write before anything is written ({ok: False, known: name, uid})."""
     st = state if state is not None else {}
 
     def step(name: str):
@@ -355,6 +357,12 @@ def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=
             raise CardError(f"this is not an NTAG 424 DNA card (select answered {_sw(sw1, sw2)})")
         step("auth key 0")
         s, was = yield from auth_door(KEY0, keys[KEY0], rnd)
+        if known is not None and was == "house":           # the random UID needs this auth; a factory card is blank
+            step("uid")
+            uid = (yield from get_card_uid(s)).hex()
+            name = known(uid)
+            if name:
+                return {"ok": False, "step": "uid", "known": name, "uid": uid}
         step("file settings")
         fs = yield from get_file_settings(s)
         if len(file) > fs["size"]:

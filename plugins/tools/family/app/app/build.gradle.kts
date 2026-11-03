@@ -14,8 +14,8 @@ android {
         applicationId = (project.findProperty("yashAppId") as String?) ?: "com.yash.home"
         minSdk = 26
         targetSdk = 34
-        versionCode = 55
-        versionName = "0.38.0"
+        versionCode = 58
+        versionName = "0.38.3"
     }
     androidResources { generateLocaleConfig = false }
 

@@ -352,11 +352,8 @@ def api(monkeypatch):
     monkeypatch.setattr(me, "_write_cards", lambda cards: None)
     monkeypatch.setattr(me.core, "update_device", lambda d: None)
     monkeypatch.setattr(me.core, "save_settings", lambda: None)
-    told = []
-    monkeypatch.setattr(me.core, "NFC_WRITE", [told.append])
     me._w.clear()
     c = TestClient(me.core.app)
-    c.told = told
     yield c
     me._w.clear()
 
@@ -372,20 +369,40 @@ def run_session(c, card, sid, headers=HOUSE):
     return r
 
 
-def test_the_house_writes_a_card_through_the_step_loop_and_lists_it(api):
-    r = api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE)
+def test_the_house_writes_a_blank_card_lists_it_under_an_automatic_name_and_the_phone_renames_it(api, monkeypatch):
+    r = api.post("/api/nfc/write/start", headers=HOUSE)                         # no name: the card names itself
     assert r.status_code == 200, r.text
     sid = r.json()["sid"]
-    assert api.told == [sid]
-    assert api.post("/api/nfc/write/start", json={"name": "Other"}, headers=HOUSE).status_code == 409   # one at a time
+    assert "name" not in r.json()
+    assert api.post("/api/nfc/write/start", headers=HOUSE).status_code == 409   # one at a time
+    me._CARDS["04000000000001"] = "card 1"                                      # taken in any case: the next free number
     card = FakeNtag424()
     r = run_session(api, card, sid)
-    assert r["done"] and r["result"]["ok"] and r["result"]["listed"] == "Gate"
-    assert me._CARDS == {card.uid.hex(): "Gate"} and tap_ok(card)[0] == card.uid
+    assert r["done"] and r["result"]["ok"] and r["result"]["listed"] == "Card 2" and r["result"]["new"] is True
+    assert me._CARDS[card.uid.hex()] == "Card 2" and tap_ok(card)[0] == card.uid
     v = api.get(f"/api/nfc/write/{sid}", headers=HOUSE).json()
     assert v["done"] and v["step"] == "done" and v["result"]["uid"] == card.uid.hex()
     text = json.dumps(v) + json.dumps(api.get("/api/nfc", headers=HOUSE).json())
     assert all(k.hex() not in text.lower() for k in KEYS.values())                 # nothing secret comes back
+    monkeypatch.setattr(me.core, "is_admin_request", lambda req: True, raising=False)   # "Name this card" on an admin phone
+    phone = {"Authorization": "Bearer yfd_admin_phone"}
+    fam = sys.modules["yashome_plugins.family"]
+    monkeypatch.setattr(fam, "_uid_of", lambda tok: "dad" if tok == "yfd_admin_phone" else None)
+    monkeypatch.setattr(fam, "_rights", lambda uid: None)                          # full access: the route judges admin
+    v = api.patch(f"/api/nfc/cards/{card.uid.hex()}", headers=phone, json={"name": "Gate"})
+    assert v.status_code == 200, v.text
+    assert me._CARDS[card.uid.hex()] == "Gate"
+    monkeypatch.setattr(me.core, "is_admin_request", lambda req: False, raising=False)
+    assert api.patch(f"/api/nfc/cards/{card.uid.hex()}", headers=phone, json={"name": "X"}).status_code == 403
+
+
+def test_the_automatic_name_follows_the_house_language(monkeypatch):
+    word = me._I18N["ru"]["Card {n}"]                                             # the word from the plug-in's i18n.json
+    monkeypatch.setattr(me, "_CARDS", {"04000000000001": word.format(n=1), "04000000000003": word.format(n=3)})
+    monkeypatch.setattr(me.core, "house_lang", lambda: "ru")
+    assert me.auto_name() == word.format(n=2) != "Card 2"
+    monkeypatch.setattr(me.core, "house_lang", lambda: "en")
+    assert me.auto_name() == "Card 1"
 
 
 def test_only_an_administrator_starts_a_write(api, monkeypatch):
@@ -394,43 +411,47 @@ def test_only_an_administrator_starts_a_write(api, monkeypatch):
     monkeypatch.setattr(fam, "_uid_of", lambda tok: "kid" if tok == "yfd_full_access_phone" else None)
     monkeypatch.setattr(fam, "_rights", lambda uid: None)                          # full access, not an administrator
     monkeypatch.delattr(me.core, "is_admin_request", raising=False)
-    r = api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=phone)
+    r = api.post("/api/nfc/write/start", headers=phone)
     assert r.status_code == 403 and me._w == {}
     guest = {"Authorization": "Bearer yg_guest"}
-    assert api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=guest).status_code in (401, 403)
+    assert api.post("/api/nfc/write/start", headers=guest).status_code in (401, 403)
     monkeypatch.setattr(me.core, "is_admin_request", lambda req: me.core.request_token(req.headers) != "yfd_full_access_phone",
                         raising=False)
-    assert api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=phone).status_code == 403
-    assert api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE).status_code == 200
+    assert api.post("/api/nfc/write/start", headers=phone).status_code == 403
+    assert api.post("/api/nfc/write/start", headers=HOUSE).status_code == 200
     monkeypatch.setattr(me.core, "is_admin_request", lambda req: True, raising=False)   # an admin phone drives it
     assert run_session(api, FakeNtag424(), me._w["sid"], headers=phone)["result"]["ok"]
 
 
 def test_no_master_key_no_address_and_the_idle_timeout(api, monkeypatch):
     monkeypatch.setattr(me, "_MASTER_KEY", b"")
-    r = api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE)
+    r = api.post("/api/nfc/write/start", headers=HOUSE)
     assert r.status_code == 503 and "NFC_MASTER_KEY" in r.json()["detail"]
     monkeypatch.setattr(me, "_MASTER_KEY", KEYS[0])
     monkeypatch.delitem(me._settings, "card_url")
     monkeypatch.setenv("DASHBOARD_ORIGINS", "http://192.0.2.1:8765, https://home.example.org/")
     assert me.card_url() == "https://home.example.org/nfc?picc={PICC}&cmac={MAC}"
     monkeypatch.setenv("DASHBOARD_ORIGINS", "")
-    assert api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE).status_code == 409
+    r = api.post("/api/nfc/write/start", headers=HOUSE)
+    assert r.status_code == 409 and r.json()["detail"].endswith("open the dashboard on its https address")
+    for bad in ({"host": "192.0.2.1:8765", "x-forwarded-proto": "https"}, {"host": "home.example.org", "x-forwarded-proto": "http"}):
+        assert api.post("/api/nfc/write/start", headers={**HOUSE, **bad}).status_code == 409
+    assert "card_url" not in me._settings
     monkeypatch.setitem(me._settings, "card_url", URL)
-    sid = api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE).json()["sid"]
+    sid = api.post("/api/nfc/write/start", headers=HOUSE).json()["sid"]
     assert "apdu_hex" in api.post(f"/api/nfc/write/{sid}/step", json={}, headers=HOUSE).json()
     me._w["last"] -= me.WRITE_IDLE_S + 1
     r = api.post(f"/api/nfc/write/{sid}/step", json={"resp_hex": "9000"}, headers=HOUSE).json()
     assert r["done"] and not r["result"]["ok"] and "timed out" in r["result"]["error"]
-    assert api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE).status_code == 200   # a new one may start
+    assert api.post("/api/nfc/write/start", headers=HOUSE).status_code == 200   # a new one may start
     assert api.post("/api/nfc/write/nope/step", json={}, headers=HOUSE).status_code == 404
 
 
-def test_the_card_address_setting(api):
-    r = api.put("/api/nfc/settings", json={"card_url": "https://door.example.org/nfc?picc={PICC}&cmac={MAC}"}, headers=HOUSE)
-    assert r.status_code == 200 and r.json()["card_url"].startswith("https://door.")
-    assert api.put("/api/nfc/settings", json={"card_url": "https://door.example.org/nfc"}, headers=HOUSE).status_code == 400
-    assert api.put("/api/nfc/settings", json={"card_url": "http://x/nfc?picc={PICC}&cmac={MAC}"}, headers=HOUSE).status_code == 400
+def test_a_stored_card_address_wins_and_there_is_no_setting_route(api, monkeypatch):
+    monkeypatch.setenv("DASHBOARD_ORIGINS", "https://home.example.org")
+    assert me.card_url() == URL                                    # a house that wrote cards keeps their link
+    assert api.put("/api/nfc/settings", json={"card_url": URL}, headers=HOUSE).status_code in (404, 405)
+    assert "card_url" not in api.get("/api/nfc", headers=HOUSE).json()
 
 
 def _run(card, gen):
@@ -456,3 +477,87 @@ def test_the_counter_moves_through_plain_mac_and_full_commands_in_one_session():
     assert _run(card, N.change_key(s, 3, bytes(16), bytes([7] * 16)))
     assert card.keys[3] == bytes([7] * 16) and s.ctr == 5
     assert _run(card, N.authenticate(0, bytes([1] * 16))) is None          # a wrong key: refused, not raised
+
+
+def test_a_write_started_on_the_https_address_takes_that_address_and_keeps_it(api, monkeypatch):
+    monkeypatch.delitem(me._settings, "card_url")
+    monkeypatch.setenv("DASHBOARD_ORIGINS", "")
+    h = {**HOUSE, "host": "home.example.org", "x-forwarded-proto": "https"}
+    assert api.post("/api/nfc/write/start", headers=h).status_code == 200
+    assert me._settings["card_url"] == "https://home.example.org/nfc?picc={PICC}&cmac={MAC}"
+
+
+# ---- a card already on the list: asked before a rewrite ----
+def _written():
+    """A card the house wrote, its state copied: (card, snapshot)."""
+    card = FakeNtag424()
+    assert drive(card)["ok"]
+    return card, (dict(card.keys), dict(card.fs), bytes(card.file))
+
+
+def _steps(c, card, sid):
+    r = c.post(f"/api/nfc/write/{sid}/step", json={}, headers=HOUSE).json()
+    while "apdu_hex" in r:
+        r = c.post(f"/api/nfc/write/{sid}/step", headers=HOUSE,
+                   json={"resp_hex": card.transceive(bytes.fromhex(r["apdu_hex"])).hex()}).json()
+    return r
+
+
+def test_the_writer_reads_the_uid_after_the_house_auth_and_stops_on_a_known_card():
+    card, snap = _written()
+    card.log.clear()
+    gen = N.write_card(KEYS, URL, PKG, known={card.uid.hex(): "Gate"}.get)
+    r = _run(card, gen)
+    assert r == {"ok": False, "step": "uid", "known": "Gate", "uid": card.uid.hex()}
+    assert [a[1] for a in card.log] == [0xA4, 0x71, 0xAF, 0x51]            # select, auth key 0, GetCardUID: nothing else
+    assert (dict(card.keys), dict(card.fs), bytes(card.file)) == snap
+    r = _run(card, N.write_card(KEYS, URL, PKG, known=lambda uid: None))    # not listed: the UID read, then written on
+    assert r["ok"] and r["keys"] == "house" and tap_ok(card)[0] == card.uid
+
+
+def test_a_listed_card_is_asked_about_and_nothing_is_written(api):
+    card, snap = _written()
+    me._CARDS[card.uid.hex()] = "Front door"
+    sid = api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE).json()["sid"]    # an older app's name: ignored
+    r = _steps(api, card, sid)
+    assert r["done"] and r["result"] == {"ok": False, "step": "uid", "known": "Front door", "uid": card.uid.hex()}
+    assert (dict(card.keys), dict(card.fs), bytes(card.file)) == snap
+    assert api.get(f"/api/nfc/write/{sid}", headers=HOUSE).json()["result"]["known"] == "Front door"
+
+
+def test_rewrite_consent_restarts_the_loop_and_writes_the_card(api, caplog):
+    card, _ = _written()
+    me._CARDS[card.uid.hex()] = "Front door"
+    sid = api.post("/api/nfc/write/start", headers=HOUSE).json()["sid"]
+    assert api.post(f"/api/nfc/write/{sid}/rewrite", headers=HOUSE).status_code == 409    # nothing asked yet
+    assert _steps(api, card, sid)["result"]["known"] == "Front door"
+    v = api.post(f"/api/nfc/write/{sid}/rewrite", headers=HOUSE).json()
+    assert v["sid"] == sid and not v["done"] and v["result"] is None
+    me._settings["card_url"] = URL.replace("house.example.org", "door.example.org")     # the session keeps its address
+    r = run_session(api, card, sid)
+    assert r["result"]["ok"] and r["result"]["listed"] == "Front door" and me._CARDS == {card.uid.hex(): "Front door"}
+    assert "new" not in r["result"]                                                    # its name and rules stay: no naming
+    assert f"card Front door ({card.uid.hex()}) written" in caplog.text and "Card 1" not in caplog.text
+    assert card.tap().startswith("https://house.example.org/") and tap_ok(card)[0] == card.uid
+    assert api.post(f"/api/nfc/write/{sid}/rewrite", headers=HOUSE).status_code == 409
+
+
+def test_cancel_leaves_a_listed_card_untouched_and_ends_the_session(api):
+    card, snap = _written()
+    me._CARDS[card.uid.hex()] = "Front door"
+    sid = api.post("/api/nfc/write/start", headers=HOUSE).json()["sid"]
+    assert _steps(api, card, sid)["result"]["known"] == "Front door"
+    v = api.delete(f"/api/nfc/write/{sid}", headers=HOUSE).json()
+    assert v["done"] and v["result"]["error"] == "cancelled" and "known" not in v["result"]
+    assert api.post(f"/api/nfc/write/{sid}/step", json={}, headers=HOUSE).json()["result"]["error"] == "cancelled"
+    assert api.post(f"/api/nfc/write/{sid}/rewrite", headers=HOUSE).status_code == 409
+    assert (dict(card.keys), dict(card.fs), bytes(card.file)) == snap
+
+
+def test_a_blank_card_is_never_asked_about(api):
+    card = FakeNtag424()
+    me._CARDS[card.uid.hex()] = "Front door"                  # even a listed UID: factory keys = a blank card
+    sid = api.post("/api/nfc/write/start", headers=HOUSE).json()["sid"]
+    r = run_session(api, card, sid)
+    assert r["result"]["ok"] and r["result"]["keys"] == "factory" and "known" not in r["result"]
+    assert not any(a[1] == 0x51 for a in card.log[:4])          # no UID read before the write

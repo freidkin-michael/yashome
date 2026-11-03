@@ -8,6 +8,7 @@ import html
 import json
 import os
 import pathlib
+import re
 import secrets
 import threading
 import time
@@ -288,8 +289,7 @@ def _view() -> dict:
             "new": [{"uid": u, "ts": v["ts"]} for u, v in sorted(_new.items(), key=lambda kv: -kv[1]["ts"]) if now - v["ts"] <= NEW_S],
             "enroll": {"name": _enroll["name"], "left": int(_enroll["until"] - now)} if _enroll else None,
             "added": dict(_added) if _added else None,
-            "write": _w_view(), "write_ready": bool(_MASTER_KEY and _META_KEY and _FILE_KEY),
-            "card_url": _settings.get("card_url") or "", "card_url_default": default_card_url()}
+            "write": _w_view(), "write_ready": bool(_MASTER_KEY and _META_KEY and _FILE_KEY)}
 
 
 def _check_name(name: str, uid: str = "") -> str:
@@ -360,10 +360,12 @@ def api_enroll_cancel(request: Request):
     return _view()
 
 
+@core.use_route
 @core.app.patch("/api/nfc/cards/{uid}")
 def api_rename_card(uid: str, body: NameBody, request: Request):
-    """A new name; the rules of the tag follow it (a tap is the gesture "<name>", so they are keyed by it), switched off ones stay off."""
-    core.house_token_only(request)
+    """A new name; the rules of the tag follow it (a tap is the gesture "<name>", so they are keyed by it), switched off ones stay off.
+    An administrator: the dashboard's pen, or the phone that has just written the card ("Name this card")."""
+    _admin_only(request)
     global _CARDS
     uid = uid.lower()
     if uid not in _CARDS:
@@ -412,7 +414,7 @@ AAR_PKG = os.environ.get("FAMILY_APP_ID") or "com.yash.home"      # the app a ta
 _settings: dict = dict(core.cfg_section("nfc", {}))
 core.SETTINGS_SECTIONS["nfc"] = lambda: _settings
 _w_lock = threading.Lock()
-_w: dict = {}                     # the one write session: sid, name, gen, state, apdu, last, result, ended
+_w: dict = {}                     # the one write session: sid, url, gen, state, apdu, last, result, ended, rewrite
 
 
 def default_card_url() -> str:
@@ -428,6 +430,16 @@ def card_url() -> str:
     return _settings.get("card_url") or default_card_url()
 
 
+def request_card_url(request: Request) -> str:
+    """The card's link on the https address this request came in on (the proxy's Host and X-Forwarded-Proto), else "".
+    An administrator who starts a write on https://home.example.org gets that address on the card."""
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").split(",")[0].strip().lower()
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip().lower()
+    if proto != "https" or not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d{1,5})?", host):
+        return ""
+    return f"https://{host}/nfc?picc={{PICC}}&cmac={{MAC}}"
+
+
 def _admin_only(request: Request):
     """An administrator: core.is_admin_request where the core has it, else the house token alone."""
     if core.request_token(request.headers).startswith("yg_"):
@@ -439,23 +451,34 @@ def _admin_only(request: Request):
         raise HTTPException(403, "only an administrator writes cards")
 
 
+def auto_name() -> str:
+    """A new card's name: "Card <n>" in the house language, the lowest n no listed card has (in any case)."""
+    lang = getattr(core, "house_lang", lambda: "en")()
+    word = _I18N.get(lang, {}).get("Card {n}") or "Card {n}"
+    taken = {n.lower() for n in _CARDS.values()}
+    return next(w for n in range(1, len(_CARDS) + 2) if (w := word.format(n=n)).lower() not in taken)
+
+
 def _w_finish(result: dict) -> None:
-    """The end of the session (lock held): the card on the list when it worked, one log line either way."""
-    name = _w["name"]
-    if result.get("ok"):
+    """The end of the session (lock held): a written card not on the list goes there under an automatic name ({new}: the
+    phone offers to name it), a listed one keeps its name and rules. One log line either way, with the card's real name."""
+    if result.get("known"):
+        core.log.info(f"[nfc] writing a card: it is {result['known']} ({result['uid']}), asking before a rewrite")
+    elif result.get("ok"):
         uid = result["uid"]
         if uid in _CARDS:
             result["listed"] = _CARDS[uid]
         else:
             try:
-                _add(uid, name)
-                result["listed"] = name
+                _add(uid, auto_name())
+                result.update(listed=_CARDS[uid], new=True)
             except HTTPException as e:
                 result["note"] = f"written, not put on the list: {e.detail}"
-        core.log.info(f"[nfc] card {name} ({uid}) written with the house keys (it had the {result.get('keys')} keys)")
+        core.log.info(f"[nfc] card {result.get('listed') or uid} ({uid}) written with the house keys "
+                      f"(it had the {result.get('keys')} keys)")
     else:
-        core.log.warning(f"[nfc] writing card {name} failed at {result.get('step')}: {result.get('error')}")
-    _w.update(result={k: v for k, v in result.items() if k in ("ok", "step", "error", "uid", "keys", "listed", "note")},
+        core.log.warning(f"[nfc] writing a card failed at {result.get('step')}: {result.get('error')}")
+    _w.update(result={k: v for k, v in result.items() if k in ("ok", "step", "error", "uid", "keys", "listed", "new", "note", "known")},
               ended=time.time(), gen=None, apdu=None)
 
 
@@ -473,9 +496,22 @@ def _w_view():
         if not _w:
             return None
         r = _w.get("result")
-        return {"sid": _w["sid"], "name": _w["name"], "step": (r or {}).get("step") or _w["state"].get("step", "start"),
+        return {"sid": _w["sid"], "step": (r or {}).get("step") or _w["state"].get("step", "start"),
                 "done": r is not None, "result": r,
                 "left": None if r else max(0, int(WRITE_IDLE_S - (time.time() - _w["last"])))}
+
+
+def _w_known(uid: str):
+    """The name of a listed card the write must ask about first; the card the administrator said to rewrite is not."""
+    return None if uid == _w.get("rewrite") else _CARDS.get(uid)
+
+
+def _w_begin(now: float) -> None:
+    """(lock held) The step loop from the start: a fresh generator, waiting for the card's first command."""
+    state: dict = {}
+    _w.update(state=state, apdu=None, last=now, result=None, ended=0,
+              gen=_ntag424.write_card({0: _MASTER_KEY, 1: _META_KEY, 2: _FILE_KEY}, _w["url"], AAR_PKG, state,
+                                      known=_w_known))
 
 
 def _w_session(sid: str) -> None:
@@ -483,51 +519,39 @@ def _w_session(sid: str) -> None:
         raise HTTPException(404, "no such write session: it ended or timed out")
 
 
-class WriteBody(core.Body):
-    name: str
-
-
 class StepBody(core.Body):
     resp_hex: Optional[str] = None
 
 
-class NfcSettingsBody(core.Body):
-    card_url: str
-
-
 @core.use_route
 @core.app.post("/api/nfc/write/start")
-def api_write_start(body: WriteBody, request: Request):
-    """A write session for a new card with this name; the administrators' phones are told (NFC_WRITE)."""
+def api_write_start(request: Request):
+    """A write session; the phone that starts it (the Yash! app) drives it. No name: a new card is listed under
+    auto_name(), a listed one keeps its own; the phone renames a new one afterwards (PATCH /api/nfc/cards/{uid})."""
     _admin_only(request)
     if not _MASTER_KEY:
         raise HTTPException(503, "NFC_MASTER_KEY is not set in the house's .env: the house cannot write cards")
     if not (_META_KEY and _FILE_KEY):
         raise HTTPException(503, "NFC_SDM_META_KEY and NFC_SDM_FILE_KEY are not set in the house's .env")
     url = card_url()
+    if not url and (url := request_card_url(request)):
+        _settings["card_url"] = url             # kept: every later card gets the same link
+        core.save_settings()
     if not url:
-        raise HTTPException(409, "the card address is not known: set it in Settings -> NFC tags -> Advanced")
+        raise HTTPException(409, "the card address is not known: open the dashboard on its https address")
     try:
         _ntag424.card_file(url, AAR_PKG)
     except _ntag424.CardError as e:
         raise HTTPException(400, f"the card address: {e}")
-    name = _check_name(body.name)
     now = time.time()
     with _w_lock:
         _w_sweep(now)
         if _w and not _w.get("result"):
             raise HTTPException(409, "another card is being written: finish or cancel it first")
-        state: dict = {}
         _w.clear()
-        _w.update(sid=secrets.token_urlsafe(16), name=name, state=state, apdu=None, last=now, result=None, ended=0,
-                  gen=_ntag424.write_card({0: _MASTER_KEY, 1: _META_KEY, 2: _FILE_KEY}, url, AAR_PKG, state))
-        sid = _w["sid"]
-    core.log.info(f"[nfc] writing card {name}: waiting for an administrator's phone")
-    for fn in list(getattr(core, "NFC_WRITE", ())):
-        try:
-            fn(sid)
-        except Exception as e:                    # noqa: BLE001  a phone not told: the dashboard still shows the session
-            core.log.error(f"[nfc] NFC_WRITE {getattr(fn, '__name__', fn)}: {e}")
+        _w.update(sid=secrets.token_urlsafe(16), url=url, rewrite=None)
+        _w_begin(now)
+    core.log.info("[nfc] writing a card: waiting for the card on the phone that started it")
     return _w_view()
 
 
@@ -579,30 +603,28 @@ def api_write_state(sid: str, request: Request):
 
 
 @core.use_route
-@core.app.delete("/api/nfc/write/{sid}")
-def api_write_cancel(sid: str, request: Request):
+@core.app.post("/api/nfc/write/{sid}/rewrite")
+def api_write_rewrite(sid: str, request: Request):
+    """The card held was a listed one ({known}): rewrite it. The step loop starts again; the card is held again."""
     _admin_only(request)
     with _w_lock:
         _w_session(sid)
-        if _w["result"] is None:
-            _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": "cancelled"})
+        r = _w["result"]
+        if not (r and r.get("known")):
+            raise HTTPException(409, "this write is not waiting for a rewrite answer")
+        _w["rewrite"] = r["uid"]
+        _w_begin(time.time())
+    core.log.info(f"[nfc] writing a card: rewrite {r['known']} ({r['uid']}), waiting for the card again")
     return _w_view()
 
 
-@core.app.put("/api/nfc/settings")
-def api_nfc_settings(body: NfcSettingsBody, request: Request):
-    """card_url: the link written into new cards ({PICC} and {MAC} in it); "" = the one the house knows."""
+@core.use_route
+@core.app.delete("/api/nfc/write/{sid}")
+def api_write_cancel(sid: str, request: Request):
+    """Cancel: a session under way or one asking about a listed card ends; the card is left as it is."""
     _admin_only(request)
-    url = body.card_url.strip()
-    if url:
-        if not url.startswith("https://"):
-            raise HTTPException(400, "the card address starts with https://")
-        try:
-            _ntag424.card_file(url, AAR_PKG)
-        except _ntag424.CardError as e:
-            raise HTTPException(400, f"the card address: {e}")
-        _settings["card_url"] = url
-    else:
-        _settings.pop("card_url", None)
-    core.save_settings()
-    return _view()
+    with _w_lock:
+        _w_session(sid)
+        if _w["result"] is None or _w["result"].get("known"):
+            _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": "cancelled"})
+    return _w_view()

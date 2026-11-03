@@ -136,27 +136,8 @@ class DashboardActivity : AppCompatActivity() {
         4 -> { startActivity(Intent(this, MouseActivity::class.java)); true }
         5 -> { startActivity(Intent(this, AskActivity::class.java)); true }
         3 -> { editing = !editing; invalidateOptionsMenu(); render(); true }
-        8 -> { askCardName(); true }
+        8 -> { NfcWriteActivity.open(this); true }
         else -> super.onOptionsItemSelected(item)
-    }
-
-    /** "Write a card": its name, then the house starts a write session and this phone carries it (NfcWriteActivity). */
-    private fun askCardName() {
-        val field = EditText(this).apply { hint = getString(R.string.nfcw_name_hint); setSingleLine() }
-        AlertDialog.Builder(this).setTitle(R.string.nfcw_menu).setView(field)
-            .setPositiveButton(R.string.nfcw_start) { _, _ ->
-                val name = field.text.toString().trim()
-                if (name.isNotEmpty()) io.execute {
-                    try {
-                        val r = HomeApi.nfcWriteStart(this, name)
-                        main.post { NfcWriteActivity.open(this, r.optString("sid"), r.optString("name", name)) }
-                    } catch (e: Exception) {
-                        val why = HomeApi.detail(e) ?: getString(R.string.nfcw_offline)
-                        main.post { Toast.makeText(this, why, Toast.LENGTH_LONG).show() }
-                    }
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null).show()
     }
 
     private fun load() {

@@ -352,8 +352,7 @@ _HOOK_DICTS = ("TRANSPORTS", "ASYNC_CONTROL", "CONTROL_KINDS", "SETTINGS_SECTION
 _HOOK_LISTS = ("MQTT_SUBSCRIPTIONS", "MQTT_HANDLERS", "STARTUP_TASKS", "DEVICE_FIELDS", "ON_MQTT_CONNECT", "TOKEN_CHECKS", "KEY_REFUSALS", "MERGE_PLAN", "DEVICE_MERGED",
                "HEALTH_CHECKS", "MQTT_SHARED_READ", "ON_EVENT", "ON_REPORT",
                "RESYNC_HOOKS", "ON_RENAME", "NAME_OWNERS", "WS_FILTERS", "DEVICE_REMOVED", "DISCOVERY_IGNORE",
-               "WIRING_CHANGED", "WIRING_MIGRATORS", "ROOM_REFS", "ON_ROOM_MOVE", "RESTRICTED_ROLE", "RESTRICTED_CHECKS", "GUEST_NOTIFY", "ADMIN_CHECKS",
-               "NFC_WRITE")
+               "WIRING_CHANGED", "WIRING_MIGRATORS", "ROOM_REFS", "ON_ROOM_MOVE", "RESTRICTED_ROLE", "RESTRICTED_CHECKS", "GUEST_NOTIFY", "ADMIN_CHECKS")
 _NS_OWNER: dict = {}           # MQTT namespace -> the plug-in that claimed it
 _TRANSPORT_OWNER: dict = {}    # transport -> the plug-in that registered it (its devices are its own)
 # names the core owns: a plug-in may not take them over

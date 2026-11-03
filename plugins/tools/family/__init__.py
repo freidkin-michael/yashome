@@ -1296,19 +1296,6 @@ def _guest_notify(req: dict) -> None:
 core.GUEST_NOTIFY.append(_guest_notify)
 
 
-def _nfc_write_send(sid: str) -> None:
-    """The house waits for a card to write: the administrators' phones open their "hold the card" screen. One session at a
-    time: a waiting older one is replaced. Only the session id goes; the keys stay in the house."""
-    _admin_send({"cmd": "nfc_write", "sid": str(sid)}, lambda c: True)
-
-
-def _nfc_write_notify(sid: str) -> None:
-    threading.Thread(target=_nfc_write_send, args=(str(sid),), daemon=True, name="family-nfc-write").start()
-
-
-core.NFC_WRITE.append(_nfc_write_notify)
-
-
 _seen_warned: dict = {}
 
 
