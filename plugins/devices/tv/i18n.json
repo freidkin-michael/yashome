@@ -51,6 +51,7 @@
     "Type the TV's address": "Введите адрес телевизора",
     "Checking...": "Проверяю...",
     "{0} did not answer: switch the TV on and press Check again": "{0} не ответил: включите телевизор и нажмите «Проверить» ещё раз",
-    "Finds the TVs on the network and tells their make itself; one that is not listed: type its address. A TV that is off does not answer: switch it on first.": "Находит телевизоры в сети и сам определяет марку; если нужного нет в списке, введите его адрес. Выключенный телевизор не отвечает: сначала включите его."
+    "Finds the TVs on the network and tells their make itself; one that is not listed: type its address. A TV that is off does not answer: switch it on first.": "Находит телевизоры в сети и сам определяет марку; если нужного нет в списке, введите его адрес. Выключенный телевизор не отвечает: сначала включите его.",
+    "Change remote": "Сменить пульт"
   }
 }

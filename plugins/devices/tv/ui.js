@@ -102,6 +102,10 @@
     if(!document.getElementById('tv-compact')) document.head.insertAdjacentHTML('beforeend', `<style id="tv-compact">
       .tvset{border-top:1px solid var(--line);padding:4px 0}.tvset:first-child{border-top:0}
       .tvset .row{padding:4px 0;min-height:0;border-top:0}.tvset .rlabel .bindcaption{font-style:normal;margin:0;font-size:12px}</style>`);
+    const irButtons = (box, remote, appliance) => {             // Keys: that remote's own window; Change remote: which remote and blaster
+      const open = (win, id) => HomePlugins.openWindow(win, id) || openSettings('ir');
+      box.querySelectorAll('[data-tvir]').forEach(b => { b.onclick = () => b.dataset.tvir === 'keys' ? open('ir.remote', remote) : open('ir.appliance', appliance); });
+    };
     const card = () => { const sc = Home.el('section', 'tvset'); sc.innerHTML = '<div></div>'; box.append(sc); return sc.lastElementChild; };
     const head = (into, title, id, plug, ip) => {                // the first row's label: the name over where, plug-in, address, state
       const lb = into.querySelector('.row .rlabel'), was = lb ? lb.innerHTML.trim() : '';
@@ -124,8 +128,8 @@
         head(into, dev.name || t.name || t.id, t.id, p.transport, t.live_host || t.host);
         const ir = (dev.parts || {}).ir;                                                  // its IR remote, a part of the same TV
         if(ir) into.insertAdjacentHTML('beforeend', `<div class="row"><span class="rlabel bindcaption">${E(i18n('IR remote: {0}, through {1}', ir.remote_name || ir.remote || '\u2014', (Home.devices().find(x => x.id === ir.blaster || x.ir_blaster === ir.blaster) || {}).name || ir.blaster || '\u2014'))}</span>
-          <button class="dlg-btn" data-tvir="1">${E(i18n('Keys'))}</button></div>`);
-        const go = into.querySelector('[data-tvir]'); if(go) go.onclick = () => openSettings('ir');
+          <span style="display:flex;gap:6px"><button class="dlg-btn" data-tvir="keys">${E(i18n('Keys'))}</button><button class="dlg-btn" data-tvir="bind">${E(i18n('Change remote'))}</button></span></div>`);
+        irButtons(into, ir.remote, ir.appliance);
       }
     });
     for(const d of Home.devices().filter(d => d.category === 'tv' && !seen.has(d.id))){       // a TV no transport sets up here: IR
@@ -133,7 +137,7 @@
       b.innerHTML = `<div class="row"><span class="rlabel bindcaption">${E(i18n(d.transport === 'ir' ? 'Its remote and keys are on the IR page.' : 'Nothing to set up here.'))}</span>
         ${d.transport === 'ir' ? `<button class="dlg-btn" data-tvir="1">${E(i18n('Open'))}</button>` : ''}</div>`;
       head(b, d.name, d.id, d.transport || 'ir', d.host);
-      const go = b.querySelector('[data-tvir]'); if(go) go.onclick = () => openSettings('ir');
+      irButtons(b, null, d.transport === 'ir' ? d.id : null);
     }
     if(!box.querySelector('.tvset')) box.insertAdjacentHTML('afterbegin', `<div class="bindcaption">${E(i18n('No TV yet.'))}</div>`);
     const foot = Home.el('section', '');

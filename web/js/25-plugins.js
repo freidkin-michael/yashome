@@ -3,10 +3,10 @@
 // first render; a script registers what it adds. Helpers a plug-in may use are on `Home`.
 const HomePlugins = {
   list: [], failed: [], off: [], tabs: [], addMenu: [], addFlow: [], cards: [], ruleActions: [], toolbar: [], onReload: [],
-  header: [], onState: [], cardFaces: [], modalSections: [], holds: [], hides: [], settings: [], help: [], ask: [], deviceSettings: [],
+  header: [], onState: [], cardFaces: [], modalSections: [], holds: [], hides: [], settings: [], help: [], ask: [], deviceSettings: [], windows: [],
   register(m){
     for(const k of ['tabs', 'addMenu', 'addFlow', 'cards', 'ruleActions', 'toolbar', 'onReload',
-                    'header', 'onState', 'cardFaces', 'modalSections', 'holds', 'hides', 'settings', 'help', 'ask', 'deviceSettings'])
+                    'header', 'onState', 'cardFaces', 'modalSections', 'holds', 'hides', 'settings', 'help', 'ask', 'deviceSettings', 'windows'])
       if(Array.isArray(m && m[k])) this[k].push(...(k === 'settings' ? m[k].map(x => Object.assign(x, {_plugin: this._cur})) : m[k]));
   },
   // one plug-in's bug must not blank the dashboard: every call into a plug-in goes through this
@@ -45,6 +45,8 @@ const HomePlugins = {
     inp.onblur = () => setTimeout(() => { drop(false); if(!inp.value.trim()) f.classList.remove('open'); }, 150);
     inp.onkeydown = ev => { if(ev.key === 'Escape'){ inp.value = ''; inp.blur(); } };
   },
+  // a plug-in's window another one opens by name (windows: [{id, open(arg)}]); false when no plug-in has it
+  openWindow(id, arg){ const w = this.windows.find(x => x.id === id); if(!w || !arg) return false; this.safe(w.open, arg); return true; },
   safe(fn, ...args){
     try{
       const r = fn(...args);

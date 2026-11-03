@@ -1087,6 +1087,8 @@ HomePlugins.register({
           visible: () => (IR.remotes || []).length > 0 || (IR.blasters || []).length > 0}],
   cardFaces: [{match: d => !!d.ir_appliance, render: irTileFace,
                update: (c, d) => { if(d.ir_power){ c.querySelectorAll('.acpanel').forEach(x => x.remove()); irFace(c, d); } }}],   // its feed or what was sent changed
+  windows: [{id: 'ir.remote', open: async id => { await loadIrRemotes(); openIrRemoteModal(id); }},           // opened from other plug-ins:
+             {id: 'ir.appliance', open: async id => { await loadIrRemotes(); openIrApplianceModal(id); }}],   // the list fresh first
   // a TV or an AC keeps only its daily controls on the card; its IR remote and binding are in its window
   cards: [(card, d) => { if(!d.ir_appliance && hostedAppliances(d.id).length && !FACED.includes(d.category)) appendHostedIr(card, d.id, {buttons: true, foot: false, fold: true}); }],
   modalSections: [{                    // a lamp with a fan opened from elsewhere (the map): its zones, the power hint, what was sent
