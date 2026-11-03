@@ -37,6 +37,8 @@ services:
   build-server:
     build: .
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here: an updater must not pull or replace it
     mem_limit: 4g
     environment:
       - APK_URL=http://apk-builder:8795
@@ -54,6 +56,8 @@ EOF
       context: .
       dockerfile: apk.Dockerfile
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"   # built here: an updater must not pull or replace it
     mem_limit: 4g
     volumes:
       - apk-cache:/cache

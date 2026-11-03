@@ -654,3 +654,4 @@ def test_the_installer_puts_the_server_on_the_loopback_with_no_key():
     text = (pathlib.Path(me.__file__).parent / "server/install-build-server.sh").read_text()
     assert '"127.0.0.1:8795:8795"' in text and "BUILD_KEY" not in text and "/plugins/build/pair" not in text
     assert subprocess.run(["sh", "-n", str(pathlib.Path(me.__file__).parent / "server/install-build-server.sh")]).returncode == 0
+    assert text.count("com.centurylinklabs.watchtower.enable: \"false\"") == 2      # both images are built here: no updater pulls them

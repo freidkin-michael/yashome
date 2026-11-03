@@ -12,7 +12,8 @@ Settings -> Devices -> Computers and servers -> a computer -> Build server: Inst
 computers). Install has the helper log in with the house's ssh key and run `server/install-build-server.sh`
 there as root: docker when missing, the build server from the house (`/plugins/build/server.tar.gz`, the
 same code as `server/`) in `/opt/yashome-build`, its port on that computer's loopback only
-(`127.0.0.1:8795`, no key). Use points the helper's ssh tunnel there (`helper:8795`) and
+(`127.0.0.1:8795`, no key); both containers carry `com.centurylinklabs.watchtower.enable: "false"` (built there, an
+updater must not pull them). Use points the helper's ssh tunnel there (`helper:8795`) and
 the house builds there (settings `build.remote` = that computer); Use on the house's own computer = this
 host's server again. No key and no code exist for it: whoever can reach the port has logged in to that
 computer already. Plan for at least 4 GB of memory and 10 GB of disk there (each build container is
