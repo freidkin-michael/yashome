@@ -1,7 +1,7 @@
 # tv - TV cards, the Appliances tab and Settings -> TVs
 
 The dashboard side of every TV, and **Add a TV**. The TV itself is reached by another plug-in: `webos`
-for LG webOS TVs, `tizen` for Samsung Tizen TVs, `ir` for an IR one.
+for LG webOS TVs, `tizen` for Samsung Tizen TVs, `androidtv` for Android TV / Google TV, `ir` for an IR one.
 
 | file | what |
 |---|---|
@@ -32,7 +32,7 @@ that is not listed. The house names the platform itself by what answers:
 | Hisense VIDAA | port 36669 |
 | Philips | port 1925 or 1926 |
 
-A platform with a plug-in that is on (`tizen`, `webos`) opens that plug-in's form for a new TV (its
+A platform with a plug-in that is on (`tizen`, `webos`, `androidtv`) opens that plug-in's form for a new TV (its
 `deviceSettings` entry's `add(found, into, reload, say)`), with the name filled in (and the MAC when
 the TV tells it: Samsung, Roku; an LG TV tells it at its pairing). A platform
 without one is named and sent to the IR page. A TV that is off answers nothing: the wizard asks to

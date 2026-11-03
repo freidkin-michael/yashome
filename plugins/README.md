@@ -12,7 +12,7 @@ one on or off, and set its keys, in Settings -> Maintenance -> Plug-ins and upda
 **Where they are in Settings.** The groups are Overview, House, Devices, Automation, Voice, This screen
 and Maintenance. A plug-in adds a page (or a tab of a page) to one of them: map -> House -> Home map,
 family -> House -> Family, weather -> House -> Weather; zigbee -> Devices -> Zigbee, ir -> Devices -> IR,
-tv, webos, tizen and player -> Devices -> TVs, panels -> Devices -> Panels, nfc -> Devices -> NFC tags,
+tv, webos, tizen, androidtv and player -> Devices -> TVs, panels -> Devices -> Panels, nfc -> Devices -> NFC tags,
 computers -> Devices -> Computers and servers; history and watchdog -> Automation; voice -> Voice;
 fwgen -> Maintenance -> Firmware builder. Health rows of every plug-in are on Overview. The rest have no
 page: they work through the Add window, a tab or a device's window (see each README).
@@ -32,6 +32,7 @@ Every shipped plug-in has a README.md (what it does, its files, routes and keys)
 | transports | `zigbee` | Zigbee through zigbee2mqtt: devices, pairing, key rename, remove; brings the zigbee2mqtt container; Settings -> Devices -> Zigbee (see its README) | `Z2M_SERIAL`, a coordinator stick |
 | transports | `webos` | LG webOS TVs as devices: SSAP + Wake-on-LAN, live polling, the LG cards on Settings -> Devices -> TVs; `media` takes play, pause, stop, volume_up, volume_down (relative steps reach a sound bar over HDMI ARC) | the WoL relay on the host (`host/wol-relay.py`, `sudo sh tools/host-sockets.sh`); TVs in `plugin-data/webos/devices.json`; see its README |
 | transports | `tizen` | Samsung Tizen TVs (2016 and later) as devices: power, volume, inputs and apps, Wake-on-LAN, an IR power-on fallback; Settings -> Devices -> TVs (see its README) | TVs in `plugin-data/tizen/settings.json` |
+| transports | `androidtv` | Android TV / Google TV (Sony, Philips, TCL, Xiaomi, Chromecast with Google TV) as devices: the Google TV remote protocol, pairing by a code on the TV, power, volume, inputs, apps, the remote's keys; Settings -> Devices -> TVs (see its README) | `EXTRA_PIP` with its packages (`setup/env.example`); TVs in `plugin-data/androidtv/settings.json` |
 | transports | `ir` | learned IR/RF remotes and appliances through ESPHome blasters; Settings -> Devices -> IR | blasters publishing on MQTT |
 | devices | `climate` | air conditioners: the room reading of a climate card from another device's sensor | - |
 | devices | `switchbot` | SwitchBot locks (Bluetooth LE only): a bridge on a host near the lock (host piece, one systemd instance per lock) on `switchbot/<id>/`; Add -> SwitchBot lock makes it a device the Yash! lock tile finds; battery and link on the health page (see its README) | the bridge host (Bluetooth) + `MQTT_SWITCHBOT_PASSWORD`; the lock's key fetched once |

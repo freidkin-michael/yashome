@@ -1,0 +1,18 @@
+{
+  "androidtv_tvs": [
+    {
+      "id": "atv_salon",
+      "name": "TV salon",
+      "host": "192.0.2.60",
+      "mac": "00:11:22:33:44:55",
+      "inputs": {
+        "HDMI 1": "TV_INPUT_HDMI_1",
+        "PlayStation": "TV_INPUT_HDMI_2"
+      },
+      "apps": {
+        "YouTube": "https://www.youtube.com",
+        "Netflix": "com.netflix.ninja"
+      }
+    }
+  ]
+}
