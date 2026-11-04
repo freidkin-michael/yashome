@@ -33,7 +33,7 @@ function openAddDevice(){
 
 // The tab of a freshly added node, from what it has: anything to switch -> Switches, readings only -> Sensors
 function espCategory(n){
-  const c = n.controls || [];
+  const c = (n.controls || []).filter(x => !x.aux);       // a node's own setting (status LED, ...) is no light or switch
   return c.some(x => !x.ro && x.kind !== 'sensor') ? 'switch' : c.length ? 'sensor' : 'other';
 }
 

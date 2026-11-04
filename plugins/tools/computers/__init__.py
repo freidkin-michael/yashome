@@ -44,8 +44,21 @@ ROLES = {"build": {"title": "Build server", "plugin": "build"},
          "llm": {"title": "Big model (LLM)", "plugin": "voice"},
          "yashgen": {"title": "yashGen firmware builder", "plugin": "fwgen"},
          "player": {"title": "Player (mpv)", "plugin": "player"},      # one on every computer at a TV: no Use
-         "touchmouse": {"title": "Touchmouse receiver", "plugin": "touchmouse"}}
-MANY = ("player", "touchmouse")    # on every computer that wants one: nothing to pick (Servers lists where they are)
+         "touchmouse": {"title": "Touchmouse receiver", "plugin": "touchmouse"},
+         "thread": {"title": "Thread border router", "plugin": "thread"},     # any number: the thread plug-in uses them all
+         "matter": {"title": "Matter controller", "plugin": "matter"}}
+MANY = ("player", "touchmouse", "thread")    # on every computer that wants one: nothing to pick (Servers lists where they are)
+ONE = ("matter",)                            # one per house, used where it is installed: Install and Remove on the card, no Use
+BAUDS = (115200, 460800, 1000000)
+RADIO_HINT = re.compile(r"thread|rcp|openthread|sonoff|itead|silicon_labs|efr32|nordic|nrf|zephyr|esp32-?h2|smlight", re.I)
+
+
+def radios(serials) -> list:
+    """The serial devices of a computer as Thread radios: likely ones first, each with the baud rate guessed from its name
+    (a USB CDC radio ignores it; a USB-UART one runs at 460800 with the common RCP builds)."""
+    out = [{"name": n, "likely": bool(RADIO_HINT.search(n)),
+            "baud": 1000000 if re.search(r"nordic|nrf|zephyr|_rcp_", n, re.I) else 460800} for n in serials or []]
+    return sorted(out, key=lambda r: not r["likely"])
 TTS_PORT = 8092
 LLM_TARGET = core.plugin_data("computers") / "llm.json"   # the computer of the big model: the host's tunnel follows this file (host/)
 YASHGEN_TARGET = core.plugin_data("computers") / "yashgen.json"   # the computer yashGen runs on: likewise (host/yashgen-tunnel.sh)
@@ -138,7 +151,7 @@ def _view() -> dict:
         out = []
         for cid, c in sorted(_computers.items(), key=lambda kv: (kv[1].get("host") != SELF, kv[1].get("name", "").lower())):
             st = _status.get(cid) or {}
-            out.append({"id": cid, **c, "self": c.get("host") == SELF, "status": st, "guess": _guess(st.get("screens")),
+            out.append({"id": cid, **c, "self": c.get("host") == SELF, "status": st, "guess": _guess(st.get("screens")), "radios": radios(st.get("serials")),
                         "tv_name": (tvs.get(c.get("tv")) or {}).get("name"), "roles": _roles(c, st), "run": _runs.get(c["host"])})
         return {"user": USER, "computers": out, "found": list(_found), "scan": dict(_scan), "tvs": list(tvs.values()), "tunnels": dict(_tunnels),
                 "net": _net(), "roles": {k: {"title": v["title"], "on": _mod(v["plugin"]) is not None} for k, v in ROLES.items()}}
@@ -179,8 +192,20 @@ def _roles(c: dict, st: dict) -> dict:
     roles = st.get("roles") or []                # the house's own computer too: installed over ssh like any other
     out["build"] = {"installed": "build" in roles, "active": host == c.get("host")}
     out["apk"] = {"installed": "apk" in roles, "active": host == c.get("host"), "needs": "build"}
-    for k in MANY:
-        out[k] = {"installed": k in roles, "active": False, "many": True}
+    for k in MANY:                               # a role of many computers: its own plug-in says whether it runs here
+        m = _mod(k)
+        try:
+            on = bool(m and hasattr(m, "role_active") and m.role_active(c))
+        except Exception:                        # noqa: BLE001 - a plug-in that cannot say: not running
+            on = False
+        out[k] = {"installed": k in roles, "active": k in roles and on, "many": True}
+    for k in ONE:                                # one per house: its plug-in says whether the house uses it here
+        m = _mod(k)
+        try:
+            on = bool(m and hasattr(m, "role_active") and m.role_active(c))
+        except Exception:                        # noqa: BLE001 - a plug-in that cannot say: not running
+            on = False
+        out[k] = {"installed": k in roles, "active": k in roles and on, "one": True}
     return out
 
 
@@ -305,6 +330,7 @@ def _check(ids: list) -> None:
             st = {k: r.get(k) for k in ("ok", "ssh", "sudo", "error")}
             st.update({"ts": now, "screens": r.get("screens") if r.get("ssh") else old.get("screens"),
                        "roles": r.get("roles") if r.get("ssh") else old.get("roles"), "llm": r.get("llm") if r.get("ssh") else old.get("llm"),
+                       "serials": r.get("serials") if r.get("ssh") else old.get("serials"),
                        "seen": now if r.get("ssh") else old.get("seen")})
             _status[cid] = st
             if r.get("ssh"):
@@ -358,6 +384,8 @@ def api_list(request: Request):
 
 class RoleBody(core.Body):
     action: str                    # install (also: use it) | remove | use
+    radio: str = ""                # thread: the radio, a name in that computer's /dev/serial/by-id
+    baud: int = 0                  # thread: its baud rate (0: guessed from its name)
 
 
 @core.app.post("/api/computers/{cid}/roles/{role}")
@@ -377,13 +405,22 @@ def api_role(cid: str, role: str, body: RoleBody, request: Request):
     if c is None:
         raise HTTPException(404, "no such computer")
     r = _roles(c, st)[role]
-    if role in MANY:                     # any Linux computer, the house's own too; each one serves itself
+    if role in MANY or role in ONE:      # any Linux computer, the house's own too; each one serves itself (ONE: the house's only)
+        if body.action == "use" and role in ONE:
+            raise HTTPException(400, "the house uses the computer it is installed on: there is nothing to pick")
         if body.action == "use":
             raise HTTPException(400, "every computer with it serves itself: there is nothing to pick")
         if c.get("wsl"):
             raise HTTPException(409, "it runs on a Linux computer, not in a WSL")
+        if body.action == "install" and role in ONE:
+            other = next((x for x in with_role(role) if x["id"] != cid), None)
+            if other:
+                raise HTTPException(409, f"one per house: it is on {other['name']} already; remove it there first")
+        args = {}
+        if body.action == "install":
+            args = _thread_args(st, body) if role == "thread" else {} if role in ONE else {"house": _house_url()}
         res = core.helper("POST", "/v1/hosts/run", {"host": c["host"], "user": c.get("user") or USER, "role": role, "action": body.action,
-                                                      "args": {"house": _house_url()} if body.action == "install" else {}}, 15)
+                                                      "args": args}, 15)
         _runs[c["host"]] = res.get("run") or {}
         core.log.info(f"[computers] {role} {body.action} on {c['name']} ({c['host']})")
         return _view()
@@ -443,7 +480,7 @@ def api_role(cid: str, role: str, body: RoleBody, request: Request):
             raise HTTPException(409, "the app builder goes beside a build server: install that first")
         args = {"house": _house_url()}
     elif body.action == "remove":
-        if r["active"]:
+        if r["active"] and role not in MANY:              # a role of many (a Thread router, ...) is removed while it runs
             raise HTTPException(409, "the house builds there now: pick another build server first")
         args = {}
     elif body.action == "use":
@@ -459,6 +496,20 @@ def api_role(cid: str, role: str, body: RoleBody, request: Request):
     _runs[c["host"]] = res.get("run") or {}
     core.log.info(f"[computers] {role} {body.action} on {c['name']} ({c['host']})")
     return _view()
+
+
+def _thread_args(st: dict, body: RoleBody) -> dict:
+    """The radio of a Thread border router: one the probe found there (the only likely one when none is given)."""
+    found = radios(st.get("serials"))
+    pick = next((r for r in found if r["name"] == body.radio), None) if body.radio else None
+    if not body.radio:
+        likely = [r for r in found if r["likely"]]
+        pick = likely[0] if len(likely) == 1 else found[0] if len(found) == 1 else None
+    if pick is None:
+        raise HTTPException(409, "pick the radio: a serial device of that computer" if found else "no serial device on that computer: plug the radio in, then Check again")
+    if body.baud and body.baud not in BAUDS:
+        raise HTTPException(400, "baud: 115200, 460800 or 1000000")
+    return {"radio": pick["name"], "baud": str(body.baud or pick["baud"])}
 
 
 @core.app.post("/api/computers")
@@ -484,7 +535,7 @@ def api_add(body: AddBody, request: Request):
             c["tv"], c["input"] = g["tv"], g.get("input")
         _computers[cid] = c
         _status[cid] = {"ok": True, "ssh": True, "sudo": True, "error": None, "ts": time.time(), "seen": time.time(),
-                        "screens": r.get("screens"), "roles": r.get("roles"), "llm": r.get("llm")}
+                        "screens": r.get("screens"), "roles": r.get("roles"), "llm": r.get("llm"), "serials": r.get("serials")}
         _found[:] = [f for f in _found if f.get("hostname") != r.get("hostname")]
         _save()
     core.log.info(f"[computers] {c['name']} ({host}) added")
@@ -592,7 +643,7 @@ async def api_scan(request: Request):
                     c["host"] = r["host"]
                 if r["host"] == c["host"]:
                     _status[cid] = {**{k: r.get(k) for k in ("ok", "ssh", "sudo", "error")}, "ts": now, "seen": now,
-                                    "screens": r.get("screens"), "roles": r.get("roles"), "llm": r.get("llm")}
+                                    "screens": r.get("screens"), "roles": r.get("roles"), "llm": r.get("llm"), "serials": r.get("serials")}
                 continue
             if r["host"] in hosts or (r.get("hostname") and r["hostname"] in seen):
                 continue

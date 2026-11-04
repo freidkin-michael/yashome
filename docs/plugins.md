@@ -20,7 +20,7 @@ and recreates what changed); for one without it a restart is enough: `docker com
 
 Every sub-directory with an `__init__.py` is a plug-in, directly in `plugins/` or in a group
 folder (a directory without `__init__.py`). The shipped ones are grouped by role:
-`transports/` (how devices are reached: zigbee, webos, tizen, ir), `devices/` (a kind of device on the
+`transports/` (how devices are reached: zigbee, thread, matter, webos, tizen, ir), `devices/` (a kind of device on the
 dashboard over any transport: climate, tv, cameras, panels, switchbot), `sources/` (data and events: weather,
 nfc, presence, fwdesc), `tools/` (the rest: map, voice, family, history, watchdog, player, stats ...;
 `plugins/README.md` lists them all). The group is only a folder: the name is unique across all of them, and
@@ -36,7 +36,7 @@ so does a `requires` file that cannot be read or holds anything but one name per
 plug-in whose requirement is off. One resolver, `tools/pluginlib.py`, decides for the backend,
 `make install` / `make update` (python3 on the host, which `make check` asks for) and the broker
 accounts; install and update print why a plug-in stays off. In `/api/plugins` a
-plug-in switched on this way has `required_by`. Of the shipped plug-ins only `player` requires another
+plug-in switched on this way has `required_by`. Of the shipped plug-ins only `player`, `thread` and `matter` require another
 (`computers`). A shared tab is declared by each plug-in that fills it (`tabs` with the same `id` become one tab).
 
 **Always on: map.** The rooms of the house are the map's (`pluginlib.REQUIRED`): it loads whether
@@ -119,6 +119,7 @@ PLUGIN = {"name": "Hello", "version": "1.0.0", "icon": "puzzle"}   # shown in Se
 | `core.ON_REPORT.append(fn(dev_id, values, ts))` | called inline with every report a device makes itself (not a command's echo): the channels it carries and their values now, and when; keep it fast, it must not raise (the watchdog learns from it how fast each channel answers its commands) |
 | `core.room_reading(room id, "temperature" \| "humidity") -> {dev, code, value} \| None`, `core.room_sensor_order(room id, kind) -> {pick, order}` | a room's temperature or humidity as the dashboard shows it: the owner's hand choice alone (silent: None, Settings -> Overview says why), else auto - the room's channels of that kind but never a module's own board (`advanced`, an AC's built-in one), a sensor outdoors (a device marked `outdoor`, or one with a wind or rain channel) nor a copy of a sensor the room has; an AC's room channel with no value is no option; marked `preferred` first, then by id. `order` is what is tried, the first live one reads |
 | ui.js `deviceSettings: [{category, transport, label, list(), card(item, box, reload), actions?(box, reload)}]` | a kind's own settings of its devices on one page per category: Settings -> TVs draws a card per TV with the kind in its title (the TV plug-in) |
+| ui.js `window.MapMarks.push(fn(device id) -> {glyph, title} \| null)` | a mark on a device's icon of the home map (the map plug-in's README); the thread plug-in marks Thread routers |
 | ui.js `windows: [{id, open(arg)}]` | a window of this plug-in that another one opens by name: `HomePlugins.openWindow(id, arg)` (false when none has it); the IR plug-in has `ir.remote` (a remote's keys) and `ir.appliance` (which remote and blaster) |
 | a device's `virtual: "person" \| "presence" \| "tag"` | no thing in the house: All devices does not list it, its window says what it is and opens its page (Family, NFC), with no room, favourite, press log or answer time |
 | `core.extend_device(dev_id, part, channels, transport, info=None, cfg=None, map=None)`, `core.drop_part(dev_id, part)`, `core.PARTS` | a part of a device another plug-in owns (an IR remote of a TV, a tablet's microphone and speaker): docs/devices.md |

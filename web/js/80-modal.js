@@ -279,7 +279,7 @@ const GUESS_KINDS = ['switch', 'light', 'sensor', 'button', 'lock', 'socket', 'c
 const MODEL_KINDS = [[/router/i, 'Zigbee repeater'], [/switch module/i, 'Wall switch module'], [/\bplug\b/i, 'plug'], [/dimmer/i, 'Dimmable light'],
   [/motion/i, 'Motion sensor'], [/wireless switch|remote/i, 'Wireless button']];      // a model description (z2m) -> its kind
 function deviceKind(d){
-  const C = d.controls || [], codes = new Set(C.map(c => c.code)), kinds = new Set(C.map(c => c.kind));
+  const C = (d.controls || []).filter(c => !c.aux), codes = new Set(C.map(c => c.code)), kinds = new Set(C.map(c => c.kind));   // a node's own setting says nothing of what it is
   const has = (...x) => x.some(k => codes.has(k)), sw = C.filter(c => c.kind === 'switch').length;
   if(d.category === 'tv') return i18n('Television');
   if(d.category === 'climate') return i18n('Air conditioner');
@@ -489,7 +489,7 @@ function updateModal(){
       const cell = document.getElementById('m_sn_'+ctl.code);
       if(cell){
         cell.textContent = ctl.kind === 'trigger_text' ? (val==null ? '\u2014' : String(val)) : ctl.code === 'uptime' && val != null ? fmtUptime(val) : fmtReading(val, d.id, ctl.code);
-        cell.classList.toggle('blob', typeof val==='string' && val.length > 24);
+        cell.classList.toggle('blob', typeof val==='string' && val.length > 24 && !/\s/.test(val));   // raw data, not a sentence
       }
     }
     if(ctl.kind==='setting_enum'){

@@ -632,8 +632,9 @@ def _answers(dev: str) -> list:
     s = _settings()["confirm"]
     out = []
     for c in (core.DEVICES.get(dev) or {}).get("controls") or []:
-        if str(c.get("kind") or "").startswith("sensor") or not c.get("code"):
-            continue
+        k = str(c.get("kind") or "")
+        if k.startswith(("sensor", "setting")) or c.get("aux") or c.get("advanced") or not c.get("code"):
+            continue                                         # a reading or the device's own setting: no answer to wait for
         xs = list(_lat.get(f"{dev}/{c['code']}") or [])
         out.append({"code": c["code"], "label": c.get("label") or c["code"], "n": len(xs), "typical": sorted(xs)[len(xs) // 2] if xs else None,
                     "wait": confirm_window(dev, c["code"]), "set": s.get(f"{dev}/{c['code']}"), "toggle": bool(c.get("toggle"))})

@@ -3,6 +3,7 @@ that verifies is an event of the device `nfc` (code "card", gesture = the card's
 rules decide what it does (unlock a door, run a scene). The keys come from .env (NFC_SDM_*); the cards are
 plugin-data/nfc/cards.json, set in Settings -> Devices -> NFC tags."""
 import asyncio
+import functools
 import hmac
 import html
 import json
@@ -24,7 +25,7 @@ import app as core
 
 from . import _ntag424, _sdm
 
-PLUGIN = {"name": "NFC", "version": "2.2.0", "icon": "nfc"}
+PLUGIN = {"name": "NFC", "version": "2.3.0", "icon": "nfc"}
 
 def _max_counters(new: bytes, old: bytes) -> bytes:
     """Two copies of the counters: the higher one per card (anything unreadable stays as it was)."""
@@ -92,6 +93,40 @@ _ctr_lock = threading.Lock()
 _seen: dict = {}                    # the highest counter per card, also kept in memory: a missing file never re-opens old links
 _fails: list = []                   # times of failed verifications: only their logging is limited
 _I18N = json.loads((pathlib.Path(__file__).parent / "i18n.json").read_text(encoding="utf-8"))
+
+
+def _say(lang: str, text: str, **kw) -> str:
+    """text in lang (i18n.json, else English), its {name}s filled; a Refusal or CardError among kw in lang too."""
+    kw = {k: _say(lang, v.say, **v.kw) if isinstance(v, (Refusal, _ntag424.CardError)) else v for k, v in kw.items()}
+    s = _I18N.get(lang, {}).get(text) or text
+    return s.format(**kw) if kw else s
+
+
+class Refusal(HTTPException):
+    """A refusal for a person: detail in English (the log, the tests), to(lang) in the asker's language."""
+    def __init__(self, status: int, say: str, **kw):
+        self.say, self.kw = say, kw
+        super().__init__(status, _say("en", say, **kw))
+
+    def to(self, lang: str) -> HTTPException:
+        return HTTPException(self.status_code, _say(lang, self.say, **self.kw))
+
+
+def _ask_lang(request: Request) -> str:
+    """The asker's language: the app's ?lang= when the plug-in has words for it, else the house's (the dashboard's)."""
+    lg = request.query_params.get("lang") or ""
+    return lg if lg == "en" or lg in _I18N else getattr(core, "house_lang", lambda: "en")()
+
+
+def _in_their_language(fn):
+    """A route's Refusal goes out in the asker's language; put it below @core.app.<method>(...)."""
+    @functools.wraps(fn)
+    def run(*a, **kw):
+        try:
+            return fn(*a, **kw)
+        except Refusal as e:
+            raise e.to(_ask_lang(kw["request"])) from None
+    return run
 
 core.OPEN_PATHS.add("/nfc")                               # a phone opens the sticker's link: no token
 
@@ -208,8 +243,8 @@ async def _tap(request: Request, picc: str, cmac: str, as_json: bool = False):
         name = _enroll["name"]
         try:
             await run_in_threadpool(_add, uid_hex, name, ctr)
-        except HTTPException as e:
-            return reply("Not added", "{why}", ok=False, status=e.status_code, why=e.detail)
+        except Refusal as e:
+            return reply("Not added", "{why}", ok=False, status=e.status_code, why=e.to(lang).detail)
         _enroll.clear()
         _added.update({"uid": uid_hex, "name": name, "ts": time.time()})
         return reply("Added", "tag {name} is on the list now", name=name)
@@ -296,9 +331,9 @@ def _check_name(name: str, uid: str = "") -> str:
     """A tag's name as stored: spaces folded, 1-40 characters, none of | / + # (it is a part of a rule id), unique in any case."""
     name = " ".join(name.split())
     if not name or len(name) > 40 or any(c in name for c in "|/+#"):
-        raise HTTPException(400, "a name of 1-40 characters, without | / + #")
+        raise Refusal(400, "a name of 1-40 characters, without | / + #")
     if name.lower() in {n.lower() for u, n in _CARDS.items() if u != uid}:
-        raise HTTPException(409, "another tag has this name")
+        raise Refusal(409, "another tag has this name")
     return name
 
 
@@ -306,10 +341,10 @@ def _add(uid: str, name: str, ctr=None) -> None:
     """On the list; ctr is the counter of the tap that brought it (stored: that tap's link never counts later)."""
     global _CARDS
     if uid in _CARDS:
-        raise HTTPException(409, f"this tag is on the list already: {_CARDS[uid]}")
+        raise Refusal(409, "this tag is on the list already: {name}", name=_CARDS[uid])
     name = _check_name(name)
     if ctr is not None and not _seed_counter(uid, ctr):
-        raise HTTPException(503, "the counters of the tags are not available, see the server log")
+        raise Refusal(503, "the counters of the tags are not available, see the server log")
     _new.pop(uid, None)
     cards = {**_CARDS, uid: name}
     _write_cards(cards)
@@ -328,23 +363,26 @@ class NameBody(core.Body):
 
 
 @core.app.get("/api/nfc")
+@_in_their_language
 def api_nfc(request: Request):
     core.house_token_only(request)
     return _view()
 
 
 @core.app.post("/api/nfc/cards")
+@_in_their_language
 def api_add_card(body: CardBody, request: Request):
     """A tag on the list: the one just tapped (its counter kept) or a UID typed in (a new sticker: its first tap counts)."""
     core.house_token_only(request)
     uid = body.uid.strip().lower().replace(":", "").replace(" ", "")
     if len(uid) != UID_LEN or any(c not in "0123456789abcdef" for c in uid):
-        raise HTTPException(400, f"the UID is {UID_LEN} hex digits")
+        raise Refusal(400, "the UID is {n} hex digits", n=UID_LEN)
     _add(uid, body.name, (_new.get(uid) or {}).get("ctr"))
     return _view()
 
 
 @core.app.post("/api/nfc/enroll")
+@_in_their_language
 def api_enroll(body: NameBody, request: Request):
     """"Add a tag": the next tap of a tag of ours that is not on the list, on any phone, puts it there with this name."""
     core.house_token_only(request)
@@ -354,6 +392,7 @@ def api_enroll(body: NameBody, request: Request):
 
 
 @core.app.delete("/api/nfc/enroll")
+@_in_their_language
 def api_enroll_cancel(request: Request):
     core.house_token_only(request)
     _enroll.clear()
@@ -362,6 +401,7 @@ def api_enroll_cancel(request: Request):
 
 @core.use_route
 @core.app.patch("/api/nfc/cards/{uid}")
+@_in_their_language
 def api_rename_card(uid: str, body: NameBody, request: Request):
     """A new name; the rules of the tag follow it (a tap is the gesture "<name>", so they are keyed by it), switched off ones stay off.
     An administrator: the dashboard's pen, or the phone that has just written the card ("Name this card")."""
@@ -369,7 +409,7 @@ def api_rename_card(uid: str, body: NameBody, request: Request):
     global _CARDS
     uid = uid.lower()
     if uid not in _CARDS:
-        raise HTTPException(404, "no such tag")
+        raise Refusal(404, "no such tag")
     old, name = _CARDS[uid], _check_name(body.name, uid)
     if name == old:
         return _view()
@@ -391,13 +431,14 @@ def api_rename_card(uid: str, body: NameBody, request: Request):
 
 
 @core.app.delete("/api/nfc/cards/{uid}")
+@_in_their_language
 def api_remove_card(uid: str, request: Request):
     """Off the list: its taps are refused from now on; a rule naming it stays until it is deleted (the page offers that)."""
     core.house_token_only(request)
     global _CARDS
     uid = uid.lower()
     if uid not in _CARDS:
-        raise HTTPException(404, "no such tag")
+        raise Refusal(404, "no such tag")
     cards = {u: n for u, n in _CARDS.items() if u != uid}
     _write_cards(cards)
     name, _CARDS = _CARDS[uid], cards
@@ -443,12 +484,12 @@ def request_card_url(request: Request) -> str:
 def _admin_only(request: Request):
     """An administrator: core.is_admin_request where the core has it, else the house token alone."""
     if core.request_token(request.headers).startswith("yg_"):
-        raise HTTPException(403, "a guest may not do this")
+        raise Refusal(403, "a guest may not do this")
     check = getattr(core, "is_admin_request", None)
     if check is None:
         core.house_token_only(request)
     elif not check(request):
-        raise HTTPException(403, "only an administrator writes cards")
+        raise Refusal(403, "only an administrator writes cards")
 
 
 def auto_name() -> str:
@@ -472,32 +513,58 @@ def _w_finish(result: dict) -> None:
             try:
                 _add(uid, auto_name())
                 result.update(listed=_CARDS[uid], new=True)
-            except HTTPException as e:
-                result["note"] = f"written, not put on the list: {e.detail}"
+            except Refusal as e:
+                result.update(note=f"written, not put on the list: {e.detail}", why=e)
         core.log.info(f"[nfc] card {result.get('listed') or uid} ({uid}) written with the house keys "
                       f"(it had the {result.get('keys')} keys)")
     else:
         core.log.warning(f"[nfc] writing a card failed at {result.get('step')}: {result.get('error')}")
-    _w.update(result={k: v for k, v in result.items() if k in ("ok", "step", "error", "uid", "keys", "listed", "new", "note", "known")},
+    keep = ("ok", "step", "error", "say", "kw", "why", "uid", "keys", "listed", "new", "note", "known")
+    _w.update(result={k: v for k, v in result.items() if k in keep},
               ended=time.time(), gen=None, apdu=None)
 
 
 def _w_sweep(now: float) -> None:
     if _w and not _w.get("result") and now - _w["last"] > WRITE_IDLE_S:
-        _w_finish({"ok": False, "step": _w["state"].get("step", "start"),
-                   "error": f"timed out: no step for {WRITE_IDLE_S} s"})
+        _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": f"timed out: no step for {WRITE_IDLE_S} s",
+                   "say": "timed out: no step for {secs} s", "kw": {"secs": WRITE_IDLE_S}})
     if _w.get("result") and now - _w["ended"] > WRITE_KEEP_S:
         _w.clear()
 
 
-def _w_view():
+def _step_words(lang: str, step: str) -> str:
+    """A writer step in lang ("card step: <step>" in i18n.json: no bare word in the dashboard's dictionary), else as is."""
+    step = step or "start"
+    m = re.fullmatch(r"(auth key|key) (\d)", step)
+    word = _I18N.get(lang, {}).get("card step: " + (m[1] + " {n}" if m else step))
+    return (word.format(n=m[2]) if m else word) if word else step
+
+
+def _w_out(r, lang: str):
+    """A result for the asker: error and step as the log has them (the app keys on error "cancelled"), message,
+    step_text and note in the asker's language."""
+    if r is None:
+        return None
+    out = {k: v for k, v in r.items() if k not in ("say", "kw", "why")}
+    if r.get("error"):
+        out["message"] = _say(lang, r.get("say") or r["error"], **(r.get("kw") or {}))
+    if r.get("why") is not None:
+        out["note"] = _say(lang, "written, not put on the list: {why}", why=r["why"])
+    if r.get("step"):
+        out["step_text"] = _step_words(lang, r["step"])
+    return out
+
+
+def _w_view(lang: str = ""):
+    lang = lang or getattr(core, "house_lang", lambda: "en")()
     with _w_lock:
         _w_sweep(time.time())
         if not _w:
             return None
         r = _w.get("result")
-        return {"sid": _w["sid"], "step": (r or {}).get("step") or _w["state"].get("step", "start"),
-                "done": r is not None, "result": r,
+        step = (r or {}).get("step") or _w["state"].get("step", "start")
+        return {"sid": _w["sid"], "step": step, "step_text": _step_words(lang, step),
+                "done": r is not None, "result": _w_out(r, lang),
                 "left": None if r else max(0, int(WRITE_IDLE_S - (time.time() - _w["last"])))}
 
 
@@ -516,7 +583,7 @@ def _w_begin(now: float) -> None:
 
 def _w_session(sid: str) -> None:
     if not _w or not hmac.compare_digest(sid.encode(), _w["sid"].encode()):
-        raise HTTPException(404, "no such write session: it ended or timed out")
+        raise Refusal(404, "no such write session: it ended or timed out")
 
 
 class StepBody(core.Body):
@@ -525,38 +592,40 @@ class StepBody(core.Body):
 
 @core.use_route
 @core.app.post("/api/nfc/write/start")
+@_in_their_language
 def api_write_start(request: Request):
     """A write session; the phone that starts it (the Yash! app) drives it. No name: a new card is listed under
     auto_name(), a listed one keeps its own; the phone renames a new one afterwards (PATCH /api/nfc/cards/{uid})."""
     _admin_only(request)
     if not _MASTER_KEY:
-        raise HTTPException(503, "NFC_MASTER_KEY is not set in the house's .env: the house cannot write cards")
+        raise Refusal(503, "NFC_MASTER_KEY is not set in the house's .env: the house cannot write cards")
     if not (_META_KEY and _FILE_KEY):
-        raise HTTPException(503, "NFC_SDM_META_KEY and NFC_SDM_FILE_KEY are not set in the house's .env")
+        raise Refusal(503, "NFC_SDM_META_KEY and NFC_SDM_FILE_KEY are not set in the house's .env")
     url = card_url()
     if not url and (url := request_card_url(request)):
         _settings["card_url"] = url             # kept: every later card gets the same link
         core.save_settings()
     if not url:
-        raise HTTPException(409, "the card address is not known: open the dashboard on its https address")
+        raise Refusal(409, "the card address is not known: open the dashboard on its https address")
     try:
         _ntag424.card_file(url, AAR_PKG)
     except _ntag424.CardError as e:
-        raise HTTPException(400, f"the card address: {e}")
+        raise Refusal(400, "the card address: {why}", why=e)
     now = time.time()
     with _w_lock:
         _w_sweep(now)
         if _w and not _w.get("result"):
-            raise HTTPException(409, "another card is being written: finish or cancel it first")
+            raise Refusal(409, "another card is being written: finish or cancel it first")
         _w.clear()
         _w.update(sid=secrets.token_urlsafe(16), url=url, rewrite=None)
         _w_begin(now)
     core.log.info("[nfc] writing a card: waiting for the card on the phone that started it")
-    return _w_view()
+    return _w_view(_ask_lang(request))
 
 
 @core.use_route
 @core.app.post("/api/nfc/write/{sid}/step")
+@_in_their_language
 def api_write_step(sid: str, body: StepBody, request: Request):
     """No resp_hex: the APDU to send now (the first, or the one not answered yet, again). resp_hex: the card's answer
     to it -> the next APDU, or {done, result}."""
@@ -564,21 +633,22 @@ def api_write_step(sid: str, body: StepBody, request: Request):
     with _w_lock:
         _w_sweep(time.time())
         _w_session(sid)
+        lang = _ask_lang(request)
         if _w["result"] is not None:
-            return {"done": True, "result": _w["result"]}
+            return {"done": True, "result": _w_out(_w["result"], lang)}
         try:
             if not body.resp_hex:
                 if _w["apdu"] is None:
                     _w["apdu"] = next(_w["gen"])
             else:
                 if _w["apdu"] is None:
-                    raise HTTPException(409, "no command was sent yet: ask for the first one without an answer")
+                    raise Refusal(409, "no command was sent yet: ask for the first one without an answer")
                 try:
                     resp = bytes.fromhex(body.resp_hex)
                 except ValueError:
-                    raise HTTPException(400, "resp_hex: the card's answer in hex")
+                    raise Refusal(400, "resp_hex: the card's answer in hex")
                 if not 2 <= len(resp) <= 512:
-                    raise HTTPException(400, "resp_hex: 2-512 bytes")
+                    raise Refusal(400, "resp_hex: 2-512 bytes")
                 _w["apdu"] = _w["gen"].send(resp)
         except StopIteration as e:
             _w_finish(e.value or {"ok": False, "error": "ended without a result"})
@@ -589,21 +659,24 @@ def api_write_step(sid: str, body: StepBody, request: Request):
             _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": "the house's card writer failed, see the log"})
         _w["last"] = time.time()
         if _w["result"] is not None:
-            return {"done": True, "result": _w["result"]}
-        return {"apdu_hex": _w["apdu"].hex(), "step": _w["state"].get("step")}
+            return {"done": True, "result": _w_out(_w["result"], lang)}
+        step = _w["state"].get("step")
+        return {"apdu_hex": _w["apdu"].hex(), "step": step, "step_text": _step_words(lang, step)}
 
 
 @core.app.get("/api/nfc/write/{sid}")
+@_in_their_language
 def api_write_state(sid: str, request: Request):
     """The dashboard's progress: step, done, result."""
     _admin_only(request)
     with _w_lock:
         _w_session(sid)
-    return _w_view()
+    return _w_view(_ask_lang(request))
 
 
 @core.use_route
 @core.app.post("/api/nfc/write/{sid}/rewrite")
+@_in_their_language
 def api_write_rewrite(sid: str, request: Request):
     """The card held was a listed one ({known}): rewrite it. The step loop starts again; the card is held again."""
     _admin_only(request)
@@ -611,20 +684,22 @@ def api_write_rewrite(sid: str, request: Request):
         _w_session(sid)
         r = _w["result"]
         if not (r and r.get("known")):
-            raise HTTPException(409, "this write is not waiting for a rewrite answer")
+            raise Refusal(409, "this write is not waiting for a rewrite answer")
         _w["rewrite"] = r["uid"]
         _w_begin(time.time())
     core.log.info(f"[nfc] writing a card: rewrite {r['known']} ({r['uid']}), waiting for the card again")
-    return _w_view()
+    return _w_view(_ask_lang(request))
 
 
 @core.use_route
 @core.app.delete("/api/nfc/write/{sid}")
+@_in_their_language
 def api_write_cancel(sid: str, request: Request):
     """Cancel: a session under way or one asking about a listed card ends; the card is left as it is."""
     _admin_only(request)
     with _w_lock:
         _w_session(sid)
         if _w["result"] is None or _w["result"].get("known"):
-            _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": "cancelled"})
-    return _w_view()
+            _w_finish({"ok": False, "step": _w["state"].get("step", "start"), "error": "cancelled",
+                       "say": "the write was cancelled: the card is left as it was"})
+    return _w_view(_ask_lang(request))

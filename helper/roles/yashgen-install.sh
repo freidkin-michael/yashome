@@ -46,6 +46,14 @@ services:
     command: ["python3", "server.py", "--host", "0.0.0.0", "--port", "8090", "--token-file", "/run/yashgen/token", "--quiet"]
     ports:
       - "127.0.0.1:8090:8090"
+    # its own check: the image's (the ESPHome dashboard, 6052) never answers here. Any HTTP answer on 8090 = up;
+    # a static file, so no page visit is logged.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import http.client as h; c = h.HTTPConnection('127.0.0.1', 8090, timeout=5); c.request('GET', '/web/favicon.svg'); c.getresponse()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     environment:
       - FWGEN_DATA=/data
       - FWGEN_HOUSE_SECRETS=/run/yashgen/house-secrets.yaml

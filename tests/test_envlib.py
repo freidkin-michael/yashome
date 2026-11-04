@@ -266,3 +266,74 @@ class EnvKeysDocumented(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+@unittest.skipUnless(shutil.which("sh") and shutil.which("python3"), "needs sh and python3")
+class YashctlOnPath(unittest.TestCase):
+    """make install / make update: ~/.local/bin/yashctl runs this checkout's tools/yashctl, written once, never over
+    a file that is not Yashome's or one that runs another checkout still present."""
+    def setUp(self):
+        self.t = pathlib.Path(tempfile.mkdtemp()).resolve()
+        self.home, self.d = self.t / "home", self.t / "checkout"
+        (self.d / "tools").mkdir(parents=True)
+        self.home.mkdir()
+        shutil.copy(CORE / "tools" / "envlib.sh", self.d / "tools")
+        shutil.copy(CORE / "tools" / "yashctl", self.d / "tools")
+        self.w = self.home / ".local" / "bin" / "yashctl"
+
+    def tearDown(self):
+        shutil.rmtree(self.t, ignore_errors=True)
+
+    def run_it(self, d=None, **env):
+        env = {"PATH": os.environ["PATH"], "HOME": str(self.home), **env}
+        return subprocess.run(["sh", "-c", ". tools/envlib.sh; yashctl_on_path"], cwd=d or self.d, env=env,
+                              capture_output=True, text=True, check=True).stdout
+
+    def test_the_wrapper_runs_this_checkout_s_yashctl_and_is_written_once(self):
+        if os.getuid() == 0:
+            self.skipTest("root: the function leaves PATH alone")
+        out = self.run_it()
+        self.assertIn(f"{self.w} -> {self.d}/tools/yashctl", out)
+        self.assertIn("is not on PATH yet", out)
+        self.assertTrue(os.access(self.w, os.X_OK))
+        r = subprocess.run([str(self.w), "-h"], capture_output=True, text=True, timeout=30)     # python3: no .venv here
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("usage: yashctl", r.stdout)
+        mtime = self.w.stat().st_mtime_ns
+        out = self.run_it(PATH=f"{self.w.parent}:{os.environ['PATH']}")
+        self.assertEqual(out, "")                                          # same text: not written again, on PATH
+        self.assertEqual(self.w.stat().st_mtime_ns, mtime)
+        venv = self.d / ".venv" / "bin"
+        venv.mkdir(parents=True)
+        (venv / "python").write_text('#!/bin/sh\necho "venv $*"\n')
+        (venv / "python").chmod(0o755)
+        r = subprocess.run([str(self.w), "status"], capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.stdout.strip(), f"venv {self.d}/tools/yashctl status")   # the checkout's .venv first
+
+    def test_a_foreign_file_and_another_live_checkout_are_left_and_a_link_is_taken_over(self):
+        if os.getuid() == 0:
+            self.skipTest("root: the function leaves PATH alone")
+        self.w.parent.mkdir(parents=True)
+        self.w.write_text("#!/bin/sh\necho mine\n")
+        self.assertIn("is not Yashome's", self.run_it())
+        self.assertEqual(self.w.read_text(), "#!/bin/sh\necho mine\n")
+        self.w.unlink()
+        self.w.symlink_to(self.d / "tools" / "yashctl")                   # the old README's ln -s
+        self.run_it()
+        self.assertFalse(self.w.is_symlink())
+        self.assertIn(f"D='{self.d}'", self.w.read_text())
+        other = self.t / "other"
+        shutil.copytree(self.d, other)
+        out = self.run_it(d=other)
+        self.assertIn(f"runs the checkout {self.d}: left as it is", out)
+        self.assertIn(f"D='{self.d}'", self.w.read_text())
+        shutil.rmtree(self.d)                                               # that checkout is gone: the next one takes it
+        self.run_it(d=other)
+        self.assertIn(f"D='{other}'", self.w.read_text())
+
+    def test_a_helper_job_writes_nothing_and_make_install_and_update_call_it(self):
+        self.run_it(YASHOME_JOB="1")
+        self.assertFalse(self.w.exists())
+        self.assertIn("yashctl_on_path", (CORE / "tools" / "install.sh").read_text())
+        update = (CORE / "Makefile").read_text().split("\nupdate:", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("yashctl_on_path", update)

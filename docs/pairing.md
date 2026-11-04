@@ -19,9 +19,9 @@ All files are 0600, under `plugin-state/pair/` of the house folder (outside git;
 - `mqtt_accounts.json`: the accounts `{user, password, kind, topics, read}`. `tools/mkpasswd.py --accounts-only` writes
   the broker's file for its next start from it (the plug-in's `setup/broker.json` names this file), the way the panels'
   accounts are kept.
-- `pairings.json`: node -> `{user, ota_password, house_id, state, made, sent, paired}`. `state` is `new`, `sent` or
+- `pairings.json`: node -> `{user, ota_password, house_id, state, made, sent, paired, via}` (`via`: wifi | thread). `state` is `new`, `sent` or
   `paired`.
-- `moved.json`: node -> when the person said it moved to another house, and its card.
+- `moved.json`: node -> when the person unpaired it (Unpair keeps the card), and its card.
 
 A lost device is paired again with a new account.
 
@@ -57,6 +57,15 @@ With the plug-in `connect` the Add button opens its "Add / bind" window; "Pair a
 5. A house restart between the request and the device's first connection does not strand the record: the wait resumes
    at startup for every record in state `sent`.
 
+## Over Thread (plug-in thread)
+
+A Yash Thread node (yashGen) has no setup AP: it joins the Thread network with the public joiner code while the person
+has a pairing open (Add -> Thread), and the thread plug-in then sends the same pair request to it over Thread: `ctl.sh pair
+<IPv6>` on the main border router posts the form to `http://[<address>]/yash/pair`. The form has no `code` and no Wi-Fi
+(`thread_form`: `house_id`, `mqtt_host`, `mqtt_port`, `mqtt_user`, `mqtt_password`, `ota_password`): the request comes from
+inside the Thread network, which only the house lets a device into, and the node takes it only while it is not paired
+(after its button was held 5 s). `pair_with` is the same path as the AP's: the account, the wait, the card.
+
 ## Removing, moving
 
 - `DELETE /api/pair/{node}` (house token), or removing a paired device in the house (`core.DEVICE_REMOVED`): publish
@@ -64,9 +73,10 @@ With the plug-in `connect` the Add button opens its "Add / bind" window; "Pair a
   account and the file entries. The account is revoked even when the device never answered. Then every retained topic
   under the node's prefix (`<node>/#`) and its Home Assistant configs (`homeassistant/+/<node>/+/config`) are emptied;
   other nodes keep theirs.
-- "Moved to another house" (a button in the window of a paired device, `POST /api/pair/{node}/moved`): the same, and the
-  card stays. Its window says "This device moved to another house; its card stays offline until it is paired here
-  again". Pairing it again clears the mark.
+- "Unpair" (a button in the window of a paired device, `POST /api/pair/{node}/moved`): the same, and the card stays.
+  The window says what the device does then by the record's `via`: a Wi-Fi device opens its setup network, a Thread one
+  stays on Thread and waits for a new pairing (blue blink); then "This device is unpaired; its card stays offline until
+  it is paired here again". Pairing it again clears the mark.
 - A device whose pair record the house has no more simply cannot connect: its account is gone.
 - `GET /api/pair` (house token) lists the paired nodes and the moved ones, without secrets.
 

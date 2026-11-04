@@ -21,6 +21,7 @@ update:         ## after editing .env or git pull: re-derive secrets, rebuild, r
 	@rm -f .broker-accounts.before
 	@# each plug-in's after-start step (a container whose profile went off is removed)
 	sh -c '. tools/envlib.sh; plugin_stage update' || true
+	@sh -c '. tools/envlib.sh; yashctl_on_path' || true
 	docker compose ps
 
 move-house:     ## move this checkout's house files into HOUSE_DIR (set it in .env first), then make update
@@ -48,7 +49,7 @@ lint:           ## ruff, py_compile, JS syntax, JSON, sh -n (what CI runs)
 	python3 tools/check_plugins.py
 	python3 tools/check_js.py index.html sw.js i18n.js
 	for f in $$(git ls-files '*.json' 2>/dev/null || ls *.json examples/*.json); do python3 -m json.tool "$$f" >/dev/null || exit 1; done
-	for f in tools/*.sh $$(find plugins -path '*/setup/*.sh'); do sh -n "$$f" || exit 1; done
+	for f in tools/*.sh helper/*.sh helper/roles/*.sh $$(find plugins -path '*/setup/*.sh'); do sh -n "$$f" || exit 1; done
 	for f in $$(find plugins -path '*/host/*.sh'); do bash -n "$$f" || exit 1; done
 	for f in $$(find plugins -path '*/server/*.sh'); do sh -n "$$f" || exit 1; done
 

@@ -14,6 +14,8 @@ const ST_SUBJECTS = [
   {id: 'devices', group: 'devices', icon: 'other', title: 'All devices', expl: 'Every device: where it is, whether it answers; add one', core: true,
    tabs: [{id: 'main', title: 'List'}, {id: 'forgotten', title: 'Forgotten'}]},
   {id: 'zigbee', group: 'devices', icon: 'network', title: 'Zigbee', expl: 'The gateway, its devices, pairing'},
+  {id: 'thread', group: 'devices', icon: 'network', title: 'Thread', expl: 'The Thread network: border routers, nodes, pairing'},
+  {id: 'matter', group: 'devices', icon: 'network', title: 'Matter', expl: 'Matter devices: the controller, the nodes, pairing by code'},
   {id: 'ir', group: 'devices', icon: 'ir', title: 'IR', expl: 'Blasters, remotes, learning, IR appliances'},
   {id: 'tv', group: 'devices', icon: 'tv', title: 'TVs', expl: 'Every TV: address, pairing, inputs, apps'},
   {id: 'panels', group: 'devices', icon: 'screen', title: 'Panels', expl: 'Wall panels: layouts and the builder, binding, firmware'},

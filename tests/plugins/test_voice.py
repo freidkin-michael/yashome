@@ -972,3 +972,19 @@ def test_a_satellite_and_its_tv_go_by_the_room_a_device_serves(monkeypatch):
         core._rooms[:] = old_rooms
         core._serves.clear()
         core._serves.update(old_serves)
+
+
+def test_the_voice_service_settings_that_were_its_env_lines_are_kept_and_checked(conf):
+    c = conf
+    seed = {**SEED, "llm_url": "http://192.0.2.1:11434", "wake_on_device": True}
+    r = c.put("/api/voice/config?seed=1", headers=HOUSE, json=seed).json()
+    assert (r["llm_url"], r["wake_on_device"]) == ("http://192.0.2.1:11434", True)
+    r = c.put("/api/voice/config", headers=HOUSE, json={"big_url": "http://192.0.2.1:11435", "big_health": "http://192.0.2.1:11436/health",
+                                                         "tv_device": "tv_1"}).json()
+    assert (r["big_url"], r["big_health"], r["tv_device"], r["llm_url"]) == ("http://192.0.2.1:11435", "http://192.0.2.1:11436/health", "tv_1",
+                                                                              "http://192.0.2.1:11434")
+    for bad in ({"llm_url": "ftp://192.0.2.1"}, {"big_url": "http://a b"}, {"big_health": "javascript:alert(1)"}, {"tv_device": "a/b"},
+                {"wake_on_device": "maybe"}):
+        assert c.put("/api/voice/config", headers=HOUSE, json=bad).status_code == 422, bad
+    r = c.put("/api/voice/config", headers=HOUSE, json={"llm_url": "", "tv_device": ""}).json()
+    assert (r["llm_url"], r["tv_device"]) == ("", "")                                       # empty = off

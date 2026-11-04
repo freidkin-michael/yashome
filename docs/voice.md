@@ -2,8 +2,8 @@
 
 Status: partly implemented. The plug-in `voice` (`plugins/tools/voice/`) has the TTS service, the satellites and their
 cards, say/play/stop/volume, the replies and chimes, "Ask the house", push-to-talk and the sample recorder. Speech
-recognition, the wake-word match and the command logic run in a separate voice service (`voice-vad`) that this
-repository does not ship: the plug-in only talks to it (below). The planned parts are at the end of this page.
+recognition, the wake-word match and the command logic run in the plug-in's recognizer service (`voice-vad`), in one
+container `voice` with the TTS (below). The planned parts are at the end of this page.
 
 ## Principle: everything on the server
 
@@ -109,15 +109,18 @@ reports is taken as idle after 10 s). A new wake, Stop, or an explicit play from
 else the house publishes `voice/ask_failed {ip}` and the question is cancelled. When the question has played, a
 satellite with `listen_once` gets `listen_once/command 6`: its mic opens once for the answer.
 
-## The voice service (`voice-vad`, outside this repository)
+## The voice service (`voice-vad`, `plugins/tools/voice/service/vad/`)
 
 The plug-in reaches it at `http://voice-vad:8093` with the header `X-Voice-Key: <VOICE_TTS_KEY>`. It needs these paths:
 `/ask`, `/confirm`, `/chat` (streamed text), `/utter` (raw audio), `/models`, and `/record/*` for the recorder. The
 service reads its settings every 10 s from `GET /api/voice/config` (house token) and publishes `voice/heard`. Without it
 the satellites still play, but nothing is recognized and "Ask the house" answers 503.
 
-How it recognizes speech (the recognizer, the command map, the model prompt) is the service's own and is not described
-or tested here.
+How it recognizes speech: webrtcvad cuts the utterance, Vosk recognizes it (the grammar of the house's phrase map
+first, checked by a free pass), then the phrase map (`voice_commands.json` in `plugin-data/voice/`, the house's own: the
+engine ships none), the state and weather questions, and the model for what no rule understood. It runs in the `voice`
+container next to the TTS (the plug-in's README, "One voice container"); its tests are `tests/plugins/test_voice_svc_*.py`
+and `test_voice_service.py`.
 
 ## Settings -> Voice ("Wake word and answers")
 
@@ -132,6 +135,8 @@ reads it every 10 s.
   (seconds a question waits for yes / no).
 - A satellite with `need_wake` acts only on a phrase that holds the wake word; the GET lists their `peer`s as
   `need_wake`. A save without the field keeps it.
+- `llm_url`, `big_url`, `big_health`: the model hosts ("" = off); `wake_on_device`: the satellites check the wake word
+  themselves (a satellite with `need_wake` still needs it in the phrase); `tv_device`: the TV of the TV commands ("" = none).
 - `lang` in the GET is the house language (Settings -> House language): the answers' language.
 - The voice service's first read seeds every field once from what it runs (`PUT ?seed=1`). A page save before that is
   refused (409).
@@ -169,7 +174,6 @@ sessions survive a restart (`plugin-state/voice/background.json`).
 ## Not implemented yet
 
 - Players other than ESP nodes and tablets: a Linux box (PipeWire) and a TV toast.
-- `voice-vad` and the recognizer as part of this repository (`make update` neither builds nor versions them).
 - The satellite firmware in the build path.
 - A command-map editor in the dashboard.
 - A level meter on the mic card.
@@ -178,3 +182,32 @@ sessions survive a restart (`plugin-state/voice/background.json`).
 - Personal assistant features (calendar, news digest, personal mail read aloud). Hard rules for them: the reading
   pipeline has no action rights in the house; while content is read aloud that satellite accepts no voice command except
   "stop".
+
+## The voice container's own variables
+
+Set by the plug-in's compose file (setup/compose.yml); the defaults fit, the house changes them in Settings -> Voice where
+there is a field. The MQTT and dashboard keys (`MQTT_*`, `DASHBOARD_TOKEN`) are the engine's own (docs/environment.md).
+
+| variable | default | what |
+|---|---|---|
+| `PCM_PORT` | 8091 | the satellites' audio stream (16 kHz s16le) port |
+| `VA_HTTP_PORT` | 8093 | the recognizer's own HTTP (health, tests) on the compose network |
+| `VA_HOME_URL` | http://home:8765 | the core on the compose network |
+| `VA_COMMANDS / VA_GLOSSARY / VA_WAKE_PHRASES` | /house/...json | the house's command words, glossary, wake phrases (plugin-data/voice) |
+| `VA_PHRASELOG_DIR / VA_PHRASELOG_KEEP` | /house/phraselog, 24 | the monthly phrase log and how many months stay |
+| `VA_SAMPLES_DIR / VA_SAMPLES_UID` | /house/wake-samples, 1000 | recorded wake samples and their owner |
+| `VA_CAPTURES / VA_CAPTURES_DIR / VA_CAPTURES_KEEP` | 0, /house/captures, 200 | keep raw utterances for debugging (off) |
+| `VA_VOSK_DIR` | /vosk | the Vosk models (volume voice-vosk) |
+| `VA_WAKE / VA_WAKE_PREFIX / VA_WAKE_VARIANTS / VA_WAKE_MAXDIST` | the house's wake word, 3 | the wake word, its accepted prefix and spellings, edit distance |
+| `VA_NOWAKE_IPS / VA_NEEDWAKE_IPS` | empty | per-address wake gate; Settings -> Voice (wake on device, per satellite) set them |
+| `VA_LLM_URL / VA_LLM_MODEL / VA_LLM_THREADS / VA_LLM_TIMEOUT` | Settings -> Voice, 4, 5 | the house's small model for the LLM fallback |
+| `VA_BIG_URL / VA_BIG_HEALTH / VA_BIG_MODEL / VA_BIG_POLL` | Settings -> Voice, 30 | the big model on another computer and its health |
+| `VA_LLM_CONFIRM_ALL_OFF` | 1 | ask before an LLM-made 'everything off' |
+| `VA_ASK_TTL` | 12 | seconds a question waits for the answer |
+| `VA_AGGR / VA_VAD_GAIN / VA_NORM_PEAK` | 2, 12, 29000 | voice activity detection aggressiveness, its gain, the utterance peak |
+| `VA_PAD_MS / VA_PREROLL_MS / VA_MAX_MS / VA_IDLE_TIMEOUT` | 500, 1500, 6000, 30 | audio around an utterance, its maximum, an idle stream's timeout |
+| `VA_ROOM_WINDOW` | 1.5 | seconds in which two satellites hearing one phrase are one phrase |
+| `VA_VOSK_AGREE / VA_VOSK_MINCONF / VA_VOSK_GUARD` | 0.7, 0.5, 1 | how sure the recognizer must be |
+| `VOICE_TTS_PORT / VOICE_TTS_DATA / VOICE_TTS_MODELS / VOICE_TTS_THREADS` | 8092, /data, /models, 2 | the TTS server inside the container |
+| `VOICE_TTS_KEY / VOICE_TTS_OPEN` | empty | the TTS key (a TTS on another computer); open only for tests |
+| `CLOCK_LANG` | ru | the language until the house says its own |

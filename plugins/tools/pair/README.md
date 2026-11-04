@@ -13,7 +13,8 @@ its Wi-Fi and its OTA password. This plug-in holds the accounts and the password
   password; removing the device in the house does it too (`core.DEVICE_REMOVED`). The shared MQTT user `esp` of nodes not paired
   this way is never touched.
 - `GET /api/pair` lists the paired nodes (no secrets) and the ones marked as moved, `DELETE /api/pair/{node}` revokes one,
-  `POST /api/pair/{node}/moved` revokes one and keeps its card (offline) as "moved to another house" (house token).
+  `POST /api/pair/{node}/moved` revokes one and keeps its card (offline): Unpair in the device window (house token).
+  A record keeps `via` (wifi | thread): the window says what the device does after (setup AP / blue blink).
 - `POST /api/pair/start {ap, code}` (house token): pairs the device behind its setup AP `<node>-setup` (the AP key is the pairing code):
   makes its account and OTA password, asks the host relay of the provision plug-in (`/run/yashome/provision.sock`) to join the AP and POST the form to `/yash/pair`
   (the house Wi-Fi, the broker as nodes reach it, the account, the OTA password); a refused or unreachable request leaves no account.

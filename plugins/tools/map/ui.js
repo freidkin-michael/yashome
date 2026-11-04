@@ -510,8 +510,10 @@
     const clock = ts => { const d = new Date(ts * 1000); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
     const num = (x, f = 0) => typeof x === 'number' ? x.toFixed(f) : '';
     const pct = (b) => typeof b === 'number' ? Math.round(b > 100 ? b / 2.55 : b) : null;
+    // a plug-in's mark on a device's icon (thread: a Thread router): window.MapMarks = [fn(device id) -> {glyph, title} | null]
+    const markOf = it => { if(it.kind !== 'device') return null; for(const f of (window.MapMarks || [])){ try { const m = f(it.dev); if(m) return m; } catch(e){ /* a plug-in's */ } } return null; };
     function thingView(it){
-      const V = {tone: '#c9d1dc', glow: 0, badge: '', tip: nameOf(it), bad: false, ring: '', dim: false, glyph: ''};
+      const V = {tone: '#c9d1dc', glow: 0, badge: '', tip: nameOf(it), bad: false, ring: '', dim: false, glyph: '', mark: markOf(it)};
       if(it.kind === 'device' && !cands.some(c => c.id === it.dev || (c.members || []).includes(it.dev))){   // its device is gone (a removed blaster): a marker
         V.tone = '#555b66'; V.bad = true; V.dim = true; V.tip += ' - ' + i18n('device removed');
         return V;
@@ -578,6 +580,7 @@
         display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;touch-action:none;z-index:${V.badge || V.bad ? 3 : 1};${S.pending && S.pending.id === it.id ? 'outline:3px solid #ffb020;' : ''}${lifted ? 'outline:4px solid #ffb020;box-shadow:0 8px 18px rgba(0,0,0,.6);' : ''}">${V.glyph || iconOf(it)}<span style="position:absolute;left:-9px;top:-9px;right:-9px;bottom:-9px;border-radius:50%"></span>
         ${V.badge ? `<span class="mb" style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:2px;font-size:11px;line-height:14px;white-space:nowrap;background:rgba(0,0,0,.7);color:${V.tone === '#e5484d' ? '#ff9a9a' : '#fff'};padding:0 4px;border-radius:6px">${esc(V.badge)}</span>` : ''}
         <span class="mn${standalone(it) ? ' always' : ''}" style="position:absolute;left:50%;top:calc(100% + ${V.badge ? 16 : 2}px);transform:translateX(-50%);font-size:11px;line-height:14px;white-space:nowrap;color:#cfd8e3;text-shadow:0 0 3px #000,0 0 3px #000">${esc(mapLabel(it))}</span>
+        ${V.mark ? `<span title="${esc(V.mark.title || '')}" style="position:absolute;left:-6px;top:-6px;background:#4aa3ff;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;line-height:16px;text-align:center;font-weight:700">${esc(V.mark.glyph || '')}</span>` : ''}
         ${V.bad ? '<span style="position:absolute;right:-6px;top:-6px;background:#e5484d;color:#fff;border-radius:50%;width:16px;height:16px;font-size:11px;line-height:16px;text-align:center;font-weight:700">!</span>' : ''}</div>`;
     }
     function glowSVG(){                                                  // a soft warm light around each lamp that is on

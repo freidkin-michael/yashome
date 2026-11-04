@@ -89,7 +89,7 @@
       box.appendChild(badge); paint();
     }}],
     modalSections: [{                               // the device window: how fast it answers, how long the house waits
-      match: d => owner && !d.virtual && (d.controls || []).some(c => c.kind !== 'sensor' && c.kind !== 'trigger_text'),
+      match: d => owner && !d.virtual && (d.controls || []).some(c => !/^(sensor|setting)/.test(c.kind) && c.kind !== 'trigger_text' && !c.aux && !c.advanced),
       html: () => `<details><summary>${esc(i18n('Answer time'))}</summary><div data-w="ans" class="bindcaption">\u2026</div></details>`,
       wire(box, d){
         const out = box.querySelector('[data-w="ans"]'), url = '/api/watchdog/answers/' + encodeURIComponent(d.id);

@@ -30,7 +30,15 @@ SW_TEXT = {0x1E: "integrity error", 0x40: "no such key", 0x7E: "length error", 0
 
 
 class CardError(Exception):
-    """A step that cannot go on; the text is for people (no key, no secret in it)."""
+    """A step that cannot go on (no key, no secret in it): str() for the log, say + kw the words a person gets
+    (a template of the plug-in's i18n.json; say defaults to the log text)."""
+    def __init__(self, text: str, say: str = "", **kw):
+        super().__init__(text)
+        self.say, self.kw = say or text, kw
+
+
+def _refused(text: str, sw1: int, sw2: int) -> CardError:
+    return CardError(text, "the card refused a command: {code}", code=f"{sw1:02X}{sw2:02X}")
 
 
 # ---- crypto ----
@@ -69,7 +77,7 @@ def pad(data: bytes) -> bytes:
 def unpad(data: bytes) -> bytes:
     i = data.rstrip(b"\x00")
     if not i or i[-1] != 0x80:
-        raise CardError("the card's encrypted answer has no valid padding")
+        raise CardError("the card's encrypted answer has no valid padding", "the card's answer did not check out: hold it still and try again")
     return i[:-1]
 
 
@@ -106,7 +114,7 @@ class Session:
 
     def decrypt(self, data: bytes) -> bytes:
         if len(data) % 16:
-            raise CardError("the card's encrypted answer is not whole blocks")
+            raise CardError("the card's encrypted answer is not whole blocks", "the card's answer did not check out: hold it still and try again")
         iv = aes_cbc(self.enc, b"\x5a\xa5" + self.ti + self._ctr() + bytes(8))
         return unpad(aes_cbc(self.enc, data, iv, decrypt=True))
 
@@ -130,7 +138,7 @@ def _off(b: bytes, i: int) -> int:
 def decode_file_settings(data: bytes) -> dict:
     """A GetFileSettings answer: file type, options, access rights, size, the SDM part."""
     if len(data) < 7:
-        raise CardError("the card's file settings are too short")
+        raise CardError("the card's file settings are too short", "the card's answer did not check out: hold it still and try again")
     opt = data[1]
     fs = {"comm": opt & 0x03, "rw": data[2] >> 4, "change": data[2] & 0xF, "read": data[3] >> 4,
           "write": data[3] & 0xF, "size": _off(data, 4), "sdm": None}
@@ -233,14 +241,14 @@ def authenticate(key_no: int, key: bytes, rnd=os.urandom):
     if (sw1, sw2) != MORE or len(data) != 16:
         if sw1 == 0x91 and sw2 in (0x40, 0x9D, 0xAE):
             return None
-        raise CardError(f"the card refused to authenticate: {_sw(sw1, sw2)}")
+        raise _refused(f"the card refused to authenticate: {_sw(sw1, sw2)}", sw1, sw2)
     rnd_b = aes_cbc(key, data, decrypt=True)
     rnd_a = rnd(16)
     data, sw1, sw2 = yield from _xfer(apdu(0xAF, aes_cbc(key, rnd_a + rotl(rnd_b))))
     if (sw1, sw2) != OK or len(data) != 32:
         if (sw1, sw2) == (0x91, 0xAE):
             return None
-        raise CardError(f"the card broke off authentication: {_sw(sw1, sw2)}")
+        raise _refused(f"the card broke off authentication: {_sw(sw1, sw2)}", sw1, sw2)
     plain = aes_cbc(key, data, decrypt=True)
     if plain[4:20] != rotl(rnd_a):
         return None                                           # not our RndA back: not this key
@@ -255,12 +263,13 @@ def auth_door(key_no: int, house_key: bytes, rnd=os.urandom):
         s = yield from authenticate(key_no, key, rnd)
         if s is not None:
             return s, which
-    raise CardError(f"the card refused the house key and the factory key (key {key_no}): it belongs to another system")
+    raise CardError(f"the card refused the house key and the factory key (key {key_no}): it belongs to another system",
+                    "the card refused the house key and the factory key (key {n}): it belongs to another system", n=key_no)
 
 
 def _check(sw1: int, sw2: int, what: str):
     if (sw1, sw2) != OK:
-        raise CardError(f"{what}: the card answered {_sw(sw1, sw2)}")
+        raise _refused(f"{what}: the card answered {_sw(sw1, sw2)}", sw1, sw2)
 
 
 def cmd_plain(s: Session, ins: int, hdr: bytes, data: bytes, what: str):
@@ -280,7 +289,7 @@ def cmd_mac(s: Session, ins: int, hdr: bytes, data: bytes, what: str, ok_only: b
             return None
         _check(sw1, sw2, what)
     if len(resp) < 8 or s.resp_mac(sw2, resp[:-8]) != resp[-8:]:
-        raise CardError(f"{what}: the card's answer has a wrong MAC")
+        raise CardError(f"{what}: the card's answer has a wrong MAC", "the card's answer did not check out: hold it still and try again")
     return resp[:-8]
 
 
@@ -325,7 +334,7 @@ def change_key(s: Session, key_no: int, old: bytes, new: bytes, version: int = K
 def get_card_uid(s: Session):
     uid = yield from cmd_full(s, 0x51, b"", b"", "reading the UID")
     if len(uid) < 7:
-        raise CardError("the card's UID answer is too short")
+        raise CardError("the card's UID answer is too short", "the card's answer did not check out: hold it still and try again")
     return uid[:7]
 
 
@@ -338,7 +347,7 @@ def sdm_settings(fs: dict, picc_off: int, mac_off: int) -> dict:
 
 
 def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=os.urandom, known=None):
-    """Generator: yields APDUs, is sent each answer (bytes). Returns {ok, step, uid?, keys?, error?, known?}.
+    """Generator: yields APDUs, is sent each answer (bytes). Returns {ok, step, uid?, keys?, error?, say?, kw?, known?}.
     keys = {0: master, 1: SDM meta read, 2: SDM file read}. `state["step"]` names the step under way.
     known(uid_hex) -> a name or None: a card that takes the house key 0 has its UID read at once, and a named one
     ends the write before anything is written ({ok: False, known: name, uid})."""
@@ -354,7 +363,8 @@ def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=
         step("select")
         _, sw1, sw2 = yield from _xfer(select_apdu())
         if (sw1, sw2) != (0x90, 0x00):
-            raise CardError(f"this is not an NTAG 424 DNA card (select answered {_sw(sw1, sw2)})")
+            raise CardError(f"this is not an NTAG 424 DNA card (select answered {_sw(sw1, sw2)})",
+                            "this is not an NTAG 424 DNA card")
         step("auth key 0")
         s, was = yield from auth_door(KEY0, keys[KEY0], rnd)
         if known is not None and was == "house":           # the random UID needs this auth; a factory card is blank
@@ -366,7 +376,8 @@ def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=
         step("file settings")
         fs = yield from get_file_settings(s)
         if len(file) > fs["size"]:
-            raise CardError(f"the link is {len(file)} bytes, the card's file only {fs['size']}")
+            raise CardError(f"the link is {len(file)} bytes, the card's file only {fs['size']}",
+                            "the link is {n} bytes, the card's file only {size}", n=len(file), size=fs["size"])
         rw, car = fs["rw"], fs["change"]
         if rw not in (EVERYONE, KEY0):                        # the write key, unless free or the one we hold
             step(f"auth key {rw}")
@@ -389,7 +400,8 @@ def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=
                 s, _ = yield from auth_door(KEY0, keys[KEY0], rnd)
                 done = yield from change_key(s, slot, keys[slot], keys[slot])
             if not done:
-                raise CardError(f"key {slot} holds neither the factory key nor the house key: it belongs to another system")
+                raise CardError(f"key {slot} holds neither the factory key nor the house key: it belongs to another system",
+                                "key {n} holds neither the factory key nor the house key: it belongs to another system", n=slot)
             if slot != KEY0:
                 s, _ = yield from auth_door(KEY0, keys[KEY0], rnd)
         step("check")
@@ -401,4 +413,4 @@ def write_card(keys: dict, url: str, aar_pkg: str = "", state: dict = None, rnd=
         step("done")
         return {"ok": True, "step": "done", "uid": uid.hex(), "keys": was}
     except CardError as e:
-        return {"ok": False, "step": st.get("step", "start"), "error": str(e)}
+        return {"ok": False, "step": st.get("step", "start"), "error": str(e), "say": e.say, "kw": e.kw}

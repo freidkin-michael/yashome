@@ -150,6 +150,7 @@ const Home = {
   openTab(id){ if(!allTabs().some(t => t.id === id) && !(id.startsWith('room:') && roomById(id.slice(5)))) return; activeTab = id; gridEditMode = false;
     rememberTab(activeTab); renderTabs(); render(); },
   openEsphomeAdd: () => openEsphomeAdd(),   // the core's "Add ESPHome" dialog
+  esphomeCategory: n => espCategory(n),     // the category Add ESPHome gives a discovered node (switch, sensor, other)
   openAdd: () => openAddDevice(),           // the header's Add button: a plug-in's addFlow window, else the Add menu
   roomClimate: id => { const r = roomById(id), c = r ? roomClimate(r) : null; return c ? {value: c.value, humidity: c.humidity, note: c.note} : null; },     // the temperature the room's tab shows (same rule), or null
   // what a device does when it is pressed or fires (its bindings and the rules it triggers), each runnable now

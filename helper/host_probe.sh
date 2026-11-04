@@ -1,6 +1,7 @@
 # What the helper runs on one of the house's computers (ssh ... sh -s < this): fixed, nothing of a request in it.
 # key=value lines: host, os, mac (of the default route's interface), one screen=<connector>|<vendor>|<name>|<port> per
-# connected screen, one role=<name> per role installed here (/opt/yashome-<name>/compose.yml), sudo last. <port> is the
+# connected screen, one role=<name> per role installed here (/opt/yashome-<name>/compose.yml), one serial=<name> per entry of
+# /dev/serial/by-id (the radios a Thread border router may use), sudo last. <port> is the
 # TV input the screen is: its EDID carries the CEC physical address of the HDMI port it is plugged in (1.0.0.0 = HDMI 1);
 # empty for a laptop's own screen or a monitor.
 echo "host=$(hostname)"
@@ -37,6 +38,7 @@ for p in sorted(glob.glob("/sys/class/drm/card*-*/edid")):
             k += ln + 1
     print("screen=%s|%s|%s|%s" % (p.split("/")[-2].split("-", 1)[-1], vend, name.replace("|", " "), port))
 PY
+for p in /dev/serial/by-id/*; do [ -e "$p" ] && echo "serial=${p##*/}"; done 2>/dev/null
 for d in /opt/yashome-*/; do [ -f "$d/compose.yml" ] && echo "role=$(basename "$d" | sed 's/^yashome-//')"; done 2>/dev/null
 [ -f /opt/yashome-player/ctl.py ] && echo role=player                                # mpv, a user unit: no compose
 [ -f /usr/local/lib/yashome/touchmouse-rx.py ] && echo role=touchmouse              # the touchmouse receiver: a system unit

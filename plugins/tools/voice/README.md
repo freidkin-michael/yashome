@@ -2,8 +2,9 @@
 
 The design and the principle (thin satellites, the wake word on the device, everything else on the server) are in
 [docs/voice.md](../../../docs/voice.md). This plug-in has the TTS service, the satellites and their cards, the voice
-settings, typed and spoken questions from the app, and the recording of samples. Speech recognition and the wake-word
-check run in the separate voice service (voice-vad, docs/voice.md), which this plug-in talks to.
+settings, typed and spoken questions from the app, and the recording of samples. Speech recognition, the wake-word
+check and the command logic run in its recognizer service (`service/vad/`, network name `voice-vad`), in the same `voice`
+container as the TTS (below).
 
 Setup: turn `voice` on and add `voice` to `COMPOSE_PROFILES`; `make install` / `make update` makes `VOICE_TTS_KEY`.
 Then Settings -> Voice -> Voice (the wake word and answers) and the satellites on the "Voice / Sound" tab.
@@ -13,16 +14,48 @@ Then Settings -> Voice -> Voice (the wake word and answers) and the satellites o
 | `__init__.py` | the satellites, say / play / stop / volume, the settings, ask / chat / push-to-talk, the routes below |
 | `_record.py` | background recording and the speaker samples (below) |
 | `ui.js`, `i18n.json` | the cards, the "Voice / Sound" tab, Settings -> Voice -> Voice |
-| `service/tts/` | the TTS service (`server.py`, `numwords.py`, `Dockerfile`) |
-| `setup/compose.yml`, `setup/install.sh`, `setup/update.sh`, `setup/env.example` | the `tts` container and its key |
+| `service/Dockerfile`, `service/run.py` | the `voice` container: its image, and the start of its two parts |
+| `service/tts/` | the TTS service (`server.py`, `numwords.py`; its own `Dockerfile` for a computer of the house) |
+| `service/vad/` | the recognizer service (`voice_vad.py` and its modules: Vosk, rules, model, state and weather answers, recorder) |
+| `setup/compose.yml`, `setup/install.sh`, `setup/update.sh`, `setup/env.example` | the `voice` container and its key |
 | `setup/settings.example.json` | the shape of the settings section |
 
-## TTS service (`service/tts`, container `tts`)
+## One voice container
+
+All of the voice runs in one container, `voice`, built from this plug-in (`service/Dockerfile`, compose service `voice` in
+`setup/compose.yml`, profile `voice`). `service/run.py` starts its two parts and starts a part again when it stops:
+
+- the TTS (`service/tts/`, port 8092) and the recognizer service (`service/vad/`: stream -> VAD -> Vosk -> intent -> house,
+  the LLM fallback, the state and weather answers, the sample recorder; port 8091 for the satellites' audio, published at
+  `BIND_ADDRESS`, and 8093 for ask / chat / record on the compose network). The container's network names `tts` and
+  `voice-vad` are the names the plug-in calls the two parts by.
+- Settings, not env: everything the house sets is in Settings -> Voice (`GET/PUT /api/voice/config`, read every 10 s, no
+  restart): `llm_url` (the small model's Ollama), `big_url` and `big_health` (the big model on another computer),
+  `llm_model`, `big_model`, `wake_on_device` (the satellites check the wake word themselves; a satellite with `need_wake`
+  still needs it in the phrase), `tv_device` (the TV that the TV commands drive). The container's env holds only keys
+  from `.env` (`DASHBOARD_TOKEN`, `MQTT_USER`, `MQTT_PASSWORD`, `VOICE_TTS_KEY`); the core's address is `http://home:8765`.
+- House data stays in the house: `<HOUSE_DIR>/plugin-data/voice/` is mounted at `/house` (`voice_commands.json`, the phrase
+  map; `voice_glossary.json`; `wake_phrases.json`; `phraselog/`; `wake-samples/`). The engine has no device table of its
+  own: without `voice_commands.json` the phrase map is empty, the state questions and the model still answer. The models
+  are in the volumes `voice-models` (Silero) and `voice-vosk` (Vosk).
+- TTS on another computer (Settings -> Devices -> Computers and servers -> Speech (TTS)) works as before: the role ships
+  `service/tts/` only and Use points the plug-in at the helper's tunnel `helper:8092`. Only the TTS moves: it is stateless,
+  while the recognizer needs the satellites' port, the Vosk models and the house data. The cost: the local TTS part stays
+  loaded (about 1.1 GB) while another computer speaks.
+- Migration from a house stack `voice-vad` (a script of the house, run by the owner): copy `voice_commands.json`,
+  `voice_glossary.json`, `wake_phrases.json`, `phraselog/` and `wake-samples/` into `plugin-data/voice/` and give them to
+  `PUID`; stop the `voice-vad` and `tts` containers (stopped, not removed); `docker compose up -d voice`; restart `home`;
+  `PUT /api/voice/config` with the values its compose env had (`llm_url`, `big_url`, `big_health`, `big_model`,
+  `wake_on_device`, `tv_device`); wait for the health of `voice` and a settings line in its log.
+- Rollback: stop and remove `voice`, start the stopped `tts` and `voice-vad` containers again. The plug-in calls the same
+  names (`tts`, `voice-vad`), so it works with either; the copied data stays where it was.
+
+## TTS service (`service/tts`, network name `tts`)
 
 Silero on the CPU (two threads), the models kept loaded and warmed at start with each language's default voice (`ru-xenia`,
 `en-en_99`; any Silero speaker may be asked for - each satellite's voice on the Voice page; the models `v5_ru.pt` 139 MB and `v3_en.pt` 54 MB
 are downloaded once into the docker volume `voice-models`). A 2 s answer takes under 0.1 s. Numbers are written out in words before synthesis. **The Silero models are
-CC BY-NC-SA 4.0: non-commercial use only** (see NOTICE.md); the container needs about 1.1 GB (`mem_limit: 2g`).
+CC BY-NC-SA 4.0: non-commercial use only** (see NOTICE.md); it needs about 1.1 GB of the container's `mem_limit: 3g`.
 
 - `POST /say {text, lang?, voice?}` with the header `X-Voice-Key: <VOICE_TTS_KEY>` -> `{"url": "/a/<name>.wav", voice, seconds, ms}`.
   The WAV is the house format, PCM 16 kHz 16-bit stereo (the mono voice is repeated on both channels); the name is 128 random bits and the file lives 10 minutes. Without a key set the service refuses to speak.
@@ -63,7 +96,8 @@ TV session takes the TV that serves the satellite's room. For the commands, voic
   (`wake_maxdist`, letters: at most (length - 1) // 2 and 3, so 7 letters -> 3, 4 -> 1), the start of the word (`wake_prefix`, 3 letters or
   more, "" = off), how it is also heard (`wake_variants`: a word of 2+ letters, or a stem of 3+ letters and *, "comput*" = any ending), smart answers on/off (`llm`: off = no model is loaded or
   polled), `llm_model`, `big_model` (`POST /api/voice/models` lists what the Ollama hosts have), `llm_timeout`, ask before
-  "turn everything off" (`confirm_all_off`), `ask_ttl`. A satellite with `need_wake: true` acts only on a phrase that holds the wake word
+  "turn everything off" (`confirm_all_off`), `ask_ttl`, the model hosts (`llm_url`, `big_url`, `big_health`; "" = off), the satellites check the wake word themselves
+  (`wake_on_device`), the TV of the TV commands (`tv_device`, "" = none). A satellite with `need_wake: true` acts only on a phrase that holds the wake word
   (`need_wake` in the GET = their `peer`s); a save without the field keeps it. voice-vad's first read seeds every field from what it runs
   (`PUT ?seed=1`, once); a page save before that is refused (409) and the page waits. A satellite added later at an address that first read
   listed as needing the wake word (`need_wake_peers`) needs it too. `lang` in the GET is the house language (Settings -> House ->

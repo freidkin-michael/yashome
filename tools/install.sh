@@ -41,6 +41,7 @@ echo "== docker compose up"
 BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans
 docker compose restart mosquitto >/dev/null   # accounts are read only at start (a HUP does not reload them)
 plugin_stage update || true
+yashctl_on_path || true   # the command line on PATH: yashctl status, yashctl apply
 # the LAN address, not a docker bridge
 port=$(get DASHBOARD_PORT); host=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
 # no default route (offline install): the first global address on an interface that is not a

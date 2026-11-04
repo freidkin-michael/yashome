@@ -26,3 +26,12 @@ def test_a_failing_hook_never_hides_a_node(monkeypatch):
     monkeypatch.setattr(app, "_esphome_discover", lambda timeout=6.0, ignore=True: {"n": _found("n/a/state")})
     monkeypatch.setattr(app, "DISCOVERY_IGNORE", [boom])
     assert set(app._discovered()) == {"n"}
+
+
+def test_a_nodes_own_setting_is_marked_aux_and_a_real_control_is_not():
+    """ent_cat config/diagnostic (a status LED, a recovery counter) is aux: the add dialog does not make the node a light."""
+    led = app._esphome_control_from_ha("number", "status_led_brightness", {"ent_cat": "config", "stat_t": "n/s", "cmd_t": "n/c"})
+    rec = app._esphome_control_from_ha("sensor", "recoveries", {"entity_category": "diagnostic", "stat_t": "n/r"})
+    lamp = app._esphome_control_from_ha("light", "lamp", {"stat_t": "n/l", "cmd_t": "n/lc"})
+    assert [c.get("aux") for c in led + rec] == [True, True] and all("aux" not in c for c in lamp)
+    assert (led[0]["kind"], led[0]["advanced"], rec[0]["kind"]) == ("setting_int", True, "sensor")     # a folded setting, no dimmer

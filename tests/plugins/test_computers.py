@@ -564,3 +564,31 @@ def test_llm_health_listens_on_loopback_and_llm_listen(monkeypatch, tmp_path):
         m.listen("0.0.0.0;id")
     with pytest.raises(ValueError):
         m.listen("0.0.0.0")
+
+
+def test_the_yashgen_compose_checks_the_builder_s_own_port(tmp_path):
+    """The image derives from ESPHome's, whose HEALTHCHECK probes its dashboard (6052): the builder's service has its own
+    check on the port the builder listens on, and that check passes on any HTTP answer and fails on a closed port."""
+    import http.server
+    import socket
+    import subprocess
+    import threading
+    import yaml
+    text = (Path(__file__).resolve().parents[2] / "helper/roles/yashgen-install.sh").read_text()
+    svc = yaml.safe_load(text.split("cat > compose.yml <<'EOF'\n", 1)[1].split("\nEOF\n", 1)[0])["services"]["yashgen"]
+    port = svc["command"][svc["command"].index("--port") + 1]
+    check = svc["healthcheck"]
+    assert check["test"][:3] == ["CMD", "python3", "-c"] and f"'127.0.0.1', {port}," in check["test"][3]
+    assert svc["ports"] == [f"127.0.0.1:{port}:{port}"] and check["retries"] >= 2 and "start_period" in check
+    srv = http.server.HTTPServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler)   # answers 501: still an answer
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    probe = lambda p: subprocess.run([sys.executable, "-c", check["test"][3].replace(f", {port},", f", {p},")],
+                                     capture_output=True, timeout=20).returncode
+    try:
+        assert probe(srv.server_address[1]) == 0
+    finally:
+        srv.shutdown()
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        closed = s.getsockname()[1]
+    assert probe(closed) != 0

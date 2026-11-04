@@ -24,15 +24,17 @@ def run(ctx):
     n = 0
     while not ctx.stop.is_set():
         n += 1
-        (ctx.state / "beat").write_text(str(n))
+        (ctx.state / "beat.tmp").write_text(str(n))
+        (ctx.state / "beat.tmp").replace(ctx.state / "beat")      # whole: a reader never sees it empty
         if ctx.wait(0.02):
             return
 """
 BOOM = """
 import pathlib
 def run(ctx):
-    f = ctx.state / "starts"
-    f.write_text(str(int(f.read_text()) + 1 if f.exists() else 1))
+    f, t = ctx.state / "starts", ctx.state / "starts.tmp"
+    t.write_text(str(int(f.read_text()) + 1 if f.exists() else 1))
+    t.replace(f)                                               # whole: a reader never sees it empty
     raise RuntimeError("boom")
 """
 

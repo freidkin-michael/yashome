@@ -1,29 +1,45 @@
-# tts, merged into the core's compose through COMPOSE_FILE (paths relative to the checkout).
-# Runs only with COMPOSE_PROFILES containing voice. The Silero models (CC BY-NC-SA 4.0: non-commercial use only) are downloaded once into the docker volume voice-models.
+# voice, merged into the core's compose through COMPOSE_FILE (paths relative to the checkout): one container with the TTS
+# and the recognizer service (the plug-in's README, "One voice container"). Runs only with COMPOSE_PROFILES containing voice.
+# The models are fetched once into the volumes (Silero: CC BY-NC-SA 4.0, non-commercial use only).
 services:
-  tts:
+  voice:
     labels:
       com.centurylinklabs.watchtower.enable: "false"   # built here: an updater must not pull or replace it
     build:
       context: plugins/tools/voice
-      dockerfile: service/tts/Dockerfile
+      dockerfile: service/Dockerfile
     restart: unless-stopped
-    init: true                  # tini as PID 1 hands SIGTERM to python: no 10 s wait, no exit 137 at an update
-    stop_grace_period: 3s
+    init: true                  # tini as PID 1 hands SIGTERM to run.py, which stops both parts
+    stop_grace_period: 5s
     profiles: ["voice"]
     user: "${PUID:-1000}:${PGID:-1000}"
-    mem_limit: 2g                                 # torch with two models: about 1.1g
+    mem_limit: 3g                                 # torch with two models about 1.1g, Vosk and the service about 0.3g
     environment:
       - VOICE_TTS_KEY=${VOICE_TTS_KEY:-}
+      - DASHBOARD_TOKEN=${DASHBOARD_TOKEN:-}
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_USER=${MQTT_USER:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - VA_SAMPLES_UID=${PUID:-1000}
+      - TZ=${TZ:-UTC}
       - HOME=/tmp
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:8091:8091"          # the satellites' audio; 8092 and 8093 stay on the compose network
     tmpfs:
       - /data:uid=${PUID:-1000},gid=${PGID:-1000}
     volumes:
-      - voice-models:/models                          # a named volume: docker would make a host folder root-owned and the plug-in could not write beside it
+      - voice-models:/models                          # named volumes: docker would make a host folder root-owned
+      - voice-vosk:/vosk
+      - ${HOUSE_DIR:-.}/plugin-data/voice:/house      # the house's phrase map, glossary, phrase log and samples
+    networks:
+      default:
+        aliases: [tts, voice-vad]                     # the names the plug-in calls the two parts by
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8092/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import socket, urllib.request; urllib.request.urlopen('http://127.0.0.1:8092/health', timeout=3); socket.create_connection(('127.0.0.1', 8091), 2).close()"]
       interval: 60s
-      timeout: 5s
+      timeout: 8s
       retries: 3
 volumes:
   voice-models:
+  voice-vosk:

@@ -126,3 +126,29 @@ _backend_only_add() {   # a checked copy renamed over .env, as _env_set: a newli
         || { rm -f "$_tmp"; trap - EXIT INT TERM; echo "cannot write .env: MQTT_BACKEND_ONLY not added" >&2; return 1; }
     trap - EXIT INT TERM
 }
+
+yashctl_on_path() {   # ~/.local/bin/yashctl runs this checkout's tools/yashctl; idempotent
+    [ "${YASHOME_JOB:-}" = 1 ] && return 0            # a helper job runs in a container: not the house user's shell
+    [ "$(id -u)" = 0 ] && return 0                     # root's PATH is not the house user's
+    [ -n "${HOME:-}" ] || return 0
+    _yb=$HOME/.local/bin; _yw=$_yb/yashctl; _yd=$(pwd -P)
+    case "$_yd" in *"'"*) echo "  yashctl: a checkout path with ' is not put on PATH: run $_yd/tools/yashctl"; return 0;; esac
+    if grep -q '^# yashome-yashctl$' "$_yw" 2>/dev/null; then
+        _yo=$(sed -n "s/^D='\(.*\)'\$/\1/p" "$_yw")
+    elif [ -L "$_yw" ] && [ "$(basename "$(readlink "$_yw")")" = yashctl ]; then    # a link (ln -s) to a checkout's own
+        _yo=$(dirname "$(dirname "$(readlink "$_yw")")")
+    elif [ -e "$_yw" ] || [ -L "$_yw" ]; then
+        echo "  $_yw is not Yashome's: left as it is"; return 0
+    else
+        _yo=$_yd
+    fi
+    if [ "$_yo" != "$_yd" ] && [ -f "$_yo/tools/yashctl" ]; then
+        echo "  $_yw runs the checkout $_yo: left as it is (delete it, then make update here, to switch)"; return 0
+    fi
+    mkdir -p "$_yb"
+    printf '%s\n' '#!/bin/sh' '# yashome-yashctl' "# the house's yashctl (make install / make update writes it): the checkout below" \
+        "D='$_yd'" 'P="$D/.venv/bin/python"; [ -x "$P" ] || P=python3' 'exec "$P" "$D/tools/yashctl" "$@"' > "$_yw.tmp"
+    chmod 755 "$_yw.tmp"
+    if [ ! -L "$_yw" ] && cmp -s "$_yw.tmp" "$_yw"; then rm -f "$_yw.tmp"; else mv -f "$_yw.tmp" "$_yw"; echo "  $_yw -> $_yd/tools/yashctl"; fi
+    case ":$PATH:" in *":$_yb:"*) ;; *) echo "  $_yb is not on PATH yet: log in again (~/.profile adds it) or add it";; esac
+}

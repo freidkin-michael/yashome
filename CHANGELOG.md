@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- voice: one container `voice`, built from the plug-in, runs the TTS and the recognizer service (stream -> VAD -> Vosk ->
+  intent -> house, the model fallback) that was a house stack (`voice-vad`); the model hosts, the wake check on the
+  satellites and the TV of the TV commands are Settings -> Voice fields (`llm_url`, `big_url`, `big_health`,
+  `wake_on_device`, `tv_device`) instead of env lines; the house's phrase map, glossary, phrase log and samples stay in
+  `plugin-data/voice/`. Moving from the house stack: the plug-in's README, "One voice container".
+
+- matter (new plug-in): Matter devices through python-matter-server, run by the new computers role "Matter controller"
+  (pinned image, host network, the computer's Bluetooth, its WebSocket on the loopback, reached through the helper's tunnel
+  `matter`; one per house). Add -> Matter pairs by one code (a new device, or one shared from a phone app); the house's
+  Thread network is given to it (never logged or shown); each node is a device with on/off, brightness, temperature,
+  humidity, motion, contact and battery channels; Settings -> Devices -> Matter lists the nodes and unpairs one.
+- yashctl: `make install` and `make update` write `~/.local/bin/yashctl` (a wrapper that runs this checkout's
+  tools/yashctl), so `yashctl apply`, `yashctl update` work as plain commands; a foreign one is left alone.
+- computers: yashGen's compose.yml has its own healthcheck on the builder's port 8090 (the inherited ESPHome one probed
+  6052 and showed the container unhealthy); Install again on a computer that has the role.
+- nfc: writing a card speaks the asker's language: refusals, steps and results (`step_text`, `message`, `note`) in the
+  app's language (`?lang=`, Yash! 0.38.4 sends it) or the house's (the dashboard); the log stays English.
+- thread (new plug-in): the house's Thread network. Border routers are computers with the new role "Thread border router"
+  (plug-in computers: the pinned OTBR on a radio of `/dev/serial/by-id`, TREL and backbone on the LAN, REST on its loopback
+  only, reached through the helper's tunnels `thread1`-`thread8`); the house keeps the dataset (never logged or shown), forms
+  or takes the network on the main router and gives it to the others, sets leader weight 255 / 64, restarts a stuck router,
+  lists the nodes with parent and link, pairs by PSKd (Add -> Thread); Settings -> Devices -> Thread; a "T" on the map for a
+  Thread router (`window.MapMarks`). Helper: `POST /v1/hosts/thread` (fixed ctl.sh), the probe lists serial devices.
+  Nodes: "Add to the house" for a node with no house device, its card for one with; the card has a Thread section.
+  One-button pairing: Add -> Thread opens the commissioner with the public code of the Yash firmware and the house pairs
+  the node over Thread (`ctl.sh pair`, plug-in pair `pair_with`): its own account, OTA password and card, no code typed.
+  The role's ctl.sh lets the nodes' MQTT through docker's FORWARD DROP; the router keeps the host's /dev/log and logs to
+  the host journal (`journalctl -t otbr-agent`, notice level).
+- esphome: a discovered control with `ent_cat` config/diagnostic is aux: it does not make the node a light or a switch
+  (the add dialog's category, the card's kind); a config number is a folded setting, not a dimmer.
 - core: one `discover` container (host network, no privileges, read-only code) runs the enabled plug-ins' discovery
   modules (`discover.py`, `run(ctx)`, docs/plugins.md), each in its own thread, restarted alone when it fails; it replaces
   `computers-discover` and `panels-discover` (same ports and files). `make update` removes the two old containers.

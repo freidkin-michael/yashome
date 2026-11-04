@@ -120,7 +120,10 @@ def _taken(node: str) -> str:
     names |= {str(p[0]) for p, _fn in core.MQTT_HANDLERS if p} | set(core.NODE_SUBTOPICS)
     if node in names:
         return f"{node!r} is a topic of the house or of a plug-in"
+    gone = _load(MOVED) or {}
     for d in list(core.DEVICES.values()):
+        if d.get("id") == node and (d.get("made_by") == "pair" or node in gone):
+            continue                                         # its own card (kept at Unpair): paired again under its name
         if node in _levels(d):
             return f"{node!r} is the name of a device the house already has"
     return ""
@@ -282,6 +285,39 @@ def pair_form(rec: dict, code: str, mqtt_host: str, mqtt_port) -> dict:
             "mqtt_port": str(mqtt_port), "mqtt_user": rec["mqtt_user"], "mqtt_password": rec["mqtt_password"], "ota_password": rec["ota_password"]}
 
 
+def thread_form(rec: dict, mqtt_host: str, mqtt_port) -> dict:
+    """The fields of the pair request to a Thread node (docs/pairing.md): no code (it comes from inside the Thread network,
+    which only the house lets a device into), no Wi-Fi."""
+    return {"house_id": rec["house_id"], "mqtt_host": mqtt_host, "mqtt_port": str(mqtt_port), "mqtt_user": rec["mqtt_user"],
+            "mqtt_password": rec["mqtt_password"], "ota_password": rec["ota_password"]}
+
+
+def pair_with(node: str, deliver, house_id: str = "yashome", reads=(), kind: str = "device", via: str = "wifi") -> dict:
+    """One pairing over any channel: the account and OTA password are made, deliver(rec) sends the request and returns the
+    device's answer {ok, reply?, error?, steps?} (RuntimeError: not delivered); a refused or undelivered request leaves no
+    new account behind. Then the wait for the device (_finish) runs on its own."""
+    existed = ota_password(node) is not None
+    rec = prepare(node, (house_id or "yashome")[:23], tuple(reads), kind)
+    try:
+        out = deliver(rec)
+    except RuntimeError as e:
+        if not existed:
+            revoke(node, unpair=False)
+        raise HTTPException(502, str(e))
+    if out.get("ok") is not True:
+        if not existed:
+            revoke(node, unpair=False)
+        steps = "; ".join(str(x) for x in out.get("steps") or [])[:500]        # status lines of a relay: no secrets in them
+        raise HTTPException(409, str(out.get("error") or "the device refused the pairing") + (f" [{steps}]" if steps else ""))
+    with _lock:
+        pairs = _load(PAIRINGS) or {}
+        pairs[node] = {**pairs.get(node, {}), "state": "sent", "sent": time.time(), "via": via}     # via: wifi | thread
+        _save(PAIRINGS, pairs)
+    threading.Thread(target=_finish, args=(node,), daemon=True, name=f"pair-{node}").start()
+    return {"ok": True, "node": (out.get("reply") or {}).get("node") or node, "hash": (out.get("reply") or {}).get("hash"),
+            "steps": [str(x) for x in out.get("steps") or []][:20]}
+
+
 class StartBody(core.Body):
     ap: str                      # <node>-setup
     code: str                    # the pairing code: the AP's key and the proof of owning the device
@@ -303,30 +339,16 @@ def pair_start(body: StartBody, request: Request):
     if not CODE_RE.fullmatch(code):
         raise HTTPException(400, "code: 8 characters, letters A-Z and digits 2-7")
     host, _warning = core.node_broker_host(request)
-    existed = ota_password(node) is not None
-    rec = prepare(node, (body.house_id or "yashome")[:23], tuple(body.reads), body.kind)
-    form = pair_form(rec, code, host, core.node_broker_port())
-    relay = {"ap": body.ap, "ap_password": code, "form": form}
-    if body.bssid:
-        relay["bssid"] = body.bssid
-    try:
-        out = _host_call(relay, HOST_WAIT_S)
-    except RuntimeError as e:
-        if not existed:
-            revoke(node, unpair=False)
-        raise HTTPException(502, f"host relay: {e}")
-    if out.get("ok") is not True:
-        if not existed:
-            revoke(node, unpair=False)
-        steps = "; ".join(str(x) for x in out.get("steps") or [])[:500]        # status lines of the relay: no secrets in them
-        raise HTTPException(409, str(out.get("error") or "the device refused the pairing") + (f" [{steps}]" if steps else ""))
-    with _lock:
-        pairs = _load(PAIRINGS) or {}
-        pairs[node] = {**pairs.get(node, {}), "state": "sent", "sent": time.time()}
-        _save(PAIRINGS, pairs)
-    threading.Thread(target=_finish, args=(node,), daemon=True, name=f"pair-{node}").start()
-    return {"ok": True, "node": (out.get("reply") or {}).get("node") or node, "hash": (out.get("reply") or {}).get("hash"),
-            "steps": [str(x) for x in out.get("steps") or []][:20]}
+
+    def relay(rec):
+        out = {"ap": body.ap, "ap_password": code, "form": pair_form(rec, code, host, core.node_broker_port())}
+        if body.bssid:
+            out["bssid"] = body.bssid
+        try:
+            return _host_call(out, HOST_WAIT_S)
+        except RuntimeError as e:
+            raise RuntimeError(f"host relay: {e}") from None
+    return pair_with(node, relay, body.house_id, body.reads, body.kind)
 
 
 def _finish(node: str) -> None:
@@ -390,7 +412,8 @@ def card_from_description(node: str, rec: dict) -> dict:
             continue
         t = node + t[1:] if t.startswith("~/") else t
         code, label, dom = _code_of(t, node), str(e.get("name") or "")[:60] or _code_of(t, node), e.get("domain")
-        adv = e.get("role") in ("rssi", "uptime", "wifi_signal", "ip_address", "ssid", "mac_address")
+        adv = e.get("role") in ("rssi", "uptime", "wifi_signal", "ip_address", "ssid", "mac_address") \
+            or e.get("category") in ("config", "diagnostic")              # the device's own setting or diagnostic: folded
         if dom == "sensor":
             c = {"kind": "sensor", "code": code, "label": label, "ro": True, "vtype": "num", "state_topic": t}
             if e.get("unit"):
@@ -411,7 +434,8 @@ def card_from_description(node: str, rec: dict) -> dict:
     if not controls:
         raise ValueError("the description has no entity the house can show yet")
     has_switch = any(c["kind"] == "switch" for c in controls)
-    card = {"id": node, "name": str(dev.get("friendly") or node)[:60], "transport": "mqtt", "category": "switch" if has_switch else "sensor",
+    card = {"id": node, "name": str(dev.get("friendly") or node)[:60], "transport": "mqtt", "made_by": "pair",
+            "category": "switch" if has_switch else "sensor",
             "esphome_node": node, "model": str((dev.get("board") or {}).get("id") or dev.get("chip") or "")[:40],
             "availability_topic": f"{node}/status", "payload_online": "online", "payload_offline": "offline", "controls": controls}
     card["_skipped"] = skipped
@@ -426,10 +450,13 @@ def make_card(node: str) -> dict:
     if node not in (_load(PAIRINGS) or {}):
         raise ValueError("this node is not paired through the house")
     have = core.DEVICES.get(node) or core.DEVICES.get(_device_for(node) or "")
-    if have:                                                 # a card made through HA discovery stays: the window offers the gap
+    mine = bool(have) and have.get("id") == node and have.get("esphome_node") == node and have.get("made_by") == "pair"
+    if have and not mine:                                    # a card made through HA discovery stays: the window offers the gap
         return have
     card = card_from_description(node, rec)
     skipped = card.pop("_skipped")
+    if mine:                                                 # its own card again (a new build, a new pairing): the channels and model
+        card = {**{k: v for k, v in have.items() if not k.startswith("_")}, **{k: card[k] for k in ("controls", "model")}}
     core.mqtt_devices_upsert(card)
     core.register_mqtt_device(card)
     core.mqtt_resubscribe_generic()
@@ -471,7 +498,8 @@ def pair_moved(node: str, request: Request):
 @core.app.get("/api/pair")
 def pair_list(request: Request):
     core.house_token_only(request)
-    return {"paired": [{"node": n, "user": r.get("user"), "state": r.get("state"), "house_id": r.get("house_id"), "device": _device_for(n)}
+    return {"paired": [{"node": n, "user": r.get("user"), "state": r.get("state"), "house_id": r.get("house_id"), "device": _device_for(n),
+                        "via": r.get("via") or "wifi"}
                        for n, r in sorted((_load(PAIRINGS) or {}).items())],
             "moved": [{"node": n, "ts": r.get("ts"), "device": r.get("device") or _device_for(n)} for n, r in sorted((_load(MOVED) or {}).items())]}
 

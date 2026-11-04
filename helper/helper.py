@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 import unicodedata
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -43,6 +44,7 @@ HOST_TIMEOUT = 12
 SCAN_PORT_S = 0.6
 HOST_PROBE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "host_probe.sh")   # what runs there (sh -s)
 SCREEN_KEEP = 8
+SERIAL_KEEP = 16
 # A role on a computer (plug-in computers): (role, action) -> the script it runs there as root (sudo sh -s < it), from this
 # checkout, with the arguments each one takes (checked here: nothing else reaches the remote shell).
 _BUILD_INSTALL = "plugins/tools/build/server/install-build-server.sh"
@@ -59,10 +61,16 @@ ROLE_SCRIPTS = {("build", "install"): (_BUILD_INSTALL, ("house",)),
                 ("player", "install"): ("helper/roles/player-install.sh", ("house",)),
                 ("player", "remove"): ("helper/roles/player-remove.sh", ()),
                 ("touchmouse", "install"): ("helper/roles/touchmouse-install.sh", ("house",)),
-                ("touchmouse", "remove"): ("helper/roles/touchmouse-remove.sh", ())}
+                ("touchmouse", "remove"): ("helper/roles/touchmouse-remove.sh", ()),
+                ("thread", "install"): ("helper/roles/thread-install.sh", ("radio", "baud")),
+                ("thread", "remove"): ("helper/roles/thread-remove.sh", ()),
+                ("matter", "install"): ("helper/roles/matter-install.sh", ()),
+                ("matter", "remove"): ("helper/roles/matter-remove.sh", ())}
 ROLE_ARG_RE = {"house": re.compile(r"^https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?$"),
                "apk": re.compile(r"^(apk|noapk)$"),
-               "model": re.compile(r"^[a-z0-9][a-z0-9._/-]{0,80}(?::[A-Za-z0-9._-]{1,40})?$")}
+               "model": re.compile(r"^[a-z0-9][a-z0-9._/-]{0,80}(?::[A-Za-z0-9._-]{1,40})?$"),
+               "radio": re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:+@-]{0,200}$"),        # a name in /dev/serial/by-id, never a path
+               "baud": re.compile(r"^(115200|230400|460800|921600|1000000)$")}
 ROLE_ARG_FIXED = {("apk", "install"): {"apk": "apk"}, ("apk", "remove"): {"apk": "noapk"}}   # not the caller's to choose
 HELLO_SCRIPT = "helper/roles/hello-install.sh"   # after every role run: the hello responder (UDP 7708)
 ROLE_TIMEOUT = 1800                  # docker installed and an image built: minutes
@@ -675,6 +683,8 @@ def check_host(cfg, host, user, wsl=""):
         if k == "screen" and len(screens) < SCREEN_KEEP:
             con, vend, name, port = (v.split("|") + ["", "", "", ""])[:4]
             screens.append({"connector": con[:20], "vendor": vend[:3], "name": name[:20], "port": int(port) if port.isdigit() else None})
+        elif k == "serial" and ROLE_ARG_RE["radio"].match(v.strip()) and len(kv.setdefault("serials", [])) < SERIAL_KEEP:
+            kv["serials"].append(v.strip())
         elif k == "role" and v.strip().isidentifier():
             kv.setdefault("roles", []).append(v.strip())
         elif k == "llm_serve" and re.match(r"^/[A-Za-z0-9._/-]{1,200}$", v.strip()):
@@ -694,7 +704,7 @@ def check_host(cfg, host, user, wsl=""):
                         else (r.stderr.strip().splitlines() or ["ssh failed"])[-1][:120])
         return out
     out.update({"ssh": True, "hostname": kv.get("host", "")[:64], "os": kv.get("os", "")[:80], "mac": kv.get("mac", "").lower()[:17],
-                "screens": screens, "roles": kv.get("roles", []), "sudo": kv["sudo"] == "yes",
+                "screens": screens, "roles": kv.get("roles", []), "serials": kv.get("serials", []), "sudo": kv["sudo"] == "yes",
                 "llm": {"serve": kv.get("llm_serve", ""), "models": kv.get("llm_models", [])}})
     out["ok"] = out["sudo"]
     if not out["sudo"]:
@@ -885,10 +895,71 @@ def post_hosts_player(cfg, body):
     return 200, out
 
 
+# ---- a Thread border router (role thread): the fixed /opt/yashome-thread/ctl.sh there, nothing else ----
+THREAD_CTL = "sudo -n /opt/yashome-thread/ctl.sh"
+THREAD_TIMEOUT = {"status": 30, "restart": 150, "leaderweight": 30, "joiner": 40, "pair": 45}
+PAIR_FIELDS = ("house_id", "mqtt_host", "mqtt_port", "mqtt_user", "mqtt_password", "ota_password")   # docs/pairing.md, Thread
+THREAD_KEYS = ("running", "state", "leaderweight", "trel_peers", "routes_fixed")
+THREAD_SRP_RE = re.compile(r"^[A-Za-z0-9-]{1,63} [0-9a-f:]{2,39}$")      # srp=<host name> <IPv6 address>, a list
+PSKD_RE = re.compile(r"^[0-9A-HJ-NPR-Y]{6,32}$")
+
+
+def post_hosts_thread(cfg, body):
+    """{host, user, cmd: status | restart | leaderweight (weight 0-255) | joiner (pskd, eui: 16 hex or *) | pair (addr, form)}:
+    ctl.sh there; {rc, out: {key: value, srp: [...], pair_status, pair_reply}}. The PSKd and the pair form go on its
+    stdin, never on a command line."""
+    host, user = host_arg(body.get("host")), user_arg(body.get("user"))
+    cmd, stdin = str(body.get("cmd") or ""), None
+    if cmd not in THREAD_TIMEOUT:
+        raise HttpError(400, "cmd: " + ", ".join(THREAD_TIMEOUT))
+    line = f"{THREAD_CTL} {cmd}"
+    if cmd == "leaderweight":
+        w = body.get("weight")
+        if isinstance(w, bool) or not isinstance(w, int) or not 0 <= w <= 255:
+            raise HttpError(400, "weight: 0-255")
+        line += f" {w}"
+    elif cmd == "joiner":
+        pskd, eui = str(body.get("pskd") or ""), str(body.get("eui") or "")
+        if not PSKD_RE.match(pskd) or not re.match(r"^([0-9a-f]{16}|\*)$", eui):
+            raise HttpError(400, "joiner: a PSKd and an EUI-64 (or *)")
+        stdin = f"{eui} {pskd}\n"
+    elif cmd == "pair":
+        addr, form = str(body.get("addr") or ""), body.get("form")
+        if not re.match(r"^[0-9a-f:]{2,39}$", addr) or not isinstance(form, dict) or set(form) - set(PAIR_FIELDS) \
+                or not all(isinstance(v, str) and len(v) <= 128 for v in form.values()):
+            raise HttpError(400, "pair: an IPv6 address and the form fields " + ", ".join(PAIR_FIELDS))
+        line += f" {addr}"
+        stdin = urllib.parse.urlencode(form)
+    if not os.path.isfile(hosts_known(cfg)):
+        raise HttpError(409, "check the computer first (its host key is not known yet)")
+    r = run(["ssh", "-i", os.path.join(SSH_KEYS, "id"), "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "-o", "StrictHostKeyChecking=yes",
+             "-o", "UserKnownHostsFile=" + hosts_known(cfg), "-o", "IdentitiesOnly=yes", "-l", user, host, line],
+            cfg, timeout=THREAD_TIMEOUT[cmd], input=stdin)
+    if r is None:
+        raise HttpError(504, "the computer did not answer")
+    out = {}
+    for x in (r.stdout or "").splitlines():
+        k, sep, v = x.strip().partition("=")
+        if sep and k in THREAD_KEYS and re.match(r"^[A-Za-z0-9_-]{0,20}$", v):
+            out[k] = v
+        elif sep and k == "srp" and THREAD_SRP_RE.match(v) and len(out.setdefault("srp", [])) < 64:
+            out["srp"].append(v)
+        elif sep and k == "pair_status" and v.isdigit():
+            out[k] = int(v)
+        elif sep and k == "pair_reply":                     # the node's answer: only its plain fields, never more
+            try:
+                ans = json.loads(v)
+            except ValueError:
+                ans = {"ok": False, "error": v[:120]}
+            out[k] = {a: ans[a] for a in ("ok", "node", "hash", "error") if isinstance(ans, dict) and isinstance(ans.get(a), (str, bool))}
+    return 200, {"rc": r.returncode, "out": out}
+
+
 # ---- tunnels: a server of another computer (build, tts) reached through ssh, so it needs no key of its own ----
 # helper:<port> -> that computer's 127.0.0.1:<port>; the server there listens on its loopback only. The dashboard's
 # backend reaches the helper on the compose network; nothing else does (the helper publishes no port).
-TUNNEL_PORTS = {"build": 8795, "tts": 8092}
+TUNNEL_PORTS = {"build": 8795, "tts": 8092, "matter": 5580, **{f"thread{n}": 8180 + n for n in range(1, 9)}}
+TUNNEL_REMOTE = {f"thread{n}": 8081 for n in range(1, 9)}   # Thread border router N's REST (plug-in thread): its 127.0.0.1:8081
 TUNNEL_RETRY_S = 10
 _tunnels = {}                        # role -> {host, user, wsl, gen, state, since, error, proc}
 _tunnels_lock = threading.Lock()
@@ -905,14 +976,14 @@ def _tunnel_view():
     return {r: {k: t.get(k) for k in ("host", "user", "wsl", "state", "since", "error")} for r, t in _tunnels.items() if t.get("host")}
 
 
-def _tunnel_cmd(cfg, t, port):
+def _tunnel_cmd(cfg, t, port, rport=None):
     # a Windows computer: the tunnel holds its WSL distro running (it stops when idle and the service in it with it)
     m = WSL_RE.match(t.get("wsl") or "")
     keep = ["wsl", "-d", m.group(1), "--", "sleep", "2147483647"] if m else []
     return ["ssh"] + ([] if keep else ["-N"]) + ["-i", os.path.join(SSH_KEYS, "id"), "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
             "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=" + hosts_known(cfg), "-o", "IdentitiesOnly=yes",
             "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
-            "-L", f"0.0.0.0:{port}:127.0.0.1:{port}", "-l", t["user"], t["host"]] + keep
+            "-L", f"0.0.0.0:{port}:127.0.0.1:{rport or port}", "-l", t["user"], t["host"]] + keep
 
 
 def _tunnel_loop(cfg, role, gen):
@@ -923,7 +994,7 @@ def _tunnel_loop(cfg, role, gen):
             t = _tunnels.get(role)
             if not t or t["gen"] != gen or not t.get("host"):
                 return
-            cmd = _tunnel_cmd(cfg, t, port)
+            cmd = _tunnel_cmd(cfg, t, port, TUNNEL_REMOTE.get(role))
         try:
             p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
         except OSError as e:
@@ -1093,6 +1164,7 @@ ROUTES = {
     ("POST", "/v1/hosts/run"): post_hosts_run,
     ("GET", "/v1/hosts/runs"): get_hosts_runs,
     ("POST", "/v1/hosts/player"): post_hosts_player,
+    ("POST", "/v1/hosts/thread"): post_hosts_thread,
     ("POST", "/v1/tunnels"): post_tunnels,
     ("GET", "/v1/tunnels"): get_tunnels,
 }

@@ -33,7 +33,7 @@ _subscribed: set = set()
 def _tts_cfg() -> dict:
     """A TTS service on another computer of the house (settings.json voice.tts {host, url}, set by the plug-in computers): the
     house reaches it through the helper's ssh tunnel (url, no key: it listens on that computer's loopback only). None = the
-    house's own `tts` container on the compose network (VOICE_TTS_KEY). Either way the satellites get its files from the
+    TTS part of the house's own `voice` container (network name `tts`, VOICE_TTS_KEY). Either way the satellites get its files from the
     dashboard's port (tts_files)."""
     t = _cfg.get("tts")
     return t if isinstance(t, dict) and t.get("url") and t.get("host") else {}
@@ -688,6 +688,7 @@ def delete_satellite(sid: str, request: Request):
 # is absent and voice-vad keeps its own value; its first read seeds them all (PUT ?seed=1), so the page shows what runs. ----
 _cfg.setdefault("config", {})
 MODEL_RE = r"^[A-Za-z0-9._:/-]{0,80}$"
+URL_RE = r"^(https?://[A-Za-z0-9._:/\[\]-]{1,200})?$"                      # an Ollama or health address; "" = none
 LETTER = "a-zA-Z\u0430-\u044f\u0410-\u042f\u0451\u0401"                     # i18n: Latin and Cyrillic letters, what voice-vad matches, on both sides
 WORD_RE = f"^[{LETTER}]+$"
 VARIANT_RE = f"[{LETTER}]{{3,20}}\\*|[{LETTER}]{{2,20}}"
@@ -710,6 +711,11 @@ class ConfigBody(core.Body):
     confirm_all_off: Optional[bool] = None                               # "turn everything off" from the model asks first
     ask_ttl: Optional[float] = Field(default=None, ge=3, le=120)         # seconds a question waits for yes / no
     need_wake_peers: Optional[list[str]] = None                          # seed only: the addresses that need the wake word
+    wake_on_device: Optional[bool] = None                                # the satellites check the wake word themselves
+    llm_url: Optional[str] = Field(default=None, pattern=URL_RE)         # the small model's Ollama ("" = no smart answers)
+    big_url: Optional[str] = Field(default=None, pattern=URL_RE)         # the big model's Ollama on another computer ("" = none)
+    big_health: Optional[str] = Field(default=None, pattern=URL_RE)      # its health: {state, loaded}
+    tv_device: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9._-]{0,64}$")   # the TV of the TV commands ("" = none)
 
 
 def _voice_config() -> dict:

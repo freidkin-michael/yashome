@@ -144,7 +144,8 @@ class NfcWriteActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             while (true) {
                 val r = HomeApi.nfcWriteStep(app, s, resp)
                 if (r.optBoolean("done")) { result(r.optJSONObject("result") ?: JSONObject()); break }
-                show(getString(R.string.nfcw_writing), getString(R.string.nfcw_step, r.optString("step")), false)
+                val stepName = r.optString("step_text").ifEmpty { r.optString("step") }    // the house's words, else its step id
+                show(getString(R.string.nfcw_writing), getString(R.string.nfcw_step, stepName), false)
                 resp = hex(iso.transceive(unhex(r.optString("apdu_hex"))))
             }
         } catch (e: TagLostException) {
@@ -172,7 +173,7 @@ class NfcWriteActivity : AppCompatActivity(), NfcAdapter.ReaderCallback {
             show(getString(R.string.nfcw_done, listed), getString(R.string.nfcw_name_this), false, naming = listed)
         }
         else if (r.optBoolean("ok")) show(getString(R.string.nfcw_done, listed.ifEmpty { r.optString("uid") }), r.optString("note"), false)
-        else show(getString(R.string.nfcw_failed, r.optString("error").ifEmpty { r.optString("step") }), "", true)
+        else show(getString(R.string.nfcw_failed, r.optString("message").ifEmpty { r.optString("error") }.ifEmpty { r.optString("step") }), "", true)
     }
 
     /** "Name this card": the tags list's rename; the automatic name stays when Close is pressed instead. */

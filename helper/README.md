@@ -34,14 +34,20 @@ things and nothing else.
   from a computer, in the background (one run per computer, its log kept): the script of `ROLE_SCRIPTS` from this
   checkout goes to `sudo -n sh -s -- <args>` there; each argument has its own pattern, a host whose key is not known yet
   (never checked) is refused, and so is a changed key (`StrictHostKeyChecking=yes`). Roles: build, apk, tts, llm,
-  yashgen, player, touchmouse (scripts in `helper/roles/` and the build plug-in). After every run the hello
+  yashgen, player, touchmouse, thread, matter (scripts in `helper/roles/` and the build plug-in; thread takes a name of
+  `/dev/serial/by-id`, never a path, and a baud rate of a fixed list). After every run the hello
   responder (UDP 7708, `helper/roles/hello-install.sh`) is installed there too
 - `POST /v1/hosts/player {"host", "user", "cmd", ...}` - one command to the player of a computer (plug-in player): only the
   command's own fields, each of its type (an http(s) address for play), go on the stdin of the fixed
   `python3 /opt/yashome-player/ctl.py` there; its answer `{ok, state | error}` comes back. One ssh connection per computer
   (`-M -N -f`, ControlPersist 5 min, on /dev/null) carries the commands; not in a WSL
+- `POST /v1/hosts/thread {"host", "user", "cmd", ...}` - a Thread border router (plug-in thread): only the fixed
+  `sudo -n /opt/yashome-thread/ctl.sh` there with `status`, `restart`, `leaderweight` (`weight` 0-255) or `joiner`
+  (`pskd`, `eui` 16 hex or `*`: on its stdin, never on a command line) or `pair` (`addr` an IPv6 address, `form` the pair
+  fields: urlencoded on its stdin); `{rc, out}` with the status keys only (`pair_status`, `pair_reply` {ok, node, hash, error})
 - `POST /v1/tunnels {"role", "host", "user", "wsl"?}`, `GET /v1/tunnels` - the server of a role on a computer, brought here
-  by ssh: `-L 0.0.0.0:<port>:127.0.0.1:<port>` (build 8795, tts 8092) with the house's key and the kept host keys, so that
+  by ssh: `-L 0.0.0.0:<port>:127.0.0.1:<port>` (build 8795, tts 8092, matter 5580 (the Matter controller's WebSocket); `thread1`..`thread8`: 8181-8188 -> that border
+  router's REST, 8081) with the house's key and the kept host keys, so that
   server listens on its own loopback and needs no key; the dashboard's backend reaches it as `helper:<port>` on the compose
   network (the helper publishes no port). One computer per role; no host: the tunnel goes. Kept in `.helper/tunnels.json`
   and taken up again at start; an ended ssh is started again after 10 s (state up / down, its last error)

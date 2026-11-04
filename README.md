@@ -381,10 +381,13 @@ The panel builder: one layout for an ESP screen or an Android tablet.
 
 ## Command line: yashctl
 
-`tools/yashctl` drives the house from a shell through the same REST API the dashboard uses; it
+`yashctl` drives the house from a shell through the same REST API the dashboard uses; it
 reads `DASHBOARD_TOKEN` and `DASHBOARD_PORT` from the checkout's `.env` (or `YASHOME_TOKEN` /
 `YASHOME_URL`, `--dir` / `YASHOME_DIR` for another checkout; `--token` works too but shows in `ps`).
-Python 3 only, no packages. Put it on your `PATH` with `ln -s "$PWD/tools/yashctl" ~/.local/bin/yashctl`.
+Python 3 only, no packages. `make install` and `make update` put it on the house user's `PATH`: `~/.local/bin/yashctl`,
+a small wrapper that runs this checkout's `tools/yashctl` with its `.venv` Python, else `python3` (a new
+`~/.local/bin` is on `PATH` after the next login). A `yashctl` there that is not Yashome's, or that runs another checkout
+still present, is left as it is. Without the wrapper: `tools/yashctl status` in the checkout.
 
 ```sh
 yashctl status                      # backend, broker, plug-ins (exit 1 if unhealthy)

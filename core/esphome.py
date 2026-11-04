@@ -13,8 +13,20 @@ def _ha_key(cfg, *names):
 
 
 def _esphome_control_from_ha(component, obj, cfg):
-    """Map one HA-discovery entry onto our control schema. Returns [] for
-    components the dashboard has no widget for (button/select/climate/text)."""
+    """Map one HA-discovery entry onto our control schema; a node's own setting or diagnostic (ent_cat) is marked aux
+    (it does not make the node a light or a switch). Returns [] for components the dashboard has no widget for."""
+    out = _esphome_control_kind(component, obj, cfg)
+    cat = _ha_key(cfg, "ent_cat", "entity_category")
+    if cat in ("config", "diagnostic"):
+        for c in out:
+            c["aux"] = True
+            if cat == "config" and component == "number" and c["kind"] == "bright":
+                # a setting of the node (a status LED's brightness): a folded number, not a dimmer
+                c.update(kind="setting_int", advanced=True, unit=_ha_key(cfg, "unit_of_meas", "unit_of_measurement") or "")
+    return out
+
+
+def _esphome_control_kind(component, obj, cfg):
     stat = _ha_key(cfg, "stat_t", "state_topic")
     cmd = _ha_key(cfg, "cmd_t", "command_topic")
     label = _ha_key(cfg, "name") or obj

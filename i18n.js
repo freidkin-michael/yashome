@@ -192,6 +192,8 @@ const I18N = {
     "The people of the house: phones, rights, the app": "Люди дома: телефоны, права, приложение",
     "Every device: where it is, whether it answers; add one": "Все устройства: где стоит, отвечает ли; добавить новое",
     "The gateway, its devices, pairing": "Шлюз, его устройства, сопряжение",
+    "The Thread network: border routers, nodes, pairing": "Сеть Thread: пограничные маршрутизаторы, узлы, сопряжение",
+    "Matter devices: the controller, the nodes, pairing by code": "Устройства Matter: контроллер, узлы, подключение по коду",
     "Blasters, remotes, learning, IR appliances": "Бластеры, пульты, обучение, ИК-приборы",
     "Every TV: address, pairing, inputs, apps": "Все телевизоры: адрес, сопряжение, входы, приложения",
     "Wall panels: layouts and the builder, binding, firmware": "Настенные панели: раскладки и конструктор, привязка, прошивка",

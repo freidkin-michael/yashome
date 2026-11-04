@@ -60,6 +60,8 @@ is shown under the one name of its device (renamed on its card; a blaster withou
 panel takes a short `label` from there. An IR fixture with a power feed (IR plug-in, "Power from": a lamp with a fan on a
 wall switch) is a lamp of the map without any entry there: lit while its switch is on, its badge the keys it last sent, a tap
 opens its window, and the switch's dashed line to it comes from that setting.
+A plug-in may mark a device's icon (a small blue letter at its top left): each function in `window.MapMarks` gets the device id and
+returns `{glyph, title}` or nothing; the thread plug-in marks a device that is a Thread router "T".
 A new LOAD (lamp, socket, AC, TV, boiler, LED strip, fan, other) is a thing the house does not know; "Link" says which channel of which device
 controls it and a line is drawn. A long press (400 ms) on an icon lifts it, it follows the pointer and a release drops it (switches, sockets, blasters,
 buttons and locks snap to the nearest wall line); Esc or a release at the start cancels; a tap opens the sheet; a drag on empty space pans.

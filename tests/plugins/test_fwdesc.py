@@ -289,3 +289,21 @@ def test_a_node_with_a_description_is_ignored_by_discovery(monkeypatch):
     monkeypatch.setattr(me, "_load", lambda kind, name: {"v": 2} if (kind, name) == ("devices", "air-3f2a1c") else None)
     assert me.discovery_ignore({"espname", "air-3f2a1c"}) and not me.discovery_ignore({"plain", "Bad Name"})
     assert me.discovery_ignore in core.DISCOVERY_IGNORE
+
+
+def test_a_device_this_house_paired_makes_its_own_build_record_and_another_does_not(fw, monkeypatch):
+    """No builder registration needed: the description of a device the house paired itself becomes its build record;
+    an unpaired device stays "not from this house", and a description that does not match its hash never counts."""
+    import types
+    monkeypatch.setitem(sys.modules, "yashome_plugins.pair", types.SimpleNamespace(ota_password=lambda n: "x" if n == "node-a" else None))
+    d = desc("node-a")
+    feed("node-a", d)
+    assert json.loads((fw / "devices" / "node-a.json").read_text())["build_known"] is True
+    assert json.loads((fw / "builds" / f"{me.canonical_hash(d)}.json").read_text())["from"] == "paired device"
+    e = desc("node-b", {"entities": []})
+    feed("node-b", e)
+    assert json.loads((fw / "devices" / "node-b.json").read_text())["build_known"] is False
+    f = desc("node-a", {"entities": []})
+    me._seen.clear()
+    feed("node-a", f, h="0123456789ab")                                  # not its own hash: no record from it
+    assert not (fw / "builds" / "0123456789ab.json").exists()

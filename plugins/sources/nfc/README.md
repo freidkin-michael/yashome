@@ -64,10 +64,14 @@ The session (one at a time; it ends 60 s after its last step; nothing secret in 
 
 - `POST /api/nfc/write/start` (no body needed) -> `{sid, step, done, result, left}`; the phone that called it drives the
   session, no other phone is told.
-- `POST /api/nfc/write/{sid}/step {}` -> `{apdu_hex, step}`: the first APDU (or the unanswered one again, after a lost reply).
+- `POST /api/nfc/write/{sid}/step {}` -> `{apdu_hex, step, step_text}`: the first APDU (or the unanswered one again, after a
+  lost reply).
 - `POST /api/nfc/write/{sid}/step {resp_hex}` (the card's whole answer, SW1 SW2 included) -> the next `{apdu_hex}`, or
-  `{done: true, result: {ok, step, uid?, error?, listed?, new?}}`: `listed` = the card's name on the list, `new` = it was
-  put there now under the automatic name.
+  `{done: true, result: {ok, step, step_text, uid?, error?, message?, note?, listed?, new?}}`: `listed` = the card's name on
+  the list, `new` = it was put there now under the automatic name.
+- Language: `step`, `error` (`cancelled` on a cancel) are the log's English words; `step_text`, `message`, `note` and every
+  refusal's `detail` are in the asker's language - `?lang=xx` on any `/api/nfc` route (the app sends its own), else the
+  house language (the dashboard). The words are in this plug-in's i18n.json.
 - A card already on the list: `result = {ok: false, step: "uid", known: <its name>, uid}`, nothing written. The phone
   asks "This is the card <name>. Rewrite it? It keeps its name and rules.":
   `POST /api/nfc/write/{sid}/rewrite` starts the step loop again for that card (it is held again; the session keeps its

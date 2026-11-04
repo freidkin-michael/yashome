@@ -3,6 +3,7 @@ simulated NTAG 424 DNA (its own crypto, written apart from the writer's, checkin
 and from a card the house wrote before; then a tap the simulated card mirrors passes the plug-in's own verifier."""
 import json
 import os
+import re
 import sys
 import urllib.parse
 import zlib
@@ -520,7 +521,8 @@ def test_a_listed_card_is_asked_about_and_nothing_is_written(api):
     me._CARDS[card.uid.hex()] = "Front door"
     sid = api.post("/api/nfc/write/start", json={"name": "Gate"}, headers=HOUSE).json()["sid"]    # an older app's name: ignored
     r = _steps(api, card, sid)
-    assert r["done"] and r["result"] == {"ok": False, "step": "uid", "known": "Front door", "uid": card.uid.hex()}
+    assert r["done"] and r["result"] == {"ok": False, "step": "uid", "step_text": "uid", "known": "Front door",
+                                     "uid": card.uid.hex()}
     assert (dict(card.keys), dict(card.fs), bytes(card.file)) == snap
     assert api.get(f"/api/nfc/write/{sid}", headers=HOUSE).json()["result"]["known"] == "Front door"
 
@@ -561,3 +563,48 @@ def test_a_blank_card_is_never_asked_about(api):
     r = run_session(api, card, sid)
     assert r["result"]["ok"] and r["result"]["keys"] == "factory" and "known" not in r["result"]
     assert not any(a[1] == 0x51 for a in card.log[:4])          # no UID read before the write
+
+
+def test_write_refusals_and_results_come_in_the_askers_language(api, monkeypatch):
+    ru = me._I18N["ru"]
+    r = api.post("/api/nfc/write/start?lang=ru", headers=HOUSE)                   # the app asks in its own language
+    sid = r.json()["sid"]
+    assert r.json()["step_text"] == ru["card step: start"]
+    r = api.post("/api/nfc/write/start?lang=ru", headers=HOUSE)
+    assert r.status_code == 409 and r.json()["detail"] == ru["another card is being written: finish or cancel it first"]
+    assert api.post("/api/nfc/write/start", headers=HOUSE).json()["detail"].startswith("another card")   # house: en
+    monkeypatch.setattr(me.core, "house_lang", lambda: "ru")                         # the dashboard: the house's language
+    assert api.post("/api/nfc/write/start", headers=HOUSE).json()["detail"] == r.json()["detail"]
+    assert api.post("/api/nfc/write/start?lang=en", headers=HOUSE).json()["detail"].startswith("another card")
+    assert api.post("/api/nfc/write/nope/step?lang=ru", json={}, headers=HOUSE).json()["detail"] == \
+        ru["no such write session: it ended or timed out"]
+    r = api.post(f"/api/nfc/write/{sid}/step?lang=ru", json={}, headers=HOUSE).json()
+    assert r["step"] == "select" and r["step_text"] == ru["card step: select"]
+    r = api.post(f"/api/nfc/write/{sid}/step?lang=ru", json={"resp_hex": "6a82"}, headers=HOUSE).json()
+    assert r["done"] and "select answered 6A82" in r["result"]["error"]               # the log's words stay English
+    assert r["result"]["message"] == ru["this is not an NTAG 424 DNA card"] and "say" not in r["result"]
+    v = api.get(f"/api/nfc/write/{sid}", headers=HOUSE).json()
+    assert v["result"]["message"] == ru["this is not an NTAG 424 DNA card"]
+    monkeypatch.setattr(me, "_MASTER_KEY", b"")
+    r = api.post("/api/nfc/write/start?lang=ru", headers=HOUSE)
+    assert r.status_code == 503 and r.json()["detail"] == ru["NFC_MASTER_KEY is not set in the house's .env: the house cannot write cards"]
+
+
+def test_card_errors_and_notes_are_translated_with_their_values():
+    ru = me._I18N["ru"]
+    other = {k: bytes([0x5A] * 16) for k in range(5)}
+    r = drive(FakeNtag424(other))
+    assert me._w_out(r, "ru")["message"] == ru["the card refused the house key and the factory key (key {n}): it belongs "
+                                              "to another system"].format(n=0)
+    assert me._w_out(r, "en")["message"] == r["error"]
+    e = N.CardError("auth: 91AE", "the card refused a command: {code}", code="91AE")
+    assert me._say("ru", "the card address: {why}", why=e) == ru["the card address: {why}"].format(
+        why=ru["the card refused a command: {code}"].format(code="91AE"))
+    why = me.Refusal(409, "another tag has this name")
+    out = me._w_out({"ok": True, "step": "done", "uid": "04", "note": "x", "why": why}, "ru")
+    assert out["note"] == ru["written, not put on the list: {why}"].format(why=ru["another tag has this name"])
+    assert out["step_text"] == ru["card step: done"] and "why" not in out
+    assert me._step_words("ru", "auth key 2") == ru["card step: auth key {n}"].format(n=2)
+    assert me._step_words("en", "auth key 2") == "auth key 2" and me._step_words("ru", "brand new") == "brand new"
+    for k, v in ru.items():                                    # every template keeps its {names}
+        assert sorted(re.findall(r"{(\w+)}", k)) == sorted(re.findall(r"{(\w+)}", v)), k

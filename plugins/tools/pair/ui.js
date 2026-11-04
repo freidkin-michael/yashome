@@ -93,21 +93,24 @@ function open(){
 let info = {paired: [], moved: []};
 async function load(){ try { info = await Home.api('/api/pair'); } catch(e){ /* the plug-in is off */ } }
 const mine = d => info.paired.find(p => p.device === d.id), gone = d => info.moved.find(m => m.device === d.id);
+// what an unpaired device does: a Wi-Fi one opens its setup network, a Thread one stays on Thread and waits (blue blink)
+const AFTER = {wifi: 'The device forgets this house and opens its setup network; its card stays here, offline.',
+               thread: 'The device forgets this house and waits for a new pairing, blinking blue; its card stays here, offline.'};
 
 HomePlugins.register({
   onReload: [load],
   modalSections: [{
     match: d => !!(mine(d) || gone(d)),
     html: d => mine(d)
-      ? `<div class="row"><span class="rlabel">${esc(i18n('Paired with this house'))}</span><button class="dlg-btn" id="pr-moved">${esc(i18n('Moved to another house'))}</button></div>
-         <div class="bindcaption">${esc(i18n('The device forgets this house and returns to its setup network; its card stays here, offline.'))}</div><div id="pr-mv-out"></div>`
-      : `<div class="bindcaption" style="color:var(--on)">${esc(i18n('This device moved to another house; its card stays offline until it is paired here again.'))}</div>`,
+      ? `<div class="row"><span class="rlabel">${esc(i18n('Paired with this house'))}</span><button class="dlg-btn" id="pr-moved">${esc(i18n('Unpair'))}</button></div>
+         <div class="bindcaption">${esc(i18n(AFTER[mine(d).via] || AFTER.wifi))}</div><div id="pr-mv-out"></div>`
+      : `<div class="bindcaption" style="color:var(--on)">${esc(i18n('This device is unpaired; its card stays offline until it is paired here again.'))}</div>`,
     wire(box, d){
       const b = box.querySelector('#pr-moved'); if(!b) return;
       b.onclick = async () => {
-        if(!confirm(i18n('Unpair this device from the house? It forgets this house and opens its setup network.'))) return;
         const p = mine(d);
-        try { await Home.api('/api/pair/' + encodeURIComponent(p.node) + '/moved', {method: 'POST'}); await load(); box.querySelector('#pr-mv-out').textContent = i18n('Done: the device moved.'); b.disabled = true; }
+        if(!confirm(i18n('Unpair this device from the house?') + ' ' + i18n(AFTER[p.via] || AFTER.wifi))) return;
+        try { await Home.api('/api/pair/' + encodeURIComponent(p.node) + '/moved', {method: 'POST'}); await load(); box.querySelector('#pr-mv-out').textContent = i18n('Done: the device is unpaired.'); b.disabled = true; }
         catch(e){ box.querySelector('#pr-mv-out').textContent = e.message || String(e); }
       };
     },
@@ -119,7 +122,7 @@ HomePlugins.register({
     {id: 'pair.ap', screen: 'pair', screenName: 'Pair a device', sel: '#pr-ap', at: 'label', title: 'Setup network', text: 'As the device shows it: <name>-setup. Pasting the text of its QR here fills both fields.'},
     {id: 'pair.code', screen: 'pair', screenName: 'Pair a device', sel: '#pr-code', at: 'label', title: 'Code', text: 'Eight characters from the label, letters and the digits 2-7; small or capital letters alike.'},
     {id: 'pair.go', screen: 'pair', screenName: 'Pair a device', sel: '#pr-go', title: 'Pair', text: 'The house joins the device\'s setup network and hands it the Wi-Fi, its own account and an update password; about a minute.'},
-    {id: 'pair.moved', screen: 'device', sel: '#pr-moved', title: 'Moved to another house', text: 'After a question the device forgets this house and opens its setup network again; its card stays here, offline.'},
+    {id: 'pair.moved', screen: 'device', sel: '#pr-moved', title: 'Unpair', text: 'After a question the device forgets this house (its account and update password are revoked); its card stays here, offline. Pairing it again brings it back.'},
   ],
   addMenu: [{
   label: 'Pair a device',

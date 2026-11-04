@@ -288,3 +288,45 @@ def test_a_paired_node_is_not_onboarded_through_discovery_and_an_existing_card_i
     made = []
     monkeypatch.setattr(core, "_mqtt_devices_upsert", lambda card: made.append(card))
     assert me.make_card("air")["id"] == "air_card" and made == []                                                   # no second card
+
+
+def test_pair_with_keeps_how_the_device_was_paired_and_a_refusal_leaves_no_account(pr, monkeypatch):
+    """pair_with over any channel: the record says via (the Unpair text follows it); a refused request revokes the account."""
+    monkeypatch.setattr(me, "_finish", lambda node: None)
+    out = me.pair_with("node-a", lambda rec: {"ok": True, "reply": {"node": "node-a"}}, via="thread")
+    assert out["node"] == "node-a" and me._load(me.PAIRINGS)["node-a"]["via"] == "thread"
+    with pytest.raises(me.HTTPException) as e:
+        me.pair_with("node-b", lambda rec: {"ok": False, "error": "already paired"})
+    assert e.value.status_code == 409 and "node-b" not in (me._load(me.PAIRINGS) or {})
+    assert not any(a["user"] == "dev-node-b" for a in me._load(me.ACCOUNTS) or [])
+
+
+def test_its_own_card_takes_the_new_channels_and_keeps_the_persons_name(monkeypatch, pr):
+    """A card the pairing made is renewed from a new description (a new build, a new pairing): the channels and the model
+    change, the name the person gave and the room stay; a card from discovery is never touched."""
+    made = []
+    monkeypatch.setattr(core, "_mqtt_devices_upsert", lambda e: made.append(e))
+    monkeypatch.setattr(core, "_register_mqtt_device", lambda e: None)
+    monkeypatch.setattr(core, "_mqtt_resubscribe_generic", lambda *a, **k: None)
+    monkeypatch.setattr(me, "_description", lambda node: {"description": DESC})
+    me.prepare("air-3f2a1c")
+    own = {"id": "air-3f2a1c", "esphome_node": "air-3f2a1c", "made_by": "pair", "name": "Kitchen air", "room": "kitchen", "controls": []}
+    monkeypatch.setitem(core.DEVICES, "air-3f2a1c", own)
+    card = me.make_card("air-3f2a1c")
+    assert (card["name"], card["room"]) == ("Kitchen air", "kitchen") and card["controls"] and made
+    made.clear()
+    monkeypatch.setitem(core.DEVICES, "air-3f2a1c", {**own, "made_by": None})
+    assert me.make_card("air-3f2a1c")["controls"] == [] and made == []
+
+
+
+def test_an_unpaired_device_is_paired_again_under_its_name_and_a_strange_card_still_blocks_it(pr, monkeypatch):
+    """Unpair keeps the card: that card (made by the pairing, or marked moved) does not take the name; another device's
+    card of that name still does."""
+    monkeypatch.setattr(me, "MOVED", me.PAIRINGS.with_name("moved.json"))
+    monkeypatch.setitem(core.DEVICES, "node-a", {"id": "node-a", "made_by": "pair", "controls": []})
+    assert me._taken("node-a") == ""
+    monkeypatch.setitem(core.DEVICES, "node-b", {"id": "node-b", "controls": []})
+    assert me._taken("node-b") != ""
+    me._save(me.MOVED, {"node-b": {"ts": 1}})
+    assert me._taken("node-b") == ""

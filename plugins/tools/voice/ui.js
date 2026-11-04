@@ -236,6 +236,8 @@
     const langName = (window.I18N_NAMES || {})[c.lang] || c.lang;
     const maxDist = w => Math.max(0, Math.min(3, Math.floor((w.length - 1) / 2)));      // as the server: more on a short word wakes on anything
     const shortPrefix = c.wake_prefix && c.wake_prefix.length < 3;
+    const tvs = [['', i18n('none')], ...(Home.devices() || []).filter(d => d.category === 'tv').map(d => [d.id, d.name || d.id])];
+    if(c.tv_device && !tvs.some(([v]) => v === c.tv_device)) tvs.push([c.tv_device, c.tv_device]);     // a TV that is gone stays shown
     box.innerHTML = `${c.seeded ? '' : `<div class="bindcaption" data-c="wait">${esc(i18n('Waiting for the voice service: it reports its settings within 10 s of its start. Saving is possible after that.'))}</div>`}
       ${row('Wake word', 'What a phrase starts with on a satellite that needs it', `<input class="askin" data-c="wake" value="${esc(c.wake || '')}">`)}
       ${row('Smart answers', 'A phrase no rule understood goes to the language model; what it suggests is checked before anything acts', tog('llm', c.llm !== false))}
@@ -246,10 +248,15 @@
       ${row('Start of the word', 'A heard word that starts like this also wakes: at least 3 letters; empty = off', `<input class="askin" data-c="wake_prefix" value="${esc(c.wake_prefix || '')}">`)}
       ${shortPrefix ? `<div class="bindcaption" style="color:var(--bad)">${esc(i18n('This start of the word is too short and does not count: make it 3 letters or more, or empty.'))}</div>` : ''}
       ${row('Also heard as', 'How the recogniser also writes the wake word, comma separated; a word ending in * takes any ending', `<textarea class="askin" data-c="wake_variants" rows="2">${esc((c.wake_variants || []).join(', '))}</textarea>`)}
+      ${row('Satellites check the wake word', 'A satellite that listens for its own wake word sends only what follows it; one ticked below still needs it in the phrase', tog('wake_on_device', !!c.wake_on_device))}
       ${mics.length ? `<div class="bindcaption">${esc(i18n('Needs the wake word in the phrase: tick a satellite that wakes by mistake; the others listen for it themselves.'))}</div>
         ${mics.map(s => row((s.cards || {}).mic || s.name || s.id, '', `<input type="checkbox" data-nw="${esc(s.id)}" ${s.need_wake ? 'checked' : ''}>`)).join('')}` : ''}
       ${row('Model', 'On this computer', `<select class="askin" data-c="llm_model"><option>${esc(c.llm_model || '')}</option></select>`)}
       ${row('Big model', 'On another computer, used while it is on', `<select class="askin" data-c="big_model"><option>${esc(c.big_model || '')}</option></select>`)}
+      ${row('Model address', 'The Ollama of the model on this computer; empty = no smart answers', `<input class="askin" data-c="llm_url" value="${esc(c.llm_url || '')}">`)}
+      ${row('Big model address', 'The Ollama of the other computer; empty = none', `<input class="askin" data-c="big_url" value="${esc(c.big_url || '')}">`)}
+      ${row('Big model health', 'Where the other computer tells whether its model is available', `<input class="askin" data-c="big_health" value="${esc(c.big_health || '')}">`)}
+      ${row('TV of the voice commands', 'The TV that "turn on the TV" and the volume commands drive', `<select class="askin" data-c="tv_device">${tvs.map(([v, n]) => `<option value="${esc(v)}"${v === (c.tv_device || '') ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`)}
       ${row('Wait for the model (s)', '', num('llm_timeout', 1, 60, 0.5))}
       ${row('A question waits (s)', 'How long the house waits for yes or no', num('ask_ttl', 3, 120, 1))}
       </details>
@@ -278,7 +285,8 @@
       if(!n || !n.seeded){ setTimeout(poll, 3000); return; }
       Object.assign(c, n);
       if(!touched.has('wake')) q('wake_maxdist').max = maxDist(n.wake || '');
-      for(const f of ['wake', 'wake_maxdist', 'wake_prefix', 'wake_variants', 'llm', 'llm_model', 'big_model', 'llm_timeout', 'confirm_all_off', 'ask_ttl']) setF(f, n[f]);
+      for(const f of ['wake', 'wake_maxdist', 'wake_prefix', 'wake_variants', 'llm', 'llm_model', 'big_model', 'llm_timeout', 'confirm_all_off', 'ask_ttl',
+                      'wake_on_device', 'llm_url', 'big_url', 'big_health', 'tv_device']) setF(f, n[f]);
       out();
       if(q('wait')) q('wait').remove();
       q('save').disabled = false;
@@ -296,7 +304,9 @@
       const body = {wake: q('wake').value.trim().toLowerCase() || null, wake_maxdist: Number(q('wake_maxdist').value), wake_prefix: q('wake_prefix').value.trim().toLowerCase(),
                     wake_variants: q('wake_variants').value.split(',').map(x => x.trim().toLowerCase()).filter(Boolean),
                     llm: q('llm').classList.contains('on'), llm_model: q('llm_model').value || null, big_model: q('big_model').value || null,
-                    llm_timeout: n('llm_timeout'), confirm_all_off: q('confirm_all_off').classList.contains('on'), ask_ttl: n('ask_ttl')};
+                    llm_timeout: n('llm_timeout'), confirm_all_off: q('confirm_all_off').classList.contains('on'), ask_ttl: n('ask_ttl'),
+                    wake_on_device: q('wake_on_device').classList.contains('on'), llm_url: q('llm_url').value.trim(), big_url: q('big_url').value.trim(),
+                    big_health: q('big_health').value.trim(), tv_device: q('tv_device').value};
       try {
         await Home.api('/api/voice/config', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
         for(const s of mics){
@@ -361,6 +371,16 @@
        text: 'A phrase no rule understood goes to the language model; what it suggests is checked before anything acts.'},
       {id: 'voiceset.model', screen: 'settings:voice', sel: '[data-c="llm_model"]', at: 'label', title: 'Model', text: 'The list is what the voice service has installed; the current model stays listed even when it is missing.'},
       {id: 'voiceset.bigmodel', screen: 'settings:voice', sel: '[data-c="big_model"]', at: 'label', title: 'Big model', text: 'While that computer is off, the model on this computer answers instead.'},
+      {id: 'voiceset.ondevice', screen: 'settings:voice', sel: '[data-c="wake_on_device"]', at: 'label', title: 'Satellites check the wake word',
+       text: 'On: a phrase is acted on without the wake word in it, except on a satellite ticked as needing it. Off: every phrase needs it.'},
+      {id: 'voiceset.llmurl', screen: 'settings:voice', sel: '[data-c="llm_url"]', at: 'label', title: 'Model address',
+       text: 'For example http://192.0.2.1:11434 (the Ollama port); the voice service takes a new address within 10 s.'},
+      {id: 'voiceset.bigurl', screen: 'settings:voice', sel: '[data-c="big_url"]', at: 'label', title: 'Big model address',
+       text: 'Usually the tunnel of the computer with the big model; empty = the model on this computer answers everything.'},
+      {id: 'voiceset.bighealth', screen: 'settings:voice', sel: '[data-c="big_health"]', at: 'label', title: 'Big model health',
+       text: 'The big model is used only while this address says it is available.'},
+      {id: 'voiceset.tv', screen: 'settings:voice', sel: '[data-c="tv_device"]', at: 'label', title: 'TV of the voice commands',
+       text: 'None: the TV commands are not understood.'},
       {id: 'voiceset.timeout', screen: 'settings:voice', sel: '[data-c="llm_timeout"]', at: 'label', title: 'Wait for the model (s)', text: 'How long the house waits for the model\'s answer.'},
       {id: 'voiceset.alloff', screen: 'settings:voice', sel: '[data-c="confirm_all_off"]', at: 'label', title: 'Ask before "turn everything off"',
        text: 'When the model understood "turn everything off", the house asks first.'},

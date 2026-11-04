@@ -118,7 +118,8 @@ changes only what you see.
 ```
 GET    /api/esphome/discover                    {nodes: [{node, title, model, availability_topic, alive, controls,
                                                 n_controls, skipped, registered, device_id}]}: nodes publishing
-                                                homeassistant/*/config
+                                                homeassistant/*/config; a control with ent_cat config/diagnostic
+                                                is aux (no say in the category), a config number a folded setting_int
 POST   /api/esphome/add                         {node, id?, name?, category?, codes?, force?} -> mqtt_devices.json,
                                                 answer {id, name, category, controls, subscribed} (force: add a
                                                 node that is not answering now)

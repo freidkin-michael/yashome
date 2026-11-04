@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import re
+import sys
 import threading
 import time
 import zlib
@@ -208,6 +209,15 @@ def _changes(node: str, old: dict, desc: dict) -> dict:
     return {"added": sorted(now - was), "removed": sorted(was - now)}
 
 
+def _paired_here(node: str) -> bool:
+    """The plug-in pair has a record of this node: the house paired it (its account and OTA password are the house's)."""
+    pm = sys.modules.get("yashome_plugins.pair")
+    try:
+        return bool(pm and pm.ota_password(node))
+    except Exception:                                        # noqa: BLE001 - no pair plug-in data: not paired here
+        return False
+
+
 def process(node: str, desc: dict, h: str) -> None:
     """A description and the hash that came with it (cases 1 and 2 of docs/device-description.md)."""
     now = time.time()
@@ -223,6 +233,12 @@ def process(node: str, desc: dict, h: str) -> None:
         if cur:
             rec["history"] = ([{"hash": cur.get("hash"), "received": cur.get("received"), "known": cur.get("build_known", False)}]
                               + rec["history"])[:HISTORY]
+        if not rec["build_known"] and not rec["mismatch"] and _paired_here(node):
+            # this house paired the device itself (no code, no secrets in its firmware): its own description is the
+            # build record, the builder need not know the house
+            _save("builds", h, {"hash": h, "date": (desc.get("build") or {}).get("date", ""), "fwgen": desc.get("fwgen") or {},
+                                "description": desc, "svg": "", "registered": now, "from": "paired device"})
+            rec["build_known"] = True
         rec["changes"] = _changes(node, (cur or {}).get("description"), desc)
         rec["card_gap"] = _card_gap(node, desc)
         _save("devices", node, rec)

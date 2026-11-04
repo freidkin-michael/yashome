@@ -18,18 +18,19 @@
     "Paired: {0}. It joins the house network now; its card appears when it has described itself.": "Привязано: {0}. Устройство заходит в сеть дома; карточка появится, когда оно опишет себя.",
     "Not paired: {0}": "Не привязано: {0}",
     "Paired with this house": "Привязано к этому дому",
-    "Moved to another house": "Переехало в другой дом",
-    "The device forgets this house and returns to its setup network; its card stays here, offline.": "Устройство забудет этот дом и вернётся в свою сеть настройки; карточка останется здесь, без связи.",
-    "This device moved to another house; its card stays offline until it is paired here again.": "Это устройство переехало в другой дом; карточка остаётся без связи, пока его снова не привяжут здесь.",
-    "Unpair this device from the house? It forgets this house and opens its setup network.": "Отвязать устройство от дома? Оно забудет этот дом и откроет свою сеть настройки.",
-    "Done: the device moved.": "Готово: устройство переехало.",
     "Lists the devices in sight that show their setup network (about 8 s); a tap on one fills Setup network.": "Показывает устройства рядом, у которых открыта сеть настройки (около 8 с); нажатие на одну заполняет «Сеть настройки».",
     "Reads the QR of the label with the camera (about 30 s) and fills both fields; only where the browser reads QR codes.": "Читает QR с наклейки камерой (около 30 с) и заполняет оба поля; только там, где браузер умеет читать QR.",
     "One found nearby: a tap puts its name into Setup network.": "Найденная рядом сеть: нажатие вставляет её имя в «Сеть настройки».",
     "As the device shows it: <name>-setup. Pasting the text of its QR here fills both fields.": "Как её показывает устройство: <имя>-setup. Если вставить сюда текст его QR, заполнятся оба поля.",
     "Eight characters from the label, letters and the digits 2-7; small or capital letters alike.": "Восемь знаков с наклейки, буквы и цифры 2-7; строчные и заглавные одинаковы.",
     "The house joins the device's setup network and hands it the Wi-Fi, its own account and an update password; about a minute.": "Дом подключается к сети настройки устройства и передаёт ему Wi-Fi, его собственную учётную запись и пароль обновлений; около минуты.",
-    "After a question the device forgets this house and opens its setup network again; its card stays here, offline.": "После вопроса устройство забывает этот дом и снова открывает сеть настройки; его карточка остаётся здесь, не в сети.",
-    "A setup network": "Сеть настройки"
+    "A setup network": "Сеть настройки",
+    "Unpair": "Отвязать",
+    "The device forgets this house and opens its setup network; its card stays here, offline.": "Устройство забудет этот дом и откроет свою сеть настройки; карточка останется здесь, без связи.",
+    "The device forgets this house and waits for a new pairing, blinking blue; its card stays here, offline.": "Устройство забудет этот дом и будет ждать новой привязки, мигая синим; карточка останется здесь, без связи.",
+    "This device is unpaired; its card stays offline until it is paired here again.": "Устройство отвязано; карточка остаётся без связи, пока его снова не привяжут здесь.",
+    "Unpair this device from the house?": "Отвязать устройство от дома?",
+    "Done: the device is unpaired.": "Готово: устройство отвязано.",
+    "After a question the device forgets this house (its account and update password are revoked); its card stays here, offline. Pairing it again brings it back.": "После вопроса устройство забудет этот дом (его учётка и пароль обновлений отзываются); карточка останется здесь, без связи. Новая привязка вернёт его."
   }
 }

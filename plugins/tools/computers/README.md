@@ -76,7 +76,9 @@ points the tunnel there; the card shows whether it is up. The helper keeps its t
 
 - **yashGen firmware builder** (Linux only, not a WSL): Install (`helper/roles/yashgen-install.sh`) prepares
   `/opt/yashome-yashgen` (docker, rsync, a compose.yml on the official ESPHome image of the builder's version - start.sh
-  writes it as `ESPHOME_VERSION` in its `.env` - and start.sh / stop.sh); nothing runs yet. Use (the Servers tab, or the card) writes `plugin-data/computers/yashgen.json` {host, user};
+  writes it as `ESPHOME_VERSION` in its `.env` - with its own healthcheck on the builder's port 8090, not the image's on
+  ESPHome's 6052, and start.sh / stop.sh); nothing runs yet. A compose.yml there without that healthcheck shows the
+  container as unhealthy: Install again. Use (the Servers tab, or the card) writes `plugin-data/computers/yashgen.json` {host, user};
   the house's own computer: empty = its own builder. Remove: not the one in use.
 
   The host piece, when `YASHGEN_SRC` is in `.env` (the builder's folder on the house's computer): the user units
@@ -91,6 +93,17 @@ points the tunnel there; the card shows whether it is up. The helper keeps its t
 - **Player (mpv)**: on every computer at a TV that wants one (no Use, not on the Servers tab; not in a WSL): Install
   (`helper/roles/player-install.sh`) puts mpv and the player plug-in's user unit there, Remove takes them off (mpv stays).
   The house drives it through the helper over ssh: the player plug-in's README.
+
+- **Thread border router** (Linux only, not a WSL): on every computer with a Thread radio that should be one (no Use; the
+  thread plug-in uses them all, its main one picked on its page). Install picks the radio among the computer's
+  `/dev/serial/by-id` devices the probe lists (likely Thread radios first) and its baud rate (guessed from the name);
+  `helper/roles/thread-install.sh` puts the pinned OTBR container in `/opt/yashome-thread`, Remove takes it off. The house's
+  own computer takes it the same way. The network, the tunnels and the rest: the thread plug-in's README.
+
+- **Matter controller** (Linux only, not a WSL): one per house, used where it is installed (no Use; Install refuses a
+  second computer). `helper/roles/matter-install.sh` puts the pinned python-matter-server in `/opt/yashome-matter` (host
+  network, the computer's Bluetooth for new devices, its WebSocket on its loopback); Remove takes it off and keeps its
+  fabric in `/var/backups`. The house's own computer takes it the same way. The tunnel and the rest: the matter plug-in's README.
 
 - **Touchmouse receiver**: like the player, on every Linux computer that wants one (no Use; not in a WSL): Install
   (`helper/roles/touchmouse-install.sh`) puts the touchmouse plug-in's receiver there, Remove takes it off. The hello
@@ -112,3 +125,7 @@ The arguments reach a script inside it (`set -- ...` at its top), never on a com
 
 A computer found at another address with the same host name moves there when its old address does not answer.
 Owner only (the house token).
+
+A role of many computers (`thread`, `player`, `touchmouse`) shows as running (green) when its own plug-in says so:
+`role_active(computer)` in that plug-in (thread: the router answers and is on the network); without it, never. So does
+the one-per-house `matter` (the house is connected to the controller there).

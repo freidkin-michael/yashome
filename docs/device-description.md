@@ -37,6 +37,10 @@ devices/<node>.json    what the device said last: {node, state, hash, descriptio
 - Size: a message is at most 24 KB on the wire; a description is decoded to at most 64 KB. A longer one is refused (a
   compressed bomb is no description).
 
+A device this house paired itself (the plug-in pair has its record) needs no registration by the builder: when its
+description comes with an unknown hash that matches it, that description becomes the build record (`from: paired device`,
+no wiring SVG). So a builder never needs the house's address or a token of it.
+
 ## Reading (`core.NODE_SUBTOPICS["fwgen"]`)
 
 The core hands every `<node>/fwgen/...` message to the plug-in. A message counts only when:

@@ -14,8 +14,15 @@
                'sudo asks for a password': 'the house cannot install there: the computer asks for a password',
                'its host key changed': 'Reinstalled? Press Trust again'};
   const why = e => i18n(WHY[e] || 'no connection: is the computer switched on?');
-  const SERVERS = ['build', 'tts', 'llm', 'yashgen', 'player', 'touchmouse'];   // the app builder ('apk') is an option of the build server
-  const MANY = ['player', 'touchmouse'];                       // on every computer that wants one: Servers lists where they are
+  const SERVERS = ['build', 'tts', 'llm', 'yashgen', 'player', 'touchmouse', 'thread', 'matter'];   // the app builder ('apk') is an option of the build server
+  const MANY = ['player', 'touchmouse', 'thread'];             // on every computer that wants one: Servers lists where they are
+  const ONE = ['matter'];                                     // one per house, used where it is installed: no pick, Remove while in use
+  const OWN = [...MANY, ...ONE];                              // installed and removed on the card, the house's own computer too
+  // a Thread border router's radio: the computer's serial devices (likely radios first) and the baud rate guessed for each
+  const radioPick = c => (c.radios || []).length ? `<select data-radio="${esc(c.id)}" style="max-width:200px">${c.radios.map(r =>
+      `<option value="${esc(r.name)}" data-baud="${r.baud}">${esc(r.name.replace(/^usb-/, '').slice(0, 48))}</option>`).join('')}</select>
+      <select data-baud="${esc(c.id)}">${[115200, 460800, 1000000].map(b => `<option${b === c.radios[0].baud ? ' selected' : ''}>${b}</option>`).join('')}</select>`
+    : `<span class="bindcaption">${esc(i18n('no radio found: plug it in and check again'))}</span><button class="dlg-btn" data-check>${esc(i18n('Check again'))}</button>`;
 
   const page = box => {
     let alive = true, timer = null, renaming = null, adding = false, busy = '', open = null;
@@ -39,9 +46,10 @@
         const row = (k, title, sub) => {
           const x = r[k] || {};
           const state = c.self && k === 'llm' ? i18n('the small model') : x.active && x.installed ? i18n('runs here') : x.installed ? i18n('installed') : i18n('not installed');
-          const act = !can || c.self && k !== 'build' && k !== 'apk' && !MANY.includes(k) ? '' : !x.installed ? ((k === 'yashgen' || MANY.includes(k)) && c.wsl ? '' : btn(k, 'install', 'Install')) : x.active && k !== 'apk' ? '' : btn(k, 'remove', 'Remove', 'var(--bad)');
+          const act = !can || c.self && k !== 'build' && k !== 'apk' && !OWN.includes(k) ? '' : !x.installed ? ((k === 'yashgen' || OWN.includes(k)) && c.wsl ? ''
+            : k === 'thread' ? (c.radios || []).length ? radioPick(c) + btn(k, 'install', 'Install') : radioPick(c) : btn(k, 'install', 'Install')) : x.active && k !== 'apk' && !OWN.includes(k) ? '' : btn(k, 'remove', 'Remove', 'var(--bad)');
           return `<div class="row" style="gap:8px;margin-top:4px${sub ? ';padding-left:18px' : ''}"><span class="rlabel">${esc(i18n(title))}<br><span class="bindcaption" style="color:${
-            x.active && x.installed && !(c.self && k === 'llm') ? 'var(--ok)' : 'inherit'}">${esc(state)}${x.active && x.installed && !c.self && k !== 'apk'
+            x.active && x.installed && !(c.self && k === 'llm') ? 'var(--ok)' : 'inherit'}">${esc(state)}${x.active && x.installed && !c.self && k !== 'apk' && !ONE.includes(k)
             ? ' \u00b7 ' + esc(i18n('another one: the Servers tab')) : ''}</span></span>
             <span class="rval">${act}</span></div>`;
         };
@@ -93,8 +101,8 @@
               <select data-tv="${esc(c.id)}"><option value="">${esc(i18n('no TV'))}</option>${c.tv && !tv ? `<option value="${esc(c.tv)}" selected>${esc(c.tv)}</option>` : ''}${v.tvs.map(t => `<option value="${esc(t.id)}"${t.id === c.tv ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
               ${tv ? `<select data-input="${esc(c.id)}"><option value="">${esc(i18n('input?'))}</option>${inputs.map(i => `<option${i === c.input ? ' selected' : ''}>${esc(i)}</option>`).join('')}</select>` : ''}</span></div>
           ${roles(c)}
-          ${line || st.error ? `<details style="margin-top:8px"><summary class="bindcaption">${esc(i18n('Advanced'))}</summary><div class="bindcaption">${
-            esc([line, st.ts ? i18n('checked {0}', Home.ago(Date.now() / 1000 - st.ts)) : '', st.error || ''].filter(Boolean).join(' \u00b7 '))}</div></details>` : ''}</section>`;
+          ${line || st.error ? `<div class="bindcaption" style="margin-top:8px">${
+            esc([line, st.ts ? i18n('checked {0}', Home.ago(Date.now() / 1000 - st.ts)) : '', st.error || ''].filter(Boolean).join(' \u00b7 '))}</div>` : ''}</section>`;
       };
       const found = v.found.map(f => `<div class="row" style="${CARD};flex-wrap:wrap;gap:8px;${f.ok ? 'border-color:var(--on)' : 'opacity:.7'}">
           <span class="rlabel"><b>${esc(f.hostname || f.host)}</b>${f.ok ? '' : `<br><span class="bindcaption">${esc(why(f.error))}</span>`}</span>
@@ -153,12 +161,21 @@
       });
       act('[data-role]', async b => {
         const c = v.computers.find(x => x.id === b.dataset.cid), role = (v.roles[b.dataset.role] || {}).title || b.dataset.role, a = b.dataset.act;
-        const ask = a === 'install' && b.dataset.role === 'touchmouse' ? i18n('The house logs in to {0} and installs the touchmouse receiver there as root: a phone or a panel moves its pointer. Go on?', c.name)
+        const extra = {};
+        if(b.dataset.role === 'thread' && a === 'install'){
+          const r = box.querySelector(`[data-radio="${CSS.escape(c.id)}"]`), bd = box.querySelector(`[data-baud="${CSS.escape(c.id)}"]`);
+          if(r){ extra.radio = r.value; extra.baud = +(bd && bd.value) || 0; }
+        }
+        const ask = a === 'install' && b.dataset.role === 'thread' ? i18n('The house logs in to {0} and installs a Thread border router there as root (docker too, when missing) on the radio {1}; the house gives it the Thread network. Go on?', c.name, extra.radio || '')
+          : a === 'remove' && b.dataset.role === 'thread' ? i18n('Remove the Thread border router from {0}? The network stays with the house and its other border routers.', c.name)
+          : a === 'install' && b.dataset.role === 'matter' ? i18n('The house logs in to {0} and installs the Matter controller there as root (docker too, when missing): new Matter devices pair over its Bluetooth. One per house. Go on?', c.name)
+          : a === 'remove' && b.dataset.role === 'matter' ? i18n('Remove the Matter controller from {0}? Its devices stay paired to its network, kept there in /var/backups; a new controller cannot reach them until they are reset and paired again.', c.name)
+          : a === 'install' && b.dataset.role === 'touchmouse' ? i18n('The house logs in to {0} and installs the touchmouse receiver there as root: a phone or a panel moves its pointer. Go on?', c.name)
           : a === 'install' && b.dataset.role === 'player' ? i18n('The house logs in to {0} and installs its player there as root (mpv, when missing): it plays on the screen of the user the house logs in as. Go on?', c.name)
           : a === 'install' ? i18n('The house logs in to {0} and installs the {1} there as root (docker too, when missing). The Servers tab picks where it runs. Go on?', c.name, i18n(role))
           : a === 'remove' ? i18n('Remove the {1} from {0}, with its data (caches, models)?', c.name, i18n(role)) : '';
         if(ask && !confirm(ask)) return v;
-        return send('POST', `/api/computers/${encodeURIComponent(c.id)}/roles/${encodeURIComponent(b.dataset.role)}`, {action: a});
+        return send('POST', `/api/computers/${encodeURIComponent(c.id)}/roles/${encodeURIComponent(b.dataset.role)}`, {action: a, ...extra});
       });
       box.querySelectorAll('[data-open]').forEach(el => {
         const go = () => { open = el.dataset.open; renaming = null; draw(v); };
@@ -166,6 +183,10 @@
         el.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } };
       });
       act('[data-close]', async () => { open = null; renaming = null; return v; });
+      box.querySelectorAll('[data-radio]').forEach(s => s.onchange = () => {          // each radio's own guess, changeable
+        const bd = box.querySelector(`[data-baud="${CSS.escape(s.dataset.radio)}"]`), o = s.selectedOptions[0];
+        if(bd && o) bd.value = o.dataset.baud;
+      });
       box.querySelectorAll('[data-tv]').forEach(s => s.onchange = async () => {
         try { draw(await send('PATCH', '/api/computers/' + encodeURIComponent(s.dataset.tv), {tv: s.value})); } catch(e){ Home.toast(e.message || String(e)); draw(); }
       });
@@ -199,13 +220,13 @@
       let v;
       try { v = await api('/api/computers'); }
       catch(e){ box.innerHTML = `<div class="bindcaption">${esc(e.message || e)}</div>`; return; }
-      const many = MANY.filter(k => (v.roles[k] || {}).on).map(k => {        // on every computer that wants one: where they are
+      const many = OWN.filter(k => (v.roles[k] || {}).on).map(k => {         // on every computer that wants one (or the one): where they are
         const have = v.computers.filter(c => ((c.roles || {})[k] || {}).installed);
         return `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="rlabel">${esc(i18n(v.roles[k].title))}<br><span class="bindcaption">${
-            esc(i18n('on every computer that has it; install it from the computer\'s card'))}</span></span>
+            esc(ONE.includes(k) ? i18n('one per house; install it from the computer\'s card') : i18n('on every computer that has it; install it from the computer\'s card'))}</span></span>
           <span class="rval bindcaption" style="color:${have.length ? 'var(--ok)' : 'inherit'}">${esc(have.length ? have.map(c => c.name).join(', ') : i18n('not installed anywhere'))}</span></div>`;
       }).join('');
-      box.innerHTML = SERVERS.filter(k => (v.roles[k] || {}).on && !MANY.includes(k)).map(k => {
+      box.innerHTML = SERVERS.filter(k => (v.roles[k] || {}).on && !OWN.includes(k)).map(k => {
         const have = v.computers.filter(c => ((c.roles || {})[k] || {}).installed), cur = have.find(c => c.roles[k].active);
         const t = (v.tunnels || {})[k], down = cur && !cur.self && t && t.host === cur.host && t.state !== 'up';
         const pick = have.length ? `<select data-server="${esc(k)}" style="max-width:260px">${cur ? '' : `<option value="">${esc(i18n('not chosen'))}</option>`}${
